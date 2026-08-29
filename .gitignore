@@ -1,0 +1,29 @@
+# OS
+.DS_Store
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.vercel
+
+# .NET
+bin/
+obj/
+*.user
+
+# Env
+.env
+.env.local
+.env*.local
+
+# Editors
+.vscode/
+.idea/
+
+# Planning material — local only, never committed.
+# The design docs and build plan live on disk alongside the repo, not in it.
+doc-starter/
+plan/
+context.md

@@ -1,0 +1,133 @@
+:root {
+  /* Palette — do not adjust for contrast, it is already AA-compliant. */
+  --bg-base: #FFFFFF;
+  --text-primary: #0F1A2E;
+  --text-secondary: #5A6780;
+  --accent: #F58025;
+  --accent-hover: #E06E14;
+  --text-on-accent: #1A1206;
+  --border-subtle: #E4E7EC; /* reserved — no bordered surfaces on this page yet */
+
+  /* Layout */
+  --content-max: 1440px;
+  --pad-x: 80px;
+  --pad-top: 140px;
+  --pad-bottom: 160px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+.hero {
+  padding: var(--pad-top) var(--pad-x) var(--pad-bottom);
+}
+
+.hero__inner {
+  max-width: var(--content-max);
+  margin-inline: auto;
+}
+
+.wordmark {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.hero__block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  /* 72px lands the section at ~654px tall on desktop, matching the ~650px target. */
+  margin-top: 72px;
+}
+
+.hero__title {
+  font-size: 96px;
+  font-weight: 700;
+  line-height: 100px;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.hero__subline {
+  max-width: 560px;
+  font-size: 21px;
+  font-weight: 400;
+  line-height: 32px;
+  color: var(--text-secondary);
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 17px 30px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+  text-decoration: none;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  transition: background-color 120ms ease-in-out;
+}
+
+.cta:hover {
+  background: var(--accent-hover);
+}
+
+.cta:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta {
+    transition: none;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --pad-x: 24px;
+  }
+
+  .hero__title {
+    font-size: 48px;
+    line-height: 52px;
+  }
+
+  .hero__subline {
+    max-width: none;
+    font-size: 18px;
+  }
+
+  .cta {
+    align-self: stretch;
+  }
+}
