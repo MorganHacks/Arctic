@@ -1,18 +1,20 @@
-:root {
-  /* Palette — do not adjust for contrast, it is already AA-compliant. */
-  --bg-base: #FFFFFF;
-  --text-primary: #0F1A2E;
-  --text-secondary: #5A6780;
-  --accent: #F58025;
-  --accent-hover: #E06E14;
-  --text-on-accent: #1A1206;
-  --border-subtle: #E4E7EC; /* reserved — no bordered surfaces on this page yet */
+/* ==========================================================================
+   MorganHacks 2027 — organizer applications, single screen
+   A night scene: deep blue ground, aurora along the horizon, contour lines
+   across the field, and the M of MorganHacks drawn as a constellation.
+   Define colours here on :root; never hardcode a hex.
+   ========================================================================== */
 
-  /* Layout */
-  --content-max: 1440px;
-  --pad-x: 80px;
-  --pad-top: 140px;
-  --pad-bottom: 160px;
+:root {
+  --blue: #16306e;
+  --blue-deep: #0d1f4d;
+  --blue-lift: #2a52a8;
+  --on-blue: #ffffff;
+  --on-blue-soft: #c8d3f0;
+  --glow: #6f9bff;
+
+  --pad-x: clamp(24px, 5vw, 84px);
+  --pad-y: clamp(22px, 4vh, 46px);
 }
 
 *,
@@ -21,17 +23,21 @@
   box-sizing: border-box;
 }
 
-html {
-  -webkit-text-size-adjust: 100%;
+html,
+body {
+  height: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Single screen: nothing below the fold, so nothing scrolls. */
+  overflow: hidden;
+  background: var(--blue-deep);
+  color: var(--on-blue);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 h1,
@@ -39,95 +45,494 @@ p {
   margin: 0;
 }
 
-.hero {
-  padding: var(--pad-top) var(--pad-x) var(--pad-bottom);
+a {
+  color: inherit;
 }
 
-.hero__inner {
-  max-width: var(--content-max);
-  margin-inline: auto;
+:focus-visible {
+  outline: 3px solid var(--on-blue);
+  outline-offset: 3px;
+  border-radius: 3px;
 }
 
-.wordmark {
-  display: block;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
-.hero__block {
+/* ==========================================================================
+   The scene
+   ========================================================================== */
+
+.screen {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 20px;
-  /* 72px lands the section at ~654px tall on desktop, matching the ~650px target. */
-  margin-top: 72px;
+  height: 100svh;
+  overflow: hidden;
+  /* Night sky: deepest overhead, lifting toward the horizon. */
+  background: radial-gradient(
+      120% 78% at 50% 104%,
+      var(--blue-lift) 0%,
+      transparent 62%
+    ),
+    linear-gradient(180deg, var(--blue-deep) 0%, var(--blue) 72%);
 }
 
-.hero__title {
-  font-size: 96px;
+/* A slow wash of light across the sky, like the glow off a city. */
+.screen::before {
+  content: "";
+  position: absolute;
+  inset: -20% -10% 30%;
+  z-index: -3;
+  background: radial-gradient(
+      42% 50% at 22% 30%,
+      rgb(111 155 255 / 22%) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      38% 46% at 82% 18%,
+      rgb(111 155 255 / 14%) 0%,
+      transparent 72%
+    );
+}
+
+.scene__contours {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Fade out top and bottom so the lines read as texture, not as a diagram,
+     and so they hand off cleanly to the aurora. */
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 22%,
+    #000 62%,
+    transparent 88%
+  );
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 22%,
+    #000 62%,
+    transparent 88%
+  );
+}
+
+.scene__aurora {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  width: 100%;
+  height: clamp(190px, 36vh, 340px);
+  pointer-events: none;
+  filter: blur(0.4px);
+}
+
+.scene__constellation {
+  position: absolute;
+  top: clamp(88px, 15vh, 150px);
+  left: clamp(40px, 7vw, 120px);
+  z-index: -2;
+  width: clamp(90px, 9vw, 130px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Painted after the aurora (same layer, later in DOM) so the footer links keep
+   their contrast against the brightest part of it. */
+.screen::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: -1;
+  height: clamp(90px, 14vh, 150px);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgb(13 31 77 / 78%) 65%,
+    rgb(13 31 77 / 92%) 100%
+  );
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Content
+   ========================================================================== */
+
+.topline {
+  flex: none;
+  padding: var(--pad-y) var(--pad-x) 0;
+}
+
+/* MLH's own placement convention: pinned to a top corner, hanging from the
+   edge. Kept clear of the wordmark, which sits top-left. */
+.mlh {
+  position: absolute;
+  top: 0;
+  right: clamp(16px, 3vw, 48px);
+  z-index: 10;
+  width: clamp(56px, 5.6vw, 80px);
+  line-height: 0;
+}
+
+.mlh img {
+  width: 100%;
+  height: auto;
+}
+
+/* Small caps on wide tracking: technical rather than editorial, so it holds
+   its own against the serif headline instead of echoing it. The star is the
+   same glyph as the sky. */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(8px, 0.8vw, 11px);
+}
+
+.wordmark__star {
+  flex: none;
+  width: clamp(12px, 1.1vw, 15px);
+  fill: var(--glow);
+  filter: drop-shadow(0 0 6px rgb(111 155 255 / 70%));
+}
+
+.wordmark__text {
   font-weight: 700;
-  line-height: 100px;
-  letter-spacing: -0.03em;
-  color: var(--text-primary);
+  font-size: clamp(14px, 1.3vw, 18px);
+  line-height: 1;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  /* Tracking adds a trailing space after the final S; pull it back so the
+     lockup optically aligns with the copy below. */
+  margin-right: -0.26em;
 }
 
-.hero__subline {
-  max-width: 560px;
-  font-size: 21px;
+.copy {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  /* Three groups, evenly separated by a gap that scales with the viewport.
+     space-between was tried and pushed them to the extremes, which read as
+     disconnected and crowded the footer. */
+  justify-content: center;
+  gap: clamp(26px, 6.5vh, 76px);
+  min-height: 0;
+  padding: clamp(14px, 2.5vh, 36px) var(--pad-x);
+  text-align: center;
+}
+
+.copy__intro,
+.copy__act {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 1.6vw, 22px);
+  width: 100%;
+  font-size: clamp(11.5px, 1vw, 13px);
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--on-blue);
+}
+
+/* Hairlines that fade outward, so the label sits in the scene rather than
+   floating loose above the headline. */
+.eyebrow::before,
+.eyebrow::after {
+  content: "";
+  flex: 0 1 clamp(28px, 7vw, 96px);
+  height: 1px;
+}
+
+.eyebrow::before {
+  background: linear-gradient(90deg, transparent, rgb(111 155 255 / 65%));
+}
+
+.eyebrow::after {
+  background: linear-gradient(90deg, rgb(111 155 255 / 65%), transparent);
+}
+
+.eyebrow span {
+  /* Tracking adds a trailing space; pull it back so the label optically
+     centres between the rules. */
+  margin-right: -0.34em;
+  text-shadow: 0 0 18px rgb(111 155 255 / 55%);
+}
+
+.headline {
+  margin: clamp(16px, 3vh, 30px) auto 0;
+  max-width: 17ch;
+  font-family: var(--font-display), Georgia, serif;
   font-weight: 400;
-  line-height: 32px;
-  color: var(--text-secondary);
+  font-size: clamp(2.2rem, 5.4vw, 4.7rem);
+  line-height: 1.03;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  text-shadow: 0 0 46px rgb(111 155 255 / 32%);
+}
+
+.headline em {
+  font-style: italic;
+}
+
+.dare {
+  margin: 0 auto;
+  max-width: 42ch;
+  font-family: var(--font-display), Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.25rem, 2.2vw, 1.9rem);
+  line-height: 1.25;
+  color: var(--on-blue-soft);
+  text-wrap: balance;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px 22px;
+  margin-top: 0;
 }
 
 .cta {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 17px 30px;
-  border-radius: 10px;
+  gap: 12px;
+  padding: 15px 34px;
+  border: 2px solid var(--on-blue);
+  border-radius: 999px;
+  background: var(--on-blue);
+  color: var(--blue);
   font-size: 16px;
   font-weight: 600;
-  line-height: 20px;
   text-decoration: none;
-  background: var(--accent);
-  color: var(--text-on-accent);
-  transition: background-color 120ms ease-in-out;
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .cta:hover {
-  background: var(--accent-hover);
+  background: transparent;
+  color: var(--on-blue);
+  box-shadow: 0 0 34px rgb(111 155 255 / 45%);
 }
 
-.cta:focus-visible {
-  outline: 2px solid var(--text-primary);
-  outline-offset: 3px;
+.cta__arrow {
+  transition: transform 0.16s ease;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .cta {
-    transition: none;
+.cta:hover .cta__arrow {
+  transform: translateX(4px);
+}
+
+/* The deadline reads as a countdown between two rules rather than a pill: the
+   number carries the urgency, the date carries the fact. */
+.clock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(22px, 3.2vw, 40px);
+  margin: clamp(20px, 3.4vh, 38px) auto 0;
+}
+
+.clock__lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  /* Holds the row steady while the count resolves after mount. */
+  min-width: clamp(78px, 8vw, 104px);
+  justify-content: flex-end;
+}
+
+.clock__count {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(2.3rem, 3.8vw, 3.4rem);
+  line-height: 0.86;
+  letter-spacing: -0.02em;
+  text-shadow: 0 0 26px rgb(111 155 255 / 45%);
+}
+
+.clock__unit,
+.clock__label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1.35;
+  text-transform: uppercase;
+  color: var(--on-blue-soft);
+}
+
+.clock__today {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  line-height: 1;
+  text-shadow: 0 0 26px rgb(111 155 255 / 45%);
+}
+
+.clock__when {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+}
+
+.clock__date {
+  font-size: clamp(14px, 1.25vw, 16px);
+  font-weight: 600;
+}
+
+.clock__closed {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.4rem, 2.2vw, 1.9rem);
+}
+
+.contact {
+  margin-top: clamp(12px, 1.8vh, 18px);
+  font-size: 14px;
+  color: var(--on-blue-soft);
+}
+
+.contact a {
+  color: var(--on-blue);
+  text-underline-offset: 3px;
+}
+
+.links {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  gap: clamp(18px, 2vw, 28px);
+  padding: 0 var(--pad-x) var(--pad-y);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--on-blue-soft);
+}
+
+.links a {
+  text-decoration: none;
+  transition: color 0.16s ease;
+}
+
+.links a:hover {
+  color: var(--on-blue);
+}
+
+/* ==========================================================================
+   Responsive — height constrains as much as width on a locked screen
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .scene__constellation {
+    display: none;
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 760px) {
+  .headline {
+    max-width: 14ch;
+    font-size: clamp(2.1rem, 9.4vw, 3.2rem);
+  }
+  .cta {
+    width: 100%;
+    justify-content: center;
+  }
+  /* Clear of the badge, which hangs in the top-right corner. */
+  .topline {
+    padding-right: 84px;
+  }
+}
+
+/* Narrowest phones: the countdown's two columns force the date to wrap and
+   strand "EST", so stack it instead. */
+@media (max-width: 380px) {
+  .clock {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .clock__lead {
+    min-width: 0;
+    justify-content: center;
+  }
+  .clock__when {
+    align-items: center;
+    text-align: center;
+  }
+}
+
+/* Short windows: shed optional lines rather than overflow a locked screen.
+   The headline, the deadline and the button never drop. */
+@media (max-height: 660px) {
+  @media (max-height: 540px) {
+  .contact,
+  .dare {
+    display: none;
+  }
+}
+
+/* Landscape phones. Everything left is essential, so nothing more can be shed:
+   shrink it instead. Without this the countdown falls off a screen that has no
+   scroll to recover it. */
+@media (max-height: 480px) {
   :root {
-    --pad-x: 24px;
+    --pad-y: 12px;
   }
-
-  .hero__title {
-    font-size: 48px;
-    line-height: 52px;
+  .eyebrow {
+    display: none;
   }
-
-  .hero__subline {
-    max-width: none;
-    font-size: 18px;
+  .copy {
+    padding-block: 6px;
   }
-
+  .headline {
+    margin-top: 10px;
+    max-width: 26ch;
+    font-size: clamp(1.5rem, 3.8vw, 2.2rem);
+  }
+  .copy {
+    gap: 14px;
+    padding-block: 8px;
+  }
+  .actions {
+    margin-top: 14px;
+  }
   .cta {
-    align-self: stretch;
+    padding: 11px 26px;
+    font-size: 15px;
+  }
+  .clock {
+    margin-top: 12px;
+    gap: 18px;
+  }
+  .clock__count {
+    font-size: 1.9rem;
+  }
+  .clock__lead {
+    min-width: 62px;
+  }
+  .scene__aurora {
+    height: 34vh;
+  }
+}
+
+@media (max-height: 450px) {
+  .links {
+    display: none;
   }
 }

@@ -1,24 +1,32 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Instrument_Serif } from "next/font/google";
 import { siteConfig } from "@/site.config";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "600", "700"],
   display: "swap",
   variable: "--font-inter",
 });
 
-const description =
-  "Morgan State's student hackathon. We're building the team that runs the next one.";
+/** Display face. Carries the whole page, so it is the only other font loaded. */
+const display = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-display",
+});
+
+const title = `MorganHacks ${siteConfig.year} — organizer applications`;
+const description = `Organizer applications for MorganHacks ${siteConfig.year} are open to all college students. Applications close ${siteConfig.deadline.weekday}, ${siteConfig.deadline.date} at ${siteConfig.deadline.time}.`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
-  title: "MorganHacks — Morgan State's student hackathon",
+  title,
   description,
   openGraph: {
-    title: "MorganHacks",
+    title,
     description,
     url: siteConfig.url,
     siteName: "MorganHacks",
@@ -26,13 +34,14 @@ export const metadata: Metadata = {
     type: "website",
     // TODO: add `images: ["/og.png"]` once an OG image exists.
   },
+  twitter: { card: "summary_large_image", title, description },
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${display.variable}`}>
       <body>{children}</body>
     </html>
   );
