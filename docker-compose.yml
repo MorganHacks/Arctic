@@ -1,0 +1,89 @@
+# Local development stack.
+#
+# Everything a contributor needs to run the platform, and nothing they do not.
+# If this file grows a service that is not required to see the app work,
+# it belongs somewhere else.
+#
+#   docker compose up -d
+#   docker compose down       # keeps data
+#   docker compose down -v    # wipes data, gives you a clean database
+
+name: arctic
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: arctic-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: arctic
+      POSTGRES_PASSWORD: local-dev-only
+      POSTGRES_DB: morganhacks
+    ports:
+      - "5432:5432"
+    volumes:
+      # Postgres 18+ stores data in a major-version subdirectory, so the mount
+      # goes at /var/lib/postgresql rather than at /data beneath it. Mounting
+      # the old path makes the container crash-loop on startup.
+      - postgres-data:/var/lib/postgresql
+      # Runs once, on an empty data directory only. If you change it, you need
+      # `docker compose down -v` for it to take effect again.
+      - ./deploy/local/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arctic -d morganhacks"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3-compatible object storage, standing in for Cloudflare R2. Resumes are
+  # uploaded here in local development so nobody needs cloud credentials to
+  # work on the application form.
+  minio:
+    image: minio/minio:latest
+    container_name: arctic-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: arctic
+      MINIO_ROOT_PASSWORD: local-dev-only
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Creates the resume bucket, then exits. Without this the first upload fails
+  # against a bucket that does not exist.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 arctic local-dev-only &&
+      mc mb --ignore-existing local/resumes &&
+      echo 'bucket ready: resumes'
+      "
+
+  # Catches every email the platform sends in local development. Nothing
+  # leaves the machine, so a stray send during development can never touch
+  # the sending reputation the real domain spends weeks warming up.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: arctic-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+    environment:
+      MP_MAX_MESSAGES: 500
+
+volumes:
+  postgres-data:
+  minio-data:
