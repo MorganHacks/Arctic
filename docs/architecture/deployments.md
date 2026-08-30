@@ -35,12 +35,25 @@ submissions and judging. That is phase two.
 `accountLimit.total: 0`, so `vercel deploy --target=staging` will not work.
 Staging is therefore a long-lived branch with a domain bound to it.
 
-| Environment | Trigger | Domain |
-|---|---|---|
-| Production | push to `main` | `morganhacks.com`, `www.morganhacks.com` |
-| Staging | push to `staging` | `staging.morganhacks.com` |
-| Preview | any other branch or PR | generated `*.vercel.app` |
-| Development | local | `localhost:3000` |
+| Environment | Trigger | portalweb | portaladmin |
+|---|---|---|---|
+| Production | push to `main` | `morganhacks.com` *(not attached yet)* | `admin.morganhacks.com` |
+| Staging | push to `staging` | `main-stg.morganhacks.com` | `admin-stg.morganhacks.com` |
+| Preview | any other branch or PR | generated `*.vercel.app` | generated `*.vercel.app` |
+| Development | local | `localhost:3000` | `localhost:3001` |
+
+Staging subdomains are named after the frontend, not the environment, so the
+scheme still reads clearly once there is more than one app: `main-stg` is the
+public site, `admin-stg` is the console.
+
+**Production is deliberately not attached.** `morganhacks.com` and
+`www.morganhacks.com` are owned by the team but assigned to no project, so both
+serve 404. Attach them only when the team decides to go live:
+
+```bash
+vercel domains add morganhacks.com morganhacks-portalweb
+vercel domains add www.morganhacks.com morganhacks-portalweb
+```
 
 If the plan ever gains custom environments, migrate: it drops the long-lived
 branch, which is the one thing this setup does that `morganhacks-cicd.md`
@@ -112,9 +125,10 @@ on this account are attached but dead for exactly that reason.
 
 | Domain | Project | DNS present |
 |---|---|---|
-| `morganhacks.com` | `morganhacks-portalweb` | yes |
-| `www.morganhacks.com` | `morganhacks-portalweb` | yes |
-| `staging.morganhacks.com` | `morganhacks-portalweb` (branch `staging`) | **no** |
+| `morganhacks.com` | *unassigned, serves 404* | yes |
+| `www.morganhacks.com` | *unassigned, serves 404* | yes |
+| `main-stg.morganhacks.com` | `morganhacks-portalweb` (branch `staging`) | **no** |
+| `admin-stg.morganhacks.com` | not created yet | **no** |
 | `2024/2025/2026.morganhacks.com` | year archives | yes |
 | `2023.morganhacks.com` | `morgan-hacks-2023` | **no** |
 | `admin.morganhacks.com` | `morgan-hacks-admin` | **no** |
@@ -126,6 +140,11 @@ issue its own certificate:
 ```
 A    <subdomain>    76.76.21.21
 ```
+
+Removing a domain from a project is not the same as removing it from the
+account. Detach with `DELETE /v9/projects/<project>/domains/<domain>`; the team
+keeps ownership. `vercel domains rm` gives up the domain entirely — do not
+reach for it to take a site offline.
 
 `admin.morganhacks.com` is already held by the existing `morgan-hacks-admin`
 project. That has to be reconciled before `portaladmin` can use it.
