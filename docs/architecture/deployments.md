@@ -93,16 +93,6 @@ git checkout staging && git merge my-change && git push origin staging
 git checkout main && git merge staging && git push origin main
 ```
 
-**The risk this model carries:** `staging` and `main` drift apart if work lands
-on one and not the other, and then staging stops predicting what production
-will do — which is the failure `morganhacks-cicd.md` was written to avoid when
-it argued for a single long-lived branch.
-
-Keep them honest by always merging **staging into main**, never cherry-picking
-between them, and merging main back into staging if a hotfix ever goes straight
-to production. If `git log main..staging` is ever large, staging has stopped
-being a rehearsal.
-
 ---
 
 ## Project settings that are not in code
