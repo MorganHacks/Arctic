@@ -1,0 +1,50 @@
+# One file for every C# service. Never copy-paste per service; copies drift
+# within a month.
+name: Build .NET service
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      path:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ inputs.service }}-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      # .NET 10 LTS. The original CI doc pinned 8.0.x, which leaves support in
+      # November 2026 — roughly when this platform would be running.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore ${{ inputs.path }}
+
+      - name: Build
+        run: dotnet build ${{ inputs.path }} --no-restore -c Release
+
+      - name: Test
+        run: dotnet test ${{ inputs.path }} --no-build -c Release --logger trx
+
+      - name: Format check
+        run: dotnet format ${{ inputs.path }} --verify-no-changes
+
+      - name: Build image
+        run: docker build -t ${{ inputs.service }}:${{ github.sha }} ${{ inputs.path }}
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ inputs.service }}:${{ github.sha }}
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'

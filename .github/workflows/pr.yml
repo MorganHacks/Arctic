@@ -1,0 +1,118 @@
+# Dispatcher. Runs on every PR, decides which services changed, and fans out.
+#
+# The service list is declared ONCE, here, in the paths-filter block. Helm
+# release names, image names and job names all derive from it, so renaming a
+# service is one edit plus a `git mv`.
+name: PR
+
+on:
+  pull_request:
+    branches: [main, staging]
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      atlas: ${{ steps.filter.outputs.atlas }}
+      lark: ${{ steps.filter.outputs.lark }}
+      harbor: ${{ steps.filter.outputs.harbor }}
+      portalweb: ${{ steps.filter.outputs.portalweb }}
+      portaladmin: ${{ steps.filter.outputs.portaladmin }}
+      contracts: ${{ steps.filter.outputs.contracts }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            atlas:
+              - 'src/atlas/**'
+              - 'libs/contracts/**'
+              - 'libs/data/**'
+            lark:
+              - 'src/lark/**'
+              - 'libs/contracts/**'
+              - 'libs/data/**'
+            harbor:
+              - 'src/harbor/**'
+              - 'libs/contracts/**'
+            portalweb:
+              - 'src/portalweb/**'
+              - 'libs/contracts/**'
+              - 'libs/ui/**'
+            portaladmin:
+              - 'src/portaladmin/**'
+              - 'libs/contracts/**'
+              - 'libs/ui/**'
+            contracts:
+              - 'libs/contracts/**'
+
+  atlas:
+    needs: changes
+    if: needs.changes.outputs.atlas == 'true'
+    uses: ./.github/workflows/build-dotnet.yml
+    with:
+      service: atlas
+      path: src/atlas
+
+  lark:
+    needs: changes
+    if: needs.changes.outputs.lark == 'true'
+    uses: ./.github/workflows/build-dotnet.yml
+    with:
+      service: lark
+      path: src/lark
+
+  harbor:
+    needs: changes
+    if: needs.changes.outputs.harbor == 'true'
+    uses: ./.github/workflows/build-dotnet.yml
+    with:
+      service: harbor
+      path: src/harbor
+
+  portalweb:
+    needs: changes
+    if: needs.changes.outputs.portalweb == 'true'
+    uses: ./.github/workflows/build-node.yml
+    with:
+      service: portalweb
+      path: src/portalweb
+
+  portaladmin:
+    needs: changes
+    if: needs.changes.outputs.portaladmin == 'true'
+    uses: ./.github/workflows/build-node.yml
+    with:
+      service: portaladmin
+      path: src/portaladmin
+
+  contract-tests:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    uses: ./.github/workflows/contract-tests.yml
+
+  # The only check marked required in branch protection. Never the service
+  # jobs themselves: GitHub treats a skipped job as never-completing when it
+  # is required, so a docs-only PR would sit pending forever.
+  ci-gate:
+    needs: [atlas, lark, harbor, portalweb, portaladmin, contract-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          for result in ${{ join(needs.*.result, ' ') }}; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "A required job failed: $result"
+              exit 1
+            fi
+          done
+          echo "All jobs passed or were skipped."

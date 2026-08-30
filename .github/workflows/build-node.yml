@@ -1,0 +1,53 @@
+# One file for every frontend.
+#
+# No image build or Trivy scan here, unlike the .NET counterpart: the
+# frontends deploy to Vercel from the git integration, not as containers, so
+# there is no image to scan. Vercel builds and deploys; this workflow only
+# decides whether the code is good enough to merge.
+name: Build Node service
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      path:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ inputs.service }}-${{ github.ref }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        working-directory: ${{ inputs.path }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ${{ inputs.path }}/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # --if-present so a service without one of these scripts does not fail
+      # the build. Adding the script later turns the check on with no workflow
+      # change.
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        run: npm run typecheck --if-present
+
+      - name: Test
+        run: npm run test --if-present
+
+      - name: Build
+        run: npm run build
