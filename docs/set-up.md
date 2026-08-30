@@ -47,7 +47,29 @@ All three should say `healthy`.
 
 ---
 
-## 2. Run the API
+## 2. Apply the schema
+
+```bash
+cd src/atlas
+dotnet run --project MorganHacks.Migrations                # apply
+dotnet run --project MorganHacks.Migrations -- --whatif    # list, change nothing
+```
+
+Safe to run repeatedly: applied scripts are journalled in a `schemaversions`
+table and skipped on the next run.
+
+`MorganHacks.Migrations` is the **only** thing that changes the database
+structure. Do not add DDL anywhere else, including
+`deploy/local/postgres/01-schemas.sql` — that file creates the four schemas and
+nothing more. Two things migrating the same database is the documented way
+setups like this break.
+
+The connection string comes from `ARCTIC_DB`, defaulting to the local
+compose stack.
+
+---
+
+## 3. Run the API
 
 ```bash
 cd src/atlas
@@ -68,7 +90,7 @@ recoverable problem into an outage.
 
 ---
 
-## 3. Run the public site
+## 4. Run the public site
 
 ```bash
 cd src/portalweb
