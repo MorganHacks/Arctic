@@ -81,6 +81,45 @@ production branch is `main`, and every other branch produces a preview
 deployment, so there is no path from `staging` to production that does not go
 through a merge into `main`.
 
+### staging follows main on its own
+
+`.github/workflows/sync-staging.yml` updates `staging` every time anything
+lands on `main`, so the two cannot quietly drift apart. It:
+
+- **fast-forwards** when staging is simply behind, which is the usual case
+  straight after a merge;
+- **merges** when staging has commits of its own, so work someone pushed there
+  is kept rather than thrown away — a force push would have discarded it
+  silently;
+- **fails loudly** on a real conflict, naming the two commands to fix it by
+  hand. It never resolves a conflict on its own.
+
+Pushes made with `GITHUB_TOKEN` do not trigger further workflows, so this
+cannot loop.
+
+### Putting a branch on staging by hand
+
+```bash
+scripts/claim-staging              # the branch you are on
+scripts/claim-staging my-branch    # a specific branch
+scripts/claim-staging --release    # hand staging back to main
+```
+
+Or as a git alias, if you would rather type `git claim`:
+
+```bash
+git config --global alias.claim '!f(){ "$(git rev-parse --show-toplevel)"/scripts/claim-staging "$@"; }; f'
+```
+
+Do not call it `git stage` — that is already a synonym for `git add`.
+
+The script uses `--force-with-lease` rather than `--force`, so it fails loudly
+if somebody claimed staging while you were not looking instead of quietly
+throwing their deploy away.
+
+Note that a claim is not permanent: the next merge to `main` will merge main
+into whatever is on staging.
+
 ```bash
 # work
 git checkout -b my-change

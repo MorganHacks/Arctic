@@ -182,6 +182,13 @@ Break those and this becomes a monolith pretending to be modular.
 |---|---|
 | a feature branch | preview deployment on a generated URL |
 | `staging` | `main-stg.morganhacks.com` updates |
-| `main` | production updates, and nothing else does |
+| `main` | production updates, **and staging is brought up to date automatically** |
+
+To try a branch on staging without merging it anywhere:
+
+```bash
+scripts/claim-staging              # the branch you are on
+scripts/claim-staging --release    # hand it back to main
+```
 
 Full detail in [`docs/architecture/deployments.md`](architecture/deployments.md).
