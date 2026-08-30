@@ -1,0 +1,22 @@
+# Runs when libs/contracts changes. Contracts are the one place an edit can
+# silently break another service, so this is wired up before there is anything
+# in it to test — proving the dispatcher path works costs nothing now and
+# catches a wiring mistake later.
+name: Contract tests
+
+on:
+  workflow_call:
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run contract tests
+        run: |
+          if [ ! -d libs/contracts ] || [ -z "$(find libs/contracts -name '*.cs' -o -name '*.ts' -o -name '*.json' 2>/dev/null)" ]; then
+            echo "No contracts defined yet — nothing to verify."
+            exit 0
+          fi
+          echo "Contracts present but no test runner is wired up yet."
+          echo "Add it here when libs/contracts gains its first consumer."

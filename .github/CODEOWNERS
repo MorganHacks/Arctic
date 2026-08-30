@@ -1,0 +1,16 @@
+# Default owner for anything not matched below.
+*                       @tobibytes
+
+# Auth and schema are where a well-meaning mistake is expensive and hard to
+# spot in review. These stay with the tech lead regardless of who else joins.
+/src/atlas/MorganHacks.Identity/    @tobibytes
+/src/atlas/MorganHacks.Migrations/  @tobibytes
+/src/harbor/                        @tobibytes
+
+# A change here can silently break another service, so it needs agreement
+# rather than a rubber stamp.
+/libs/contracts/                    @tobibytes
+
+# CI and deployment config.
+/.github/                           @tobibytes
+/deploy/                            @tobibytes
