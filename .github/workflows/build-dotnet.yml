@@ -19,11 +19,11 @@ jobs:
       group: ${{ inputs.service }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # .NET 10 LTS. The original CI doc pinned 8.0.x, which leaves support in
       # November 2026 — roughly when this platform would be running.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -39,10 +39,25 @@ jobs:
       - name: Format check
         run: dotnet format ${{ inputs.path }} --verify-no-changes
 
+      # Services are containerised as they become deployable. Until a service
+      # has a Dockerfile there is no image to build or scan, and failing the
+      # build over that would just train people to ignore red CI.
+      - name: Is this service containerised yet?
+        id: image
+        run: |
+          if [ -f "${{ inputs.path }}/Dockerfile" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No ${{ inputs.path }}/Dockerfile yet — skipping image build and scan."
+          fi
+
       - name: Build image
+        if: steps.image.outputs.exists == 'true'
         run: docker build -t ${{ inputs.service }}:${{ github.sha }} ${{ inputs.path }}
 
       - name: Trivy scan
+        if: steps.image.outputs.exists == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ inputs.service }}:${{ github.sha }}

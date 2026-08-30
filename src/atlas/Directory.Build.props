@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    Shared settings for every atlas project. Set here rather than per-csproj so
+    a new project inherits them instead of being configured from memory.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- This system holds applicant PII and is maintained by rotating student
+         volunteers. A warning nobody reads is a bug nobody finds. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>

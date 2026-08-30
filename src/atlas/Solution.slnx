@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="MorganHacks.Api.Tests/MorganHacks.Api.Tests.csproj" />
+  <Project Path="MorganHacks.Api/MorganHacks.Api.csproj" />
+  <Project Path="MorganHacks.Applications/MorganHacks.Applications.csproj" />
+  <Project Path="MorganHacks.Identity/MorganHacks.Identity.csproj" />
+  <Project Path="MorganHacks.Migrations/MorganHacks.Migrations.csproj" />
+  <Project Path="MorganHacks.Profiles/MorganHacks.Profiles.csproj" />
+</Solution>
