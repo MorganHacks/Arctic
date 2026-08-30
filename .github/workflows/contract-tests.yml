@@ -11,7 +11,7 @@ jobs:
   contract-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run contract tests
         run: |
           if [ ! -d libs/contracts ] || [ -z "$(find libs/contracts -name '*.cs' -o -name '*.ts' -o -name '*.json' 2>/dev/null)" ]; then
