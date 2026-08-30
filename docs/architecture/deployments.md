@@ -59,22 +59,49 @@ If the plan ever gains custom environments, migrate: it drops the long-lived
 branch, which is the one thing this setup does that `morganhacks-cicd.md`
 argues against.
 
-### Staging is a claimable slot, not a place work accumulates
+### Branch model
 
-`morganhacks-cicd.md` defines staging as a shared slot anyone can claim, which
-resets to whatever `main` last produced. That survives here — the branch is a
-pointer, not somewhere commits pile up:
+Two long-lived branches. Nothing is force-pushed and nothing is claimed.
 
-```bash
-# claim staging with your branch
-git push origin my-branch:staging --force-with-lease
-
-# reset it to main (do this after a main deploy)
-git push origin main:staging --force-with-lease
+```
+feature branch  →  staging  →  main
+                     ↓           ↓
+              main-stg.      morganhacks.com
+              morganhacks.com   (production)
 ```
 
-Never merge *into* `staging` and never branch *off* it. The moment someone does,
-it becomes the `develop` branch the CI doc warns about.
+| You push to | What happens |
+|---|---|
+| a feature branch | preview deployment on a generated URL |
+| `staging` | `main-stg.morganhacks.com` updates |
+| `main` | production updates, and nothing else does |
+
+**Production only ever moves when something lands on `main`.** Vercel's
+production branch is `main`, and every other branch produces a preview
+deployment, so there is no path from `staging` to production that does not go
+through a merge into `main`.
+
+```bash
+# work
+git checkout -b my-change
+git push origin my-change            # preview URL, no domain
+
+# put it on staging
+git checkout staging && git merge my-change && git push origin staging
+
+# ship it
+git checkout main && git merge staging && git push origin main
+```
+
+**The risk this model carries:** `staging` and `main` drift apart if work lands
+on one and not the other, and then staging stops predicting what production
+will do — which is the failure `morganhacks-cicd.md` was written to avoid when
+it argued for a single long-lived branch.
+
+Keep them honest by always merging **staging into main**, never cherry-picking
+between them, and merging main back into staging if a hotfix ever goes straight
+to production. If `git log main..staging` is ever large, staging has stopped
+being a rehearsal.
 
 ---
 
