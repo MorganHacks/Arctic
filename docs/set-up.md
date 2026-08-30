@@ -51,7 +51,7 @@ All three should say `healthy`.
 
 ```bash
 cd src/atlas
-dotnet build MorganHacks.slnx
+dotnet build Solution.slnx
 dotnet run --project MorganHacks.Api --urls http://localhost:5080
 ```
 
@@ -82,7 +82,7 @@ npm run dev          # http://localhost:3000
 
 ```bash
 cd src/atlas
-dotnet test MorganHacks.slnx
+dotnet test Solution.slnx
 ```
 
 ```bash
@@ -97,7 +97,7 @@ CI runs the same commands. If they pass here they pass there.
 
 ## Things that will confuse you once
 
-**The solution file is `MorganHacks.slnx`, not `.sln`.** .NET 10 creates the
+**The solution file is `Solution.slnx`, not `.sln`.** .NET 10 creates the
 newer XML solution format. `dotnet sln MorganHacks.sln` will tell you it cannot
 find a solution; use the `.slnx` name or just `dotnet build` from `src/atlas`.
 
