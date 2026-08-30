@@ -446,6 +446,27 @@ a {
 }
 
 @media (max-width: 760px) {
+  /* The flanking rules need horizontal room either side of the label to read
+     as rules. With a label this long there is none left and they collapse to
+     slivers, so drop them and let the label centre on its own. Tracking comes
+     down too, so it wraps to two balanced lines rather than three ragged ones. */
+  .eyebrow::before,
+  .eyebrow::after {
+    display: none;
+  }
+  .eyebrow {
+    display: block;
+    max-width: 26ch;
+    margin-inline: auto;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    line-height: 1.5;
+    text-wrap: balance;
+  }
+  .eyebrow span {
+    margin-right: 0;
+  }
+
   .headline {
     max-width: 14ch;
     font-size: clamp(2.1rem, 9.4vw, 3.2rem);

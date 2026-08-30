@@ -48,7 +48,7 @@ export default function Home() {
             one stays internally tight. */}
         <div className="copy__intro">
           <p className="eyebrow">
-            <span>MorganHacks {year}</span>
+            <span>MorganHacks {year} · Organizer applications</span>
           </p>
 
           <h1 className="headline">
