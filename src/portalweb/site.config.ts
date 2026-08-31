@@ -31,7 +31,7 @@ export const siteConfig = {
     iso: "2026-09-14T03:59:00Z",
   },
 
-  contactEmail: "morganhacks2022@gmail.com",
+  contactEmail: "info@morganhacks.com",
 
   /**
    * MLH trust badge. Hotlinked from MLH's own S3, same as the 2026 site did —
