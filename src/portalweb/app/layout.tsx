@@ -32,7 +32,8 @@ export const metadata: Metadata = {
     siteName: "MorganHacks",
     locale: "en_US",
     type: "website",
-    // TODO: add `images: ["/og.png"]` once an OG image exists.
+    // The image itself comes from app/opengraph-image.tsx, which Next wires up
+    // automatically — listing it here as well would only let the two drift.
   },
   twitter: { card: "summary_large_image", title, description },
 };
