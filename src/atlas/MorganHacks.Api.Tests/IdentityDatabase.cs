@@ -99,4 +99,20 @@ public sealed class IdentityDatabase : IAsyncLifetime
         cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync();
     }
+
+    public async Task<string?> GoogleSubOf(Guid personId)
+    {
+        await using var cmd = DataSource.CreateCommand(
+            "SELECT google_sub FROM identity.people WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", personId);
+        return await cmd.ExecuteScalarAsync() as string;
+    }
+
+    public async Task RevokeAsync(Guid personId)
+    {
+        await using var cmd = DataSource.CreateCommand(
+            "UPDATE identity.people SET revoked_at = now() WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", personId);
+        await cmd.ExecuteNonQueryAsync();
+    }
 }

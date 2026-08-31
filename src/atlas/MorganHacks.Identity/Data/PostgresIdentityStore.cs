@@ -253,4 +253,76 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         baselines.AddRange(bySlug.Select(kv => new TeamBaseline(kv.Key, kv.Value)));
         return (memberships, grants, baselines);
     }
+
+    public async Task<OrganizerResult> ResolveOrganizerAsync(
+        GoogleIdentity identity, CancellationToken ct)
+    {
+        // 1. Known subject id wins, whatever the address now is. This is what
+        //    keeps an organizer who changed their Google email signed in.
+        const string bySubject = """
+            SELECT id, revoked_at FROM identity.people
+             WHERE google_sub = @sub AND kind = 'organizer'
+            """;
+        await using (var cmd = dataSource.CreateCommand(bySubject))
+        {
+            cmd.Parameters.AddWithValue("sub", identity.Subject);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+            {
+                var id = reader.GetGuid(0);
+                return await reader.IsDBNullAsync(1, ct)
+                    ? OrganizerResult.Accept(id)
+                    : OrganizerResult.Reject(OrganizerRejection.Revoked);
+            }
+        }
+
+        // 2. Otherwise the address must be on the allowlist, which is simply
+        //    an organizer row existing for it.
+        const string byEmail = """
+            SELECT id, google_sub, revoked_at FROM identity.people
+             WHERE lower(email) = lower(@email) AND kind = 'organizer'
+            """;
+        Guid personId;
+        await using (var cmd = dataSource.CreateCommand(byEmail))
+        {
+            cmd.Parameters.AddWithValue("email", identity.Email);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                return OrganizerResult.Reject(OrganizerRejection.NotAllowlisted);
+            }
+
+            personId = reader.GetGuid(0);
+
+            if (!await reader.IsDBNullAsync(2, ct))
+            {
+                return OrganizerResult.Reject(OrganizerRejection.Revoked);
+            }
+
+            // Already bound to somebody else's Google account. Rebinding is a
+            // deliberate admin action, never something a sign-in does.
+            if (!await reader.IsDBNullAsync(1, ct))
+            {
+                return OrganizerResult.Reject(OrganizerRejection.BoundToAnotherAccount);
+            }
+        }
+
+        // 3. First successful sign-in binds the subject id. Conditional on it
+        //    still being null so two simultaneous first logins cannot both
+        //    bind.
+        const string bind = """
+            UPDATE identity.people
+               SET google_sub = @sub, updated_at = now()
+             WHERE id = @id AND google_sub IS NULL
+            RETURNING id
+            """;
+        await using (var cmd = dataSource.CreateCommand(bind))
+        {
+            cmd.Parameters.AddWithValue("sub", identity.Subject);
+            cmd.Parameters.AddWithValue("id", personId);
+            return await cmd.ExecuteScalarAsync(ct) is Guid bound
+                ? OrganizerResult.Accept(bound)
+                : OrganizerResult.Reject(OrganizerRejection.BoundToAnotherAccount);
+        }
+    }
 }

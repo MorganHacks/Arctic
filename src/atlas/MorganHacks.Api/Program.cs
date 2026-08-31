@@ -12,6 +12,12 @@ var connectionString =
 
 builder.Services.AddIdentityModule(connectionString);
 builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
+builder.Services.AddHttpClient();
+
+// Registered even when unconfigured: the endpoints answer 503 rather than
+// failing at startup, so local development does not need Google credentials.
+builder.Services.AddSingleton<IGoogleTokenVerifier>(
+    _ => new GoogleTokenVerifier(builder.Configuration["Google:ClientId"] ?? string.Empty));
 
 // Rate limiting on the magic-link endpoint, per IP and per address.
 //
@@ -47,6 +53,7 @@ app.UseRateLimiter();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapAuth();
+app.MapGoogle();
 
 app.Run();
 
