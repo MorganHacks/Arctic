@@ -73,4 +73,30 @@ public sealed class IdentityDatabase : IAsyncLifetime
         cmd.Parameters.AddWithValue("email", email);
         return (Guid)(await cmd.ExecuteScalarAsync())!;
     }
+
+    /// <summary>Adds a person to a seeded team, optionally with an expiry.</summary>
+    public async Task AddToTeamAsync(Guid personId, string slug, DateTimeOffset? expiresAt = null)
+    {
+        await using var cmd = DataSource.CreateCommand("""
+            INSERT INTO identity.team_members (person_id, team_id, expires_at)
+            SELECT @personId, id, @expiresAt FROM identity.teams WHERE slug = @slug
+            """);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("slug", slug);
+        cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>Grants one permission directly to a person.</summary>
+    public async Task GrantAsync(Guid personId, string permission, DateTimeOffset? expiresAt = null)
+    {
+        await using var cmd = DataSource.CreateCommand("""
+            INSERT INTO identity.grants (person_id, permission, expires_at)
+            VALUES (@personId, @permission, @expiresAt)
+            """);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("permission", permission);
+        cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync();
+    }
 }
