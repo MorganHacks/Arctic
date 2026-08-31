@@ -67,6 +67,21 @@ setups like this break.
 The connection string comes from `ARCTIC_DB`, defaulting to the local
 compose stack.
 
+### Seeding a super admin
+
+Nobody can grant permissions to anyone until at least one person holds
+`people.grant_permissions`, and the only way to get the first one is to seed it:
+
+```bash
+ARCTIC_SUPER_ADMIN_EMAIL=you@morganhacks.com \
+  dotnet run --project MorganHacks.Migrations
+```
+
+Idempotent, and it never removes anyone: taking access away is a deliberate act,
+not a side effect of a deploy. It warns while there is only one super admin,
+because the RBAC doc asks for two so that one graduation cannot lock the org
+out.
+
 ---
 
 ## 3. Run the API
