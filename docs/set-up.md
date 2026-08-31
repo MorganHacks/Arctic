@@ -115,6 +115,24 @@ npm run dev          # http://localhost:3000
 
 ---
 
+## Google sign-in for organizers
+
+Optional locally. Without credentials `/auth/google` answers 503 and everything
+else still works, so nobody needs a Google project to develop the rest.
+
+```bash
+export Google__ClientId=...apps.googleusercontent.com
+export Google__ClientSecret=...
+export Google__RedirectUri=http://localhost:5080/auth/google/callback
+```
+
+Google authenticates; it does not authorise. An address must also exist as an
+`organizer` row, which is the allowlist. The Google subject id is bound on the
+first successful sign-in, so changing a Google email later does not lock anyone
+out, and nobody can claim an allowlisted address they do not control.
+
+---
+
 ## Turn the git hooks on
 
 One line, once per clone:

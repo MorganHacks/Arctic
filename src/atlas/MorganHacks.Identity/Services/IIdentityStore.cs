@@ -49,6 +49,24 @@ public interface IIdentityStore
     /// Returned as raw rows rather than a decision, so the additive-union rule
     /// lives in one testable place instead of in SQL.
     /// </remarks>
+    /// <summary>
+    /// Resolves a verified Google identity to an organizer, binding the Google
+    /// subject id on first sign-in.
+    /// </summary>
+    /// <remarks>
+    /// Google says who someone is. It does not say they are allowed in — those
+    /// are different questions, and conflating them makes every Gmail account
+    /// an organizer.
+    /// <para>
+    /// Matching prefers the subject id over the address, so an organizer who
+    /// changes their Google email is not locked out. Binding on first
+    /// successful sign-in means nobody can claim an allowlisted address they
+    /// do not actually control.
+    /// </para>
+    /// </remarks>
+    Task<OrganizerResult> ResolveOrganizerAsync(
+        GoogleIdentity identity, CancellationToken ct);
+
     Task<(IReadOnlyList<TeamMembership> Memberships,
           IReadOnlyList<PermissionGrant> Grants,
           IReadOnlyList<TeamBaseline> Baselines)>
