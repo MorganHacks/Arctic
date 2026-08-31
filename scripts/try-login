@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Walks the whole hacker sign-in flow against your machine and prints what
+# happens at each step, so "does auth work" has an answer you can watch rather
+# than infer from a green test run.
+#
+#   scripts/try-login                 # uses demo@example.com
+#   scripts/try-login me@example.com
+#
+# Starts the API itself and stops it afterwards. Needs the compose stack up.
+set -euo pipefail
+
+EMAIL="${1:-demo@example.com}"
+PORT="${PORT:-5099}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+API_LOG="$(mktemp)"
+API_PID=""
+
+cleanup() {
+  if [ -n "$API_PID" ]; then
+    # Braces and the redirect together swallow bash's "Terminated" job notice,
+    # which is noise at the end of an otherwise clean walkthrough.
+    { kill "$API_PID" && wait "$API_PID"; } 2>/dev/null || true
+  fi
+  rm -f "$API_LOG"
+}
+trap cleanup EXIT
+
+step() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; }
+
+step "1. Is the local stack up?"
+if ! docker compose -f "$ROOT/docker-compose.yml" ps --format '{{.Service}} {{.Status}}' 2>/dev/null | grep -q "postgres.*healthy"; then
+  bad "Postgres is not healthy. Run: docker compose up -d"
+  exit 1
+fi
+ok "postgres is healthy"
+
+step "2. Apply migrations"
+(cd "$ROOT/src/atlas" && dotnet run --project MorganHacks.Migrations -c Release 2>&1 | tail -1 | sed 's/^/  /')
+
+step "3. Make sure $EMAIL exists as a hacker"
+docker compose -f "$ROOT/docker-compose.yml" exec -T postgres \
+  psql -U arctic -d morganhacks -tAc \
+  "INSERT INTO identity.people (kind,email) VALUES ('hacker','$EMAIL') ON CONFLICT DO NOTHING" >/dev/null
+ok "$EMAIL is in identity.people"
+
+step "4. Start the API on :$PORT"
+# Build, then exec the binary directly. `dotnet run` spawns the app as a child,
+# so killing the PID it returns leaves the API holding the port — and the next
+# run then health-checks green against the previous process whose log is gone.
+(cd "$ROOT/src/atlas" && dotnet build MorganHacks.Api -c Release >/dev/null 2>&1)
+(cd "$ROOT/src/atlas/MorganHacks.Api" \
+  && exec dotnet bin/Release/net10.0/MorganHacks.Api.dll --urls "http://localhost:$PORT" >"$API_LOG" 2>&1) &
+API_PID=$!
+for _ in $(seq 1 30); do
+  curl -sS -m 2 -o /dev/null "http://localhost:$PORT/health" 2>/dev/null && break
+  sleep 1
+done
+curl -sS -m 3 -o /dev/null "http://localhost:$PORT/health" || { bad "API did not start"; tail -20 "$API_LOG"; exit 1; }
+ok "API is up"
+
+step "5. Ask for a sign-in link — for an address that EXISTS"
+curl -sS -X POST "http://localhost:$PORT/auth/magic-link" \
+  -H 'content-type: application/json' -d "{\"email\":\"$EMAIL\"}" | sed 's/^/  /'
+echo
+
+step "6. Ask again — for an address that does NOT exist"
+curl -sS -X POST "http://localhost:$PORT/auth/magic-link" \
+  -H 'content-type: application/json' -d '{"email":"definitely-not-real@example.com"}' | sed 's/^/  /'
+printf '\n  \033[33mNote:\033[0m identical. That is the point — otherwise this endpoint\n'
+printf '  tells anyone who asks who applied.\n'
+
+step "7. The link (from the log, standing in for the email lark will send)"
+sleep 1
+LINK=$(grep -o "http://localhost:3000/auth/consume?token=[A-Za-z0-9_-]*" "$API_LOG" | tail -1 || true)
+[ -z "$LINK" ] && { bad "No link was issued — is $EMAIL really in the database?"; exit 1; }
+TOKEN="${LINK##*token=}"
+echo "  ${LINK%token=*}token=${TOKEN:0:10}…"
+
+step "8. Click it"
+RESPONSE=$(curl -sS -i "http://localhost:$PORT/auth/consume?token=$TOKEN" 2>/dev/null)
+COOKIE=$(printf '%s' "$RESPONSE" | grep -io 'mh_session=[A-Za-z0-9_-]*' | head -1 || true)
+printf '%s\n' "$RESPONSE" | grep -iE '^HTTP|^set-cookie|signedIn' \
+  | sed 's/mh_session=[A-Za-z0-9_-]*/mh_session=<token>/' | sed 's/^/  /'
+[ -n "$COOKIE" ] && ok "signed in, session cookie set" || { bad "no session cookie"; exit 1; }
+printf '  \033[33mNote:\033[0m httponly means script cannot read it, so an XSS bug\n'
+printf '  cannot lift the session.\n'
+
+step "9. Prove single use: click the same link again"
+curl -sS "http://localhost:$PORT/auth/consume?token=$TOKEN" | sed 's/^/  /'
+echo
+
+step "10. A fresh link, then check who you are"
+curl -sS -X POST "http://localhost:$PORT/auth/magic-link" \
+  -H 'content-type: application/json' -d "{\"email\":\"$EMAIL\"}" >/dev/null
+sleep 1
+T2=$(grep -o "consume?token=[A-Za-z0-9_-]*" "$API_LOG" | tail -1); T2="${T2##*token=}"
+C2=$(curl -sS -i "http://localhost:$PORT/auth/consume?token=$T2" 2>/dev/null | grep -io 'mh_session=[A-Za-z0-9_-]*' | head -1)
+printf '  with the cookie:    '; curl -sS "http://localhost:$PORT/auth/me" -H "Cookie: $C2"; echo
+printf '  without it:         '; curl -sS -o /dev/null -w 'HTTP %{http_code}\n' "http://localhost:$PORT/auth/me"
+
+step "11. Log out, then reuse the same cookie"
+curl -sS -X POST "http://localhost:$PORT/auth/logout" -H "Cookie: $C2" | sed 's/^/  /'
+echo
+printf '  same cookie again:  '; curl -sS -o /dev/null -w 'HTTP %{http_code}\n' "http://localhost:$PORT/auth/me" -H "Cookie: $C2"
+printf '\n  \033[33mNote:\033[0m 401 on the very next request. That is why sessions are\n'
+printf '  database rows and not JWTs — a JWT would keep working until it expired.\n\n'
