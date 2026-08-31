@@ -1,0 +1,61 @@
+#!/usr/bin/env sh
+# Refuses direct pushes to main and staging.
+#
+# This is not security — `--no-verify` walks straight past it, and on a private
+# repo on a free plan GitHub gives us no server-side enforcement to fall back
+# on. It is here for the failure it actually catches: muscle memory. Somebody
+# finishes work on main by habit and pushes before remembering.
+#
+# Install:  git config core.hooksPath .githooks
+set -eu
+
+blocked=""
+
+# stdin gives: <local ref> <local sha> <remote ref> <remote sha>
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      blocked="main"
+      ;;
+    refs/heads/staging)
+      # scripts/claim-staging sets this. Pushing to staging on purpose is
+      # fine; doing it by accident is what we are stopping.
+      if [ "${ARCTIC_ALLOW_STAGING:-}" != "1" ]; then
+        blocked="staging"
+      fi
+      ;;
+  esac
+done
+
+[ -z "$blocked" ] && exit 0
+
+cat >&2 <<MSG
+
+  Refusing to push directly to '$blocked'.
+
+MSG
+
+if [ "$blocked" = "main" ]; then
+  cat >&2 <<'MSG'
+  main only moves through a pull request:
+
+      git push origin HEAD:refs/heads/your-branch
+      gh pr create --base main
+
+MSG
+else
+  cat >&2 <<'MSG'
+  staging is a mirror, never somewhere work lives. To test a branch on it:
+
+      scripts/claim-staging            # the branch you are on
+      scripts/claim-staging --release  # hand it back to main
+
+MSG
+fi
+
+cat >&2 <<'MSG'
+  If you genuinely meant it: git push --no-verify
+
+MSG
+
+exit 1

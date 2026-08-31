@@ -38,7 +38,9 @@ git rev-parse --verify --quiet "$ref" >/dev/null || {
 }
 
 echo "Claiming staging for '$ref'..."
-git push origin "$ref:staging" --force-with-lease
+# The pre-push hook blocks pushes to staging by default; this says the push is
+# deliberate rather than muscle memory.
+ARCTIC_ALLOW_STAGING=1 git push origin "$ref:staging" --force-with-lease
 
 echo
 echo "Deploying to https://main-stg.morganhacks.com (about 15s)."

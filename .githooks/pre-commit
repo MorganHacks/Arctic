@@ -1,0 +1,68 @@
+#!/usr/bin/env sh
+# Stops three things that are painful to undo once they are in history.
+#
+# Install:  git config core.hooksPath .githooks
+# Bypass:   git commit --no-verify
+set -eu
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+fail=0
+say() { printf '%s\n' "$*" >&2; }
+
+# Filenames are matched with grep over a newline-separated list rather than a
+# `for` loop: word splitting would break on any path containing a space, which
+# is exactly what the duplicate-file check below is looking for.
+
+# --- 1. Environment files ---------------------------------------------------
+# Values belong in Vercel and in the local stack, never in git. .env.example is
+# the contract and carries no values, so it is allowed.
+env_hits=$(printf '%s\n' "$staged" \
+  | grep -E '(^|/)\.env($|\.)' \
+  | grep -vE '\.env\.(example|sample)$' || true)
+if [ -n "$env_hits" ]; then
+  say "  Refusing to commit environment files:"
+  printf '%s\n' "$env_hits" | sed 's/^/    /' >&2
+  fail=1
+fi
+
+# --- 2. iCloud duplicate files ----------------------------------------------
+# The Desktop this repo lives on is synced, which drops "name 2.ext" copies
+# next to real files. One already broke tsc by colliding with Next's
+# generated types.
+dup_hits=$(printf '%s\n' "$staged" | grep -E ' 2(\.[^/]*)?$' || true)
+if [ -n "$dup_hits" ]; then
+  say "  Refusing to commit iCloud duplicates:"
+  printf '%s\n' "$dup_hits" | sed 's/^/    /' >&2
+  fail=1
+fi
+
+# --- 3. Secrets -------------------------------------------------------------
+# High-signal patterns only. A hook that cries wolf gets --no-verify'd every
+# time and then protects nothing.
+begin_key="-----BEGIN"        # split so this file does not match itself
+added=$(git diff --cached -U0 --diff-filter=ACM | grep '^+' | grep -v '^+++' || true)
+if [ -n "$added" ]; then
+  for p in \
+    "$begin_key .*PRIVATE KEY-----" \
+    'AKIA[0-9A-Z]{16}' \
+    'gh[pousr]_[A-Za-z0-9]{36,}' \
+    'xox[baprs]-[A-Za-z0-9-]{10,}' \
+    'NEXT_PUBLIC_[A-Z0-9_]*(SECRET|PASSWORD|PRIVATE)[A-Z0-9_]*=.'
+  do
+    if printf '%s\n' "$added" | grep -Eq "$p"; then
+      say "  Possible secret in staged changes, matching: $p"
+      fail=1
+    fi
+  done
+fi
+
+if [ "$fail" -ne 0 ]; then
+  say ""
+  say "  Nothing was committed. If this is a false positive:"
+  say "    git commit --no-verify"
+  exit 1
+fi
+
+exit 0
