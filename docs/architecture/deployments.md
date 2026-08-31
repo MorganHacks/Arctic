@@ -95,6 +95,33 @@ not.
 That is also the reset: claiming staging is temporary, and the next thing to
 reach main takes it back.
 
+### Choosing what runs on staging
+
+`Actions -> Deploy to staging` gives a form: which branch to put on staging, and
+which services to force a rebuild of.
+
+```bash
+gh workflow run deploy-staging.yml -f ref=my-branch
+gh workflow run deploy-staging.yml -f ref=my-branch -f portalweb=true
+```
+
+Moving staging to a different commit is usually all that is needed, because
+Vercel rebuilds from the push. The per-service switches exist for the other
+case: re-running a service when the code has **not** changed, which a no-op
+push cannot trigger.
+
+Forcing a rebuild without a code change needs a Vercel token:
+
+```bash
+gh secret set VERCEL_TOKEN -R MorganHacks/Arctic
+```
+
+Without it, moving the branch still works — only the force path fails, and it
+says so rather than reporting a deploy that did not happen.
+
+The backend services appear in the form but have no staging deploy target yet,
+so ticking one fails loudly. They light up as each becomes deployable.
+
 ### Putting a branch on staging by hand
 
 ```bash
