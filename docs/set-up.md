@@ -182,7 +182,7 @@ Break those and this becomes a monolith pretending to be modular.
 |---|---|
 | a feature branch | preview deployment on a generated URL |
 | `staging` | `main-stg.morganhacks.com` updates |
-| `main` | production updates, **and staging is brought up to date automatically** |
+| `main` | production updates, **and staging is reset to mirror main** |
 
 To try a branch on staging without merging it anywhere:
 

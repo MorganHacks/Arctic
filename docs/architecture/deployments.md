@@ -81,21 +81,19 @@ production branch is `main`, and every other branch produces a preview
 deployment, so there is no path from `staging` to production that does not go
 through a merge into `main`.
 
-### staging follows main on its own
+### staging is a mirror, never a place work lives
 
-`.github/workflows/sync-staging.yml` updates `staging` every time anything
-lands on `main`, so the two cannot quietly drift apart. It:
+Nothing is ever committed to `staging` and no branch is ever merged into it. It
+holds a copy of `main`, or a copy of whatever branch someone is testing, and
+nothing else.
 
-- **fast-forwards** when staging is simply behind, which is the usual case
-  straight after a merge;
-- **merges** when staging has commits of its own, so work someone pushed there
-  is kept rather than thrown away — a force push would have discarded it
-  silently;
-- **fails loudly** on a real conflict, naming the two commands to fix it by
-  hand. It never resolves a conflict on its own.
+`.github/workflows/mirror-staging.yml` overwrites `staging` with `main` every
+time anything lands on main. It force-pushes rather than merging, because a
+merge would imply staging had commits worth keeping and by definition it does
+not.
 
-Pushes made with `GITHUB_TOKEN` do not trigger further workflows, so this
-cannot loop.
+That is also the reset: claiming staging is temporary, and the next thing to
+reach main takes it back.
 
 ### Putting a branch on staging by hand
 
