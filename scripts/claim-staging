@@ -38,6 +38,12 @@ git rev-parse --verify --quiet "$ref" >/dev/null || {
 }
 
 echo "Claiming staging for '$ref'..."
+
+# --force-with-lease compares against the local remote-tracking ref, so a stale
+# one makes it refuse with "stale info". Fetch first: the point of the lease is
+# to notice somebody else's claim, not to trip over our own out-of-date copy.
+git fetch -q origin staging 2>/dev/null || true
+
 # The pre-push hook blocks pushes to staging by default; this says the push is
 # deliberate rather than muscle memory.
 ARCTIC_ALLOW_STAGING=1 git push origin "$ref:staging" --force-with-lease
