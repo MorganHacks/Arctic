@@ -39,4 +39,18 @@ public interface IIdentityStore
         Guid personId, DateTimeOffset now, CancellationToken ct);
 
     Task<Guid?> FindPersonIdByEmailAsync(string email, CancellationToken ct);
+
+    /// <summary>
+    /// Everything needed to work out what one person may do: their team
+    /// memberships, their individual grants, and the baseline each team
+    /// confers.
+    /// </summary>
+    /// <remarks>
+    /// Returned as raw rows rather than a decision, so the additive-union rule
+    /// lives in one testable place instead of in SQL.
+    /// </remarks>
+    Task<(IReadOnlyList<TeamMembership> Memberships,
+          IReadOnlyList<PermissionGrant> Grants,
+          IReadOnlyList<TeamBaseline> Baselines)>
+        GetPermissionContextAsync(Guid personId, CancellationToken ct);
 }

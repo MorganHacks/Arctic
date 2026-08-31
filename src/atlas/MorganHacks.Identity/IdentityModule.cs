@@ -22,6 +22,7 @@ public static class IdentityModule
         services.AddScoped<IIdentityStore, PostgresIdentityStore>();
         services.AddScoped<MagicLinkService>();
         services.AddScoped<SessionService>();
+        services.AddScoped<PermissionService>();
         return services;
     }
 }

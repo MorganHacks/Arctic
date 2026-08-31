@@ -14,7 +14,7 @@ public static class AuthEndpoints
     /// client — Strict would drop the cookie on exactly the navigation a magic
     /// link produces, and the user would land logged out.
     /// </remarks>
-    private const string SessionCookie = "mh_session";
+    private const string SessionCookie = RequirePermissionExtensions.SessionCookie;
 
     public static IEndpointRouteBuilder MapAuth(this IEndpointRouteBuilder app)
     {
@@ -27,10 +27,19 @@ public static class AuthEndpoints
         auth.MapPost("/logout", Logout);
         auth.MapGet("/me", WhoAmI);
 
+        // The first gated route. Proves the filter end to end and gives the
+        // admin screens something to call.
+        app.MapGet("/people", ListPeople)
+           .RequirePermission(Permission.PeopleView);
+
         return app;
     }
 
     public sealed record MagicLinkRequest(string Email);
+
+    /// <summary>Requires <c>people.view</c>.</summary>
+    private static IResult ListPeople(HttpContext http) =>
+        Results.Ok(new { requestedBy = http.PersonId(), people = Array.Empty<object>() });
 
     /// <summary>
     /// Per-address request counter, checked before any database work.

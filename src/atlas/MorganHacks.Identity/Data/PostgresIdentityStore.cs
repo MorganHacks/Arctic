@@ -169,4 +169,88 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         cmd.Parameters.AddWithValue("now", now);
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    public async Task<(IReadOnlyList<TeamMembership>, IReadOnlyList<PermissionGrant>,
+        IReadOnlyList<TeamBaseline>)> GetPermissionContextAsync(
+        Guid personId, CancellationToken ct)
+    {
+        var memberships = new List<TeamMembership>();
+        var grants = new List<PermissionGrant>();
+        var baselines = new List<TeamBaseline>();
+
+        // Expiry is not filtered here. EffectivePermissions decides what is
+        // still live, so there is exactly one place that rule exists and one
+        // place to test it.
+        const string membershipSql = """
+            SELECT t.slug, m.expires_at
+              FROM identity.team_members m
+              JOIN identity.teams t ON t.id = m.team_id
+             WHERE m.person_id = @personId
+            """;
+        await using (var cmd = dataSource.CreateCommand(membershipSql))
+        {
+            cmd.Parameters.AddWithValue("personId", personId);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                memberships.Add(new TeamMembership(
+                    reader.GetString(0),
+                    await reader.IsDBNullAsync(1, ct)
+                        ? null
+                        : reader.GetFieldValue<DateTimeOffset>(1)));
+            }
+        }
+
+        const string grantSql = """
+            SELECT permission, expires_at FROM identity.grants WHERE person_id = @personId
+            """;
+        await using (var cmd = dataSource.CreateCommand(grantSql))
+        {
+            cmd.Parameters.AddWithValue("personId", personId);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                // A permission the code no longer knows about is skipped
+                // rather than granted. TryParse is the gate.
+                if (Permission.TryParse(reader.GetString(0), out var permission))
+                {
+                    grants.Add(new PermissionGrant(
+                        permission,
+                        await reader.IsDBNullAsync(1, ct)
+                            ? null
+                            : reader.GetFieldValue<DateTimeOffset>(1)));
+                }
+            }
+        }
+
+        const string baselineSql = """
+            SELECT t.slug, p.permission
+              FROM identity.teams t
+              JOIN identity.team_permissions p ON p.team_id = t.id
+            """;
+        var bySlug = new Dictionary<string, HashSet<Permission>>();
+        await using (var cmd = dataSource.CreateCommand(baselineSql))
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                if (!Permission.TryParse(reader.GetString(1), out var permission))
+                {
+                    continue;
+                }
+
+                var slug = reader.GetString(0);
+                if (!bySlug.TryGetValue(slug, out var set))
+                {
+                    set = [];
+                    bySlug[slug] = set;
+                }
+
+                set.Add(permission);
+            }
+        }
+
+        baselines.AddRange(bySlug.Select(kv => new TeamBaseline(kv.Key, kv.Value)));
+        return (memberships, grants, baselines);
+    }
 }
