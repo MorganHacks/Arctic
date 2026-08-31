@@ -176,6 +176,25 @@ CI runs the same commands. If they pass here they pass there.
 
 ## Things that will confuse you once
 
+**Two .NET installs will pick the wrong one.** If `dotnet build` says
+*"The current .NET SDK does not support targeting .NET 10.0"*, you have both an
+older x64 .NET and Homebrew's, and your shell is finding the older one first:
+
+```bash
+which -a dotnet          # whichever is listed first wins
+dotnet --version         # must say 10.x
+```
+
+Put Homebrew ahead of it in `~/.zprofile`:
+
+```bash
+export PATH="/opt/homebrew/bin:$PATH"
+```
+
+On Apple Silicon the cleaner fix is removing the x64 install altogether — it
+runs under Rosetta and buys nothing. `global.json` pins the requirement, so the
+error names the version rather than pointing at a target framework.
+
 **The solution file is `Solution.slnx`, not `.sln`.** .NET 10 creates the
 newer XML solution format. `dotnet sln MorganHacks.sln` will tell you it cannot
 find a solution; use the `.slnx` name or just `dotnet build` from `src/atlas`.
