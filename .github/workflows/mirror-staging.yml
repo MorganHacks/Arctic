@@ -1,0 +1,38 @@
+# staging mirrors main.
+#
+# staging is never somewhere work lives: it holds a copy of main, or a copy of
+# whatever branch someone is currently testing, and nothing else. So this
+# overwrites it rather than merging into it — a merge would imply staging had
+# commits worth keeping, and by definition it does not.
+#
+# This is also the reset. Claiming staging with a branch is temporary; the next
+# thing to land on main takes it back.
+name: Mirror main onto staging
+
+on:
+  push:
+    branches: [main]
+
+# Never let two of these race, or the second would publish a stale tree.
+concurrency:
+  group: sync-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      # --force, not --force-with-lease. Overwriting whatever is on staging is
+      # the intent, including somebody's claim: with-lease would fail exactly
+      # when the reset is most needed.
+      - name: Point staging at main
+        run: |
+          git push --force origin HEAD:refs/heads/staging
+          echo "staging now mirrors main at $(git rev-parse --short HEAD)."

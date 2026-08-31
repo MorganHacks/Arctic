@@ -100,6 +100,30 @@ npm run dev          # http://localhost:3000
 
 ---
 
+## Turn the git hooks on
+
+One line, once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+| Hook | Stops |
+|---|---|
+| `pre-commit` | `.env` files, iCloud `name 2.ext` duplicates, and obvious secrets (private keys, AWS ids, GitHub and Slack tokens, `NEXT_PUBLIC_*SECRET=`) |
+| `pre-push` | pushing straight to `main` or `staging` |
+
+`--no-verify` walks past either, so this is not security. It is here for the
+mistakes that actually happen: a `.env` staged by a wildcard `git add`, and
+finishing on `main` out of habit.
+
+Two of these are not hypothetical. An iCloud duplicate already broke `tsc` by
+colliding with Next's generated types, and the stack doc singles out a prior
+hackathon platform that shipped storage credentials in `NEXT_PUBLIC_*`
+variables, where anyone could read them out of the client bundle.
+
+---
+
 ## Running the tests
 
 ```bash
@@ -182,6 +206,13 @@ Break those and this becomes a monolith pretending to be modular.
 |---|---|
 | a feature branch | preview deployment on a generated URL |
 | `staging` | `main-stg.morganhacks.com` updates |
-| `main` | production updates, and nothing else does |
+| `main` | production updates, **and staging is reset to mirror main** |
+
+To try a branch on staging without merging it anywhere:
+
+```bash
+scripts/claim-staging              # the branch you are on
+scripts/claim-staging --release    # hand it back to main
+```
 
 Full detail in [`docs/architecture/deployments.md`](architecture/deployments.md).

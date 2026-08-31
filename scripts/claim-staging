@@ -1,0 +1,47 @@
+#!/usr/bin/env sh
+# Put a branch on staging so it deploys to main-stg.morganhacks.com.
+#
+#   scripts/claim-staging            # the branch you are on
+#   scripts/claim-staging my-branch  # a specific branch
+#   scripts/claim-staging --release  # hand staging back to main
+#
+# staging is a slot, not somewhere work lives: never merge into it and never
+# branch off it. --force-with-lease rather than --force so this fails loudly
+# if somebody else claimed it while you were not looking, instead of quietly
+# throwing their deploy away.
+set -eu
+
+case "${1:-}" in
+  --release|-r)
+    ref=main
+    ;;
+  --help|-h)
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+  "")
+    ref=$(git rev-parse --abbrev-ref HEAD)
+    ;;
+  *)
+    ref=$1
+    ;;
+esac
+
+if [ "$ref" = "staging" ]; then
+  echo "You are on staging. Push it directly, or name the branch you meant." >&2
+  exit 1
+fi
+
+git rev-parse --verify --quiet "$ref" >/dev/null || {
+  echo "No such branch: $ref" >&2
+  exit 1
+}
+
+echo "Claiming staging for '$ref'..."
+# The pre-push hook blocks pushes to staging by default; this says the push is
+# deliberate rather than muscle memory.
+ARCTIC_ALLOW_STAGING=1 git push origin "$ref:staging" --force-with-lease
+
+echo
+echo "Deploying to https://main-stg.morganhacks.com (about 15s)."
+echo "Hand it back with: scripts/claim-staging --release"

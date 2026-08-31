@@ -1,0 +1,130 @@
+# Put a branch on staging, and optionally force specific services to rebuild.
+#
+# Run it from the Actions tab, or:
+#   gh workflow run deploy-staging.yml -f ref=my-branch -f portalweb=true
+#
+# Moving staging to a different commit is enough on its own: Vercel rebuilds
+# from the push. The per-service switches are for the other case — re-running a
+# service when the code has not changed, which a no-op push cannot trigger.
+name: Deploy to staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or SHA to put on staging"
+        required: true
+        default: main
+        type: string
+      portalweb:
+        description: "Re-run portalweb even if the commit is unchanged"
+        type: boolean
+        default: false
+      portaladmin:
+        description: "Re-run portaladmin (no deploy target yet)"
+        type: boolean
+        default: false
+      atlas:
+        description: "Re-run atlas (no deploy target yet)"
+        type: boolean
+        default: false
+      lark:
+        description: "Re-run lark (no deploy target yet)"
+        type: boolean
+        default: false
+      harbor:
+        description: "Re-run harbor (no deploy target yet)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: sync-staging      # shares the mirror's slot, so they cannot race
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    outputs:
+      moved: ${{ steps.push.outputs.moved }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Point staging at ${{ inputs.ref }}
+        id: push
+        run: |
+          target=$(git rev-parse HEAD)
+          current=$(git ls-remote origin refs/heads/staging | cut -f1)
+
+          echo "requested : ${{ inputs.ref }} ($target)"
+          echo "staging is: ${current:-<empty>}"
+
+          if [ "$target" = "$current" ]; then
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+            echo "staging is already at this commit; no rebuild will be triggered by the push."
+          else
+            git push --force origin HEAD:refs/heads/staging
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+            echo "staging moved. Vercel will rebuild portalweb from this push."
+          fi
+
+  # Only needed when the commit did not change, since then the push above
+  # triggered nothing and the service has to be told to run again.
+  portalweb:
+    needs: claim
+    if: inputs.portalweb
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-run portalweb on staging
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ "${{ needs.claim.outputs.moved }}" = "true" ]; then
+            echo "staging already moved to a new commit, so Vercel is rebuilding."
+            echo "Nothing further to do."
+            exit 0
+          fi
+
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::Forcing a rebuild without a code change needs a Vercel token."
+            echo "::error::Add it once:  gh secret set VERCEL_TOKEN -R MorganHacks/Arctic"
+            echo "::error::Or push a commit to ${{ inputs.ref }} instead."
+            exit 1
+          fi
+
+          npm i -g vercel@latest >/dev/null 2>&1
+          latest=$(vercel ls morganhacks-portalweb --token="$VERCEL_TOKEN" 2>/dev/null \
+                   | grep -oE 'https://[a-z0-9.-]+\.vercel\.app' | head -1)
+          if [ -z "$latest" ]; then
+            echo "::error::Could not find a deployment to re-run."
+            exit 1
+          fi
+          echo "Re-running $latest"
+          vercel redeploy "$latest" --token="$VERCEL_TOKEN"
+
+  # These exist so the form matches the service list and lights up on its own
+  # as each service becomes deployable. They fail loudly rather than reporting
+  # a deploy that did not happen.
+  backends:
+    needs: claim
+    if: inputs.atlas || inputs.lark || inputs.harbor || inputs.portaladmin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Not deployable yet
+        run: |
+          for s in atlas lark harbor portaladmin; do
+            case "$s" in
+              atlas)       want="${{ inputs.atlas }}" ;;
+              lark)        want="${{ inputs.lark }}" ;;
+              harbor)      want="${{ inputs.harbor }}" ;;
+              portaladmin) want="${{ inputs.portaladmin }}" ;;
+            esac
+            [ "$want" = "true" ] && echo "  $s: requested, but it has no staging deploy target yet."
+          done
+          echo "::error::Nothing was deployed for those services. Remove the tick, or wire up a target first."
+          exit 1

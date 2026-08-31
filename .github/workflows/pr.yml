@@ -15,6 +15,10 @@ concurrency:
 
 permissions:
   contents: read
+  # dorny/paths-filter asks the API which files the PR touched. Without this
+  # it fails with "Resource not accessible by integration" — and because every
+  # service job is gated on its output, they all skip rather than fail.
+  pull-requests: read
 
 jobs:
   changes:
@@ -103,7 +107,10 @@ jobs:
   # jobs themselves: GitHub treats a skipped job as never-completing when it
   # is required, so a docs-only PR would sit pending forever.
   ci-gate:
-    needs: [atlas, lark, harbor, portalweb, portaladmin, contract-tests]
+    # `changes` is in this list deliberately. Without it, a dispatcher failure
+    # leaves every service job skipped, the loop below sees nothing but
+    # "skipped", and the gate goes green having verified nothing at all.
+    needs: [changes, atlas, lark, harbor, portalweb, portaladmin, contract-tests]
     if: always()
     runs-on: ubuntu-latest
     steps:

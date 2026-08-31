@@ -81,6 +81,70 @@ production branch is `main`, and every other branch produces a preview
 deployment, so there is no path from `staging` to production that does not go
 through a merge into `main`.
 
+### staging is a mirror, never a place work lives
+
+Nothing is ever committed to `staging` and no branch is ever merged into it. It
+holds a copy of `main`, or a copy of whatever branch someone is testing, and
+nothing else.
+
+`.github/workflows/mirror-staging.yml` overwrites `staging` with `main` every
+time anything lands on main. It force-pushes rather than merging, because a
+merge would imply staging had commits worth keeping and by definition it does
+not.
+
+That is also the reset: claiming staging is temporary, and the next thing to
+reach main takes it back.
+
+### Choosing what runs on staging
+
+`Actions -> Deploy to staging` gives a form: which branch to put on staging, and
+which services to force a rebuild of.
+
+```bash
+gh workflow run deploy-staging.yml -f ref=my-branch
+gh workflow run deploy-staging.yml -f ref=my-branch -f portalweb=true
+```
+
+Moving staging to a different commit is usually all that is needed, because
+Vercel rebuilds from the push. The per-service switches exist for the other
+case: re-running a service when the code has **not** changed, which a no-op
+push cannot trigger.
+
+Forcing a rebuild without a code change needs a Vercel token:
+
+```bash
+gh secret set VERCEL_TOKEN -R MorganHacks/Arctic
+```
+
+Without it, moving the branch still works — only the force path fails, and it
+says so rather than reporting a deploy that did not happen.
+
+The backend services appear in the form but have no staging deploy target yet,
+so ticking one fails loudly. They light up as each becomes deployable.
+
+### Putting a branch on staging by hand
+
+```bash
+scripts/claim-staging              # the branch you are on
+scripts/claim-staging my-branch    # a specific branch
+scripts/claim-staging --release    # hand staging back to main
+```
+
+Or as a git alias, if you would rather type `git claim`:
+
+```bash
+git config --global alias.claim '!f(){ "$(git rev-parse --show-toplevel)"/scripts/claim-staging "$@"; }; f'
+```
+
+Do not call it `git stage` — that is already a synonym for `git add`.
+
+The script uses `--force-with-lease` rather than `--force`, so it fails loudly
+if somebody claimed staging while you were not looking instead of quietly
+throwing their deploy away.
+
+Note that a claim is not permanent: the next merge to `main` will merge main
+into whatever is on staging.
+
 ```bash
 # work
 git checkout -b my-change
