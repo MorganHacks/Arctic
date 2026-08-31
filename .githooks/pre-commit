@@ -51,7 +51,9 @@ if [ -n "$added" ]; then
     'xox[baprs]-[A-Za-z0-9-]{10,}' \
     'NEXT_PUBLIC_[A-Z0-9_]*(SECRET|PASSWORD|PRIVATE)[A-Z0-9_]*=.'
   do
-    if printf '%s\n' "$added" | grep -Eq "$p"; then
+    # -- so a pattern beginning with a dash is read as a pattern and not as
+    # grep options. Without it the private-key check silently matches nothing.
+    if printf '%s\n' "$added" | grep -Eq -- "$p"; then
       say "  Possible secret in staged changes, matching: $p"
       fail=1
     fi
