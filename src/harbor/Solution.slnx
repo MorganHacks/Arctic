@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MorganHacks.Harbor/MorganHacks.Harbor.csproj" />
+  <Project Path="MorganHacks.Harbor.Tests/MorganHacks.Harbor.Tests.csproj" />
+</Solution>

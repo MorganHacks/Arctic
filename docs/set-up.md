@@ -177,11 +177,33 @@ Google sign-in cannot be tried this way without credentials — see above.
 
 ---
 
+## Running harbor in front of the API
+
+harbor is the gateway. Nothing needs it locally — the API is reachable
+directly — but this is how requests arrive in production:
+
+```bash
+# terminal 1
+cd src/atlas/MorganHacks.Api && dotnet run --urls http://localhost:5080
+
+# terminal 2
+cd src/harbor/MorganHacks.Harbor
+ASPNETCORE_ENVIRONMENT=Development dotnet run --urls http://localhost:5090
+```
+
+Then call `http://localhost:5090/api/...` instead of `http://localhost:5080/...`.
+harbor strips the `/api` prefix on the way through.
+
+Every response carries `X-Correlation-ID`. If someone reports a problem, that
+value turns it into one query rather than four log searches lined up by hand.
+
+---
+
 ## Running the tests
 
 ```bash
-cd src/atlas
-dotnet test Solution.slnx
+cd src/atlas  && dotnet test Solution.slnx
+cd src/harbor && dotnet test Solution.slnx
 ```
 
 ```bash
