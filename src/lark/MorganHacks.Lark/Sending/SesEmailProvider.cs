@@ -23,6 +23,8 @@ public sealed class SesEmailProvider(
     IAmazonSimpleEmailServiceV2 ses,
     ILogger<SesEmailProvider> log) : IEmailProvider
 {
+    public bool IsConfigured => true;
+
     public async Task<SendOutcome> SendAsync(
         ClaimedMessage message, CancellationToken ct = default)
     {

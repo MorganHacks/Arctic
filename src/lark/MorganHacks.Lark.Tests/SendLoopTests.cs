@@ -10,6 +10,8 @@ namespace MorganHacks.Lark.Tests;
 /// <summary>A provider that answers however a test needs it to, and remembers.</summary>
 internal sealed class FakeProvider(Func<ClaimedMessage, SendOutcome> answer) : IEmailProvider
 {
+    public bool IsConfigured { get; init; } = true;
+
     public List<ClaimedMessage> Sent { get; } = [];
 
     public Task<SendOutcome> SendAsync(ClaimedMessage message, CancellationToken ct = default)
@@ -57,6 +59,29 @@ public class SendLoopTests(NotifyDatabase db) : IClassFixture<NotifyDatabase>
         await stop.CancelAsync();
         await loop.StopAsync(CancellationToken.None);
         await running;
+    }
+
+    [Fact]
+    public async Task Nothing_is_claimed_when_there_is_no_provider()
+    {
+        // Not claiming leaves the queue exactly as it was, so the backlog goes
+        // out untouched once credentials arrive. Claiming would either burn an
+        // attempt on a problem no retry fixes, or strand the row in 'sending'
+        // for the sweeper to take back — forever.
+        var campaign = await db.AddCampaignAsync();
+        var id = await db.QueueAsync(campaign, Email("unsendable"));
+        var clock = new FakeTimeProvider();
+        var provider = new FakeProvider(_ => SendOutcome.Sent("never"))
+        {
+            IsConfigured = false,
+        };
+
+        await RunOnce(LoopWith(provider, clock), clock);
+
+        Assert.DoesNotContain(provider.Sent, m => m.Id == id);
+        var state = await db.StateOf(id);
+        Assert.Equal("pending", state.Status);
+        Assert.Equal(0, state.Attempts);
     }
 
     [Fact]
@@ -116,13 +141,15 @@ public class SendLoopTests(NotifyDatabase db) : IClassFixture<NotifyDatabase>
         var campaign = await db.AddCampaignAsync();
         var email = Email("blocked");
         await Queue.SuppressAsync(email, "complaint");
-        await db.QueueAsync(campaign, email);
+        var id = await db.QueueAsync(campaign, email);
         var clock = new FakeTimeProvider();
         var provider = new FakeProvider(_ => SendOutcome.Sent("should-not-happen"));
 
         await RunOnce(LoopWith(provider, clock), clock);
 
-        Assert.Empty(provider.Sent);
+        // About this message rather than about the whole batch: the loop claims
+        // whatever is pending, and other tests share this database.
+        Assert.DoesNotContain(provider.Sent, m => m.Id == id);
     }
 
     [Fact]

@@ -6,12 +6,17 @@
 using 'main.bicep'
 
 param environmentName = 'staging'
-param location = 'eastus'
-param registryName = 'crmorganhacks'
+param location = 'centralus'
+param registryName = 'crmharctic'
 
 param imageTag = readEnvironmentVariable('IMAGE_TAG')
 param dbPassword = readEnvironmentVariable('DB_PASSWORD')
 param superAdminEmail = readEnvironmentVariable('SUPER_ADMIN_EMAIL')
 param sentryDsn = readEnvironmentVariable('SENTRY_DSN', '')
 
+param awsRegion = readEnvironmentVariable('AWS_REGION', '')
+param awsAccessKeyId = readEnvironmentVariable('AWS_ACCESS_KEY_ID', '')
+param awsSecretAccessKey = readEnvironmentVariable('AWS_SECRET_ACCESS_KEY', '')
+
+param deployPlatform = bool(readEnvironmentVariable('DEPLOY_PLATFORM', 'true'))
 param deployApps = bool(readEnvironmentVariable('DEPLOY_APPS', 'true'))

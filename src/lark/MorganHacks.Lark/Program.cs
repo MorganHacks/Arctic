@@ -23,9 +23,25 @@ builder.Services.Configure<SendLoopOptions>(builder.Configuration.GetSection("Se
 
 // Region and credentials come from the environment, so nothing secret is in
 // the repo and the same binary runs locally, on staging and in production.
-builder.Services.AddSingleton<IAmazonSimpleEmailServiceV2>(
-    _ => new AmazonSimpleEmailServiceV2Client());
-builder.Services.AddSingleton<IEmailProvider, SesEmailProvider>();
+//
+// Constructing the SES client without a region throws, so an unset variable
+// would take the whole worker down at startup and keep it down — a crash loop
+// that reports a dependency-injection stack trace rather than "no region
+// configured". Checked here instead, and the worker runs either way.
+var awsRegion = builder.Configuration["AWS_REGION"]
+                ?? Environment.GetEnvironmentVariable("AWS_REGION");
+
+if (!string.IsNullOrWhiteSpace(awsRegion))
+{
+    builder.Services.AddSingleton<IAmazonSimpleEmailServiceV2>(
+        _ => new AmazonSimpleEmailServiceV2Client(
+            Amazon.RegionEndpoint.GetBySystemName(awsRegion)));
+    builder.Services.AddSingleton<IEmailProvider, SesEmailProvider>();
+}
+else
+{
+    builder.Services.AddSingleton<IEmailProvider, UnconfiguredEmailProvider>();
+}
 
 builder.Services.AddHostedService<SendLoop>();
 

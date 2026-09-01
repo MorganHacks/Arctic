@@ -27,8 +27,15 @@ export DB_PASSWORD SUPER_ADMIN_EMAIL
 export SENTRY_DSN="${SENTRY_DSN:-}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOCATION="${LOCATION:-eastus}"
-GROUP="rg-morganhacks-${ENVIRONMENT}"
+
+# A subscription-scoped deployment records the location it ran in and refuses
+# to run again from another one. Changing region therefore means deleting the
+# record first:
+#
+#   az deployment sub delete -n arctic-<env>-platform
+#   az deployment sub delete -n arctic-<env>
+LOCATION="${LOCATION:-centralus}"
+GROUP="rg-mh-${ENVIRONMENT}"
 JOB="caj-migrations-${ENVIRONMENT}"
 PARAMS="${HERE}/${ENVIRONMENT}.bicepparam"
 
@@ -43,25 +50,35 @@ if [[ "$MODE" != "--apply" ]]; then
     exit 0
 fi
 
-say "1/4  Platform  (Postgres, environment, migration job)"
-# Apps deliberately excluded from this pass. Updating them now would put new
-# code in front of a schema that has not been migrated yet.
+say "1/5  Registry"
+# The registry alone. It has to exist and hold the images before the migration
+# job can even be created — Container Apps checks that the image is really
+# there when the job is defined, not when it runs.
+DEPLOY_PLATFORM=false DEPLOY_APPS=false az deployment sub create \
+    -l "$LOCATION" -n "arctic-${ENVIRONMENT}-registry" \
+    -f "$HERE/main.bicep" -p "$PARAMS" -o none
+
+say "2/5  Images"
+# After the platform pass, because the registry has to exist before anything
+# can be pushed to it — and before migrations, because the job cannot run an
+# image that is not there.
+#
+# SKIP_PUSH=1 for a rollback: that tag already exists, and rebuilding it would
+# produce different bytes from the ones being rolled back to.
+if [[ "${SKIP_PUSH:-}" == "1" ]]; then
+    echo "  skipped (SKIP_PUSH=1) — deploying tag ${IMAGE_TAG} as it already is"
+else
+    "$HERE/push-images.sh" "$ENVIRONMENT" "$IMAGE_TAG"
+fi
+
+say "3/5  Platform  (Postgres, apps environment, migration job)"
+# Apps deliberately excluded. Updating them now would put new code in front of
+# a schema that has not been migrated yet.
 DEPLOY_APPS=false az deployment sub create \
     -l "$LOCATION" -n "arctic-${ENVIRONMENT}-platform" \
     -f "$HERE/main.bicep" -p "$PARAMS" -o none
 
-POSTGRES_HOST="$(az deployment sub show -n "arctic-${ENVIRONMENT}-platform" \
-    --query properties.outputs.postgresHost.value -o tsv)"
-
-say "2/4  Schemas"
-# The migration runner owns tables, not the schemas they live in — creating a
-# schema is a one-time privilege it should not need on every run.
-PGPASSWORD="$DB_PASSWORD" psql \
-    "host=${POSTGRES_HOST} port=5432 dbname=morganhacks user=arctic sslmode=require" \
-    -v ON_ERROR_STOP=1 -qf "$HERE/../local/postgres/01-schemas.sql"
-echo "  schemas present"
-
-say "3/4  Migrations"
+say "4/5  Migrations"
 az containerapp job start -g "$GROUP" -n "$JOB" -o none
 echo "  started; waiting"
 
@@ -82,8 +99,11 @@ if [[ "$STATUS" != "Succeeded" ]]; then
 fi
 echo "  migrations succeeded"
 
-say "4/4  Services"
-DEPLOY_APPS=true az deployment sub create \
+say "5/5  Services"
+# Platform excluded: it already exists, and re-writing the Postgres extension
+# configuration while the server is still settling from the last write fails
+# with ServerIsBusy. Each pass does one thing.
+DEPLOY_PLATFORM=false DEPLOY_APPS=true az deployment sub create \
     -l "$LOCATION" -n "arctic-${ENVIRONMENT}" \
     -f "$HERE/main.bicep" -p "$PARAMS" -o none
 

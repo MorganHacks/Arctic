@@ -6,12 +6,25 @@ genuinely imperative: building images, and running the migration job.
 ```bash
 az login                      # into the MorganHacks account, not a personal one
 
-export DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
+export DB_PASSWORD=$(cat ~/.mh-staging-db-password)
 export SUPER_ADMIN_EMAIL=olola73@morgan.edu
 
-./deploy/azure/push-images.sh staging
-./deploy/azure/deploy.sh      staging              # what-if — changes nothing
-./deploy/azure/deploy.sh      staging --apply
+./deploy/azure/deploy.sh staging              # what-if — changes nothing
+./deploy/azure/deploy.sh staging --apply
+```
+
+`deploy.sh` builds and pushes the images itself, because the registry has to
+exist before anything can be pushed to it. `SKIP_PUSH=1` skips that step, which
+is what a rollback wants — the tag already exists and rebuilding it would
+produce different bytes from the ones being rolled back to.
+
+Optional, and each one is off when unset rather than half-configured:
+
+```bash
+export SENTRY_DSN=...                         # error reporting
+export AWS_REGION=us-east-1                   # lark sends only when these are set
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
 ```
 
 Resource groups included. `main.bicep` is subscription-scoped and owns them,
@@ -120,3 +133,27 @@ existing Azure relationships and credits flow through that channel routinely.
 **Own these resources with the MorganHacks account, not a personal one.** Same
 rule as the Vercel projects and `tech@morganhacks.com`: infrastructure tied to
 somebody's student account is infrastructure that leaves when they graduate.
+
+## Four things the first real deploy found
+
+Worth recording, because none of them show up in a test.
+
+**`eastus` is capacity-restricted on this subscription.** Postgres provisioning
+is refused there outright, and the error is `Version should be in: []` rather
+than anything about capacity. `centralus` is open and offers Postgres 18, which
+is what docker-compose and the tests run — so local and deployed now match
+exactly.
+
+**`citext` has to be allow-listed on the server.** Azure refuses `CREATE
+EXTENSION` regardless of the connecting user's privileges until the extension
+is named in `azure.extensions`. Without it the notify schema cannot be created
+at all.
+
+**A subscription deployment records its location and will not move.** Changing
+region means deleting the record first:
+`az deployment sub delete -n arctic-<env>-platform`.
+
+**Container Apps rejects a secret with an empty value.** "Off unless
+configured" therefore has to mean the secret is absent, not blank — otherwise
+the thing that lets this run with no accounts is the thing that stops it
+deploying.

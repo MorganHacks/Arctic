@@ -14,7 +14,7 @@ param location string = resourceGroup().location
 param imageTag string
 
 param registryName string
-param registryResourceGroup string = 'rg-morganhacks-shared'
+param registryResourceGroup string = 'rg-mh-shared'
 
 @secure()
 param dbPassword string
@@ -26,9 +26,21 @@ param dbName string = 'morganhacks'
 @description('Empty disables error reporting, which is what lets this run with no accounts.')
 param sentryDsn string = ''
 
+@description('''
+Region for SES. Empty means lark runs but sends nothing and says so, rather
+than crash-looping on a missing variable — which is what it used to do.
+''')
+param awsRegion string = ''
+
+@secure()
+param awsAccessKeyId string = ''
+
+@secure()
+param awsSecretAccessKey string = ''
+
 param tags object = {}
 
-var suffix = 'morganhacks-${environmentName}'
+var suffix = 'mh-${environmentName}'
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: registryName
@@ -63,10 +75,46 @@ var dbSecret = {
   value: connectionString
 }
 
-var sentrySecret = {
-  name: 'sentry-dsn'
-  value: sentryDsn
-}
+// Container Apps rejects a secret with an empty value outright, so "Sentry is
+// off until a DSN is set" has to mean the secret is absent rather than blank.
+// Otherwise the thing that lets this run with no accounts is the thing that
+// stops it deploying.
+var hasSentry = !empty(sentryDsn)
+
+var sentrySecrets = hasSentry ? [
+  {
+    name: 'sentry-dsn'
+    value: sentryDsn
+  }
+] : []
+
+// Same shape as Sentry: absent rather than blank, because Container Apps
+// rejects a secret with an empty value.
+var hasAws = !empty(awsRegion) && !empty(awsAccessKeyId)
+
+var awsSecrets = hasAws ? [
+  {
+    name: 'aws-access-key-id'
+    value: awsAccessKeyId
+  }
+  {
+    name: 'aws-secret-access-key'
+    value: awsSecretAccessKey
+  }
+] : []
+
+var awsEnv = hasAws ? [
+  { name: 'AWS_REGION', value: awsRegion }
+  { name: 'AWS_ACCESS_KEY_ID', secretRef: 'aws-access-key-id' }
+  { name: 'AWS_SECRET_ACCESS_KEY', secretRef: 'aws-secret-access-key' }
+] : []
+
+var sentryEnv = hasSentry ? [
+  { name: 'Sentry__Dsn', secretRef: 'sentry-dsn' }
+  // The deployed commit, so a spike in errors ties to what shipped rather
+  // than being matched up by timestamp.
+  { name: 'Sentry__Release', value: imageTag }
+] : []
 
 // ------------------------------------------------------------------ atlas ---
 // Internal ingress. Harbor is the only path to the API. Atlas validates its
@@ -85,7 +133,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
       }
       registries: registryConfig
-      secrets: [registrySecret, dbSecret, sentrySecret]
+      secrets: concat([registrySecret, dbSecret], sentrySecrets)
     }
     template: {
       containers: [
@@ -93,16 +141,14 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'atlas'
           image: '${registry.properties.loginServer}/atlas:${imageTag}'
           resources: { cpu: json('0.5'), memory: '1Gi' }
-          env: [
+          env: concat([
             { name: 'ARCTIC_DB', secretRef: 'db-connection' }
             { name: 'ASPNETCORE_URLS', value: 'http://+:8080' }
-            { name: 'Sentry__Dsn', secretRef: 'sentry-dsn' }
-            { name: 'Sentry__Release', value: imageTag }
             // Liveness only, and deliberately not the database: a Postgres
             // blip that restarts every replica turns a recoverable problem
             // into an outage.
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
-          ]
+          ], sentryEnv)
           probes: [
             {
               type: 'Liveness'
@@ -130,7 +176,7 @@ resource lark 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: environment.id
     configuration: {
       registries: registryConfig
-      secrets: [registrySecret, dbSecret, sentrySecret]
+      secrets: concat([registrySecret, dbSecret], sentrySecrets, awsSecrets)
     }
     template: {
       containers: [
@@ -138,12 +184,10 @@ resource lark 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'lark'
           image: '${registry.properties.loginServer}/lark:${imageTag}'
           resources: { cpu: json('0.5'), memory: '1Gi' }
-          env: [
+          env: concat([
             { name: 'ARCTIC_DB', secretRef: 'db-connection' }
-            { name: 'Sentry__Dsn', secretRef: 'sentry-dsn' }
-            { name: 'Sentry__Release', value: imageTag }
             { name: 'DOTNET_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
-          ]
+          ], sentryEnv, awsEnv)
         }
       ]
       scale: { minReplicas: 1, maxReplicas: 1 }
@@ -166,7 +210,7 @@ resource harbor 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
       }
       registries: registryConfig
-      secrets: [registrySecret, sentrySecret]
+      secrets: concat([registrySecret], sentrySecrets)
     }
     template: {
       containers: [
@@ -174,17 +218,15 @@ resource harbor 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'harbor'
           image: '${registry.properties.loginServer}/harbor:${imageTag}'
           resources: { cpu: json('0.5'), memory: '1Gi' }
-          env: [
+          env: concat([
             { name: 'ASPNETCORE_URLS', value: 'http://+:8080' }
             { name: 'ReverseProxy__Clusters__atlas__Destinations__primary__Address', value: 'https://${atlas.properties.configuration.ingress.fqdn}/' }
-            { name: 'Sentry__Dsn', secretRef: 'sentry-dsn' }
-            { name: 'Sentry__Release', value: imageTag }
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
             // Container Apps terminates in front of harbor, so without this
             // RemoteIpAddress is the platform's and every per-IP rate limit
             // shares one bucket for the entire internet.
             { name: 'Network__ForwardLimit', value: '2' }
-          ]
+          ], sentryEnv)
           probes: [
             {
               type: 'Liveness'

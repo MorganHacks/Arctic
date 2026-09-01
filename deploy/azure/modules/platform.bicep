@@ -26,7 +26,7 @@ param location string = resourceGroup().location
 param imageTag string
 
 param registryName string
-param registryResourceGroup string = 'rg-morganhacks-shared'
+param registryResourceGroup string = 'rg-mh-shared'
 
 @secure()
 param dbPassword string
@@ -35,17 +35,13 @@ param dbAdminUser string = 'arctic'
 param dbName string = 'morganhacks'
 
 @description('Postgres major version. Keep this the same as docker-compose and the tests.')
-param postgresVersion string = '17'
+param postgresVersion string = '18'
 
 param superAdminEmail string
 
 param tags object = {}
 
-@secure()
-@description('Empty disables error reporting, which is what lets this run with no accounts.')
-param sentryDsn string = ''
-
-var suffix = 'morganhacks-${environmentName}'
+var suffix = 'mh-${environmentName}'
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: registryName
@@ -98,6 +94,19 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-0
   }
 }
 
+// Azure refuses to create an extension unless it is named here first, whatever
+// the connecting user's privileges are. citext is what makes email columns
+// case-insensitive at the database rather than by remembering lower() at every
+// call site, so without this the notify schema cannot be created at all.
+resource extensions 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
+  parent: postgres
+  name: 'azure.extensions'
+  properties: {
+    value: 'CITEXT'
+    source: 'user-override'
+  }
+}
+
 // Container Apps egress has no fixed address on the consumption plan, so this
 // is the rule that lets the services connect at all. It permits other Azure
 // services, not the open internet — but it is the weakest thing here, and the
@@ -147,11 +156,6 @@ var dbSecret = {
   value: connectionString
 }
 
-var sentrySecret = {
-  name: 'sentry-dsn'
-  value: sentryDsn
-}
-
 // ------------------------------------------------------------- migrations ---
 // A job, not something the API does at startup. An API that migrates on boot
 // means every replica racing to alter one schema, which is the documented way
@@ -184,7 +188,7 @@ resource migrations 'Microsoft.App/jobs@2024-03-01' = {
       ]
     }
   }
-  dependsOn: [database, allowAzure]
+  dependsOn: [database, allowAzure, extensions]
 }
 
 

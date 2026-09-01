@@ -7,11 +7,11 @@ being an alphabetical pile.
 
 | Resource | Pattern | Example |
 |---|---|---|
-| Resource group | `rg-morganhacks-<env>` | `rg-morganhacks-staging` |
-| Container registry | `crmorganhacks` | shared; registries allow no hyphens |
-| Log Analytics | `log-morganhacks-<env>` | `log-morganhacks-staging` |
-| Container Apps env | `cae-morganhacks-<env>` | `cae-morganhacks-staging` |
-| Postgres | `psql-morganhacks-<env>` | `psql-morganhacks-staging` |
+| Resource group | `rg-mh-<env>` | `rg-mh-staging` |
+| Container registry | `crmharctic` | shared; registries allow no hyphens |
+| Log Analytics | `log-mh-<env>` | `log-mh-staging` |
+| Container Apps env | `cae-mh-<env>` | `cae-mh-staging` |
+| Postgres | `psql-mh-<env>` | `psql-mh-staging` |
 | Container app | `ca-<service>-<env>` | `ca-harbor-staging` |
 | Container Apps job | `caj-<name>-<env>` | `caj-migrations-staging` |
 
@@ -25,7 +25,7 @@ Every resource carries the same four, plus `service` where it means something.
 
 | Tag | Why |
 |---|---|
-| `workload` | `morganhacks`, so this is separable from anything else in the subscription |
+| `workload` | `mh`, so this is separable from anything else in the subscription |
 | `environment` | `staging` or `prod` — the filter you actually want in Cost Analysis |
 | `managedBy` | `bicep`, so it is clear a portal edit will be reverted on the next deploy |
 | `repository` | `MorganHacks/Arctic`, so somebody finding a stray resource can find its source |
