@@ -24,7 +24,7 @@ public sealed class IdentityMiddleware(RequestDelegate next, ILogger<IdentityMid
             {
                 log.LogWarning(
                     "Stripped caller-supplied {Header}. Correlation {CorrelationId}.",
-                    header, context.Items[IdentityHeaders.CorrelationId]);
+                    header, context.Items[MorganHacks.Observability.Telemetry.CorrelationIdProperty]);
             }
         }
 

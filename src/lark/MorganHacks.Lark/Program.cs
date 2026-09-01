@@ -2,9 +2,12 @@ using Amazon.SimpleEmailV2;
 using MorganHacks.Lark;
 using MorganHacks.Lark.Data.Data;
 using MorganHacks.Lark.Sending;
+using MorganHacks.Observability;
 using Npgsql;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.UseArcticLogging("lark");
 
 var connectionString =
     builder.Configuration.GetConnectionString("Postgres")

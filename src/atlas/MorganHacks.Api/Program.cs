@@ -5,10 +5,13 @@ using MorganHacks.Api;
 using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
 using MorganHacks.Api.Webhooks;
+using MorganHacks.Observability;
 using MorganHacks.Lark.Data.Data;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.UseArcticLogging("atlas");
 
 var connectionString =
     builder.Configuration.GetConnectionString("Postgres")
@@ -72,6 +75,9 @@ builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<ISnsSignatureVerifier, SnsSignatureVerifier>();
 builder.Services.AddMemoryCache();
 
+// So a queued message can be stamped with the request that caused it.
+builder.Services.AddHttpContextAccessor();
+
 // Registered even when unconfigured: the endpoints answer 503 rather than
 // failing at startup, so local development does not need Google credentials.
 builder.Services.AddSingleton<IGoogleTokenVerifier>(
@@ -119,6 +125,11 @@ var app = builder.Build();
 
 // First, so every limiter and every logged IP below sees the real caller.
 app.UseForwardedHeaders();
+
+// Ahead of anything that logs, so no line this request produces is missing
+// the one field that ties it to the rest of its journey.
+app.UseMiddleware<CorrelationIdMiddleware>();
+
 app.UseRateLimiter();
 
 // Liveness only. This deliberately does NOT touch the database: a Postgres

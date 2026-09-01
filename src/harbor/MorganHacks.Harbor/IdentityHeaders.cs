@@ -13,7 +13,8 @@ public static class IdentityHeaders
 {
     public const string PersonId = "X-Person-Id";
     public const string Permissions = "X-Permissions";
-    public const string CorrelationId = "X-Correlation-ID";
+    /// <summary>Named once, in the library every service reads it from.</summary>
+    public const string CorrelationId = MorganHacks.Observability.Telemetry.CorrelationIdHeader;
 
     /// <summary>
     /// Everything a caller must never be able to set for themselves.
