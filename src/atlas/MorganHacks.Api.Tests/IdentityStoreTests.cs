@@ -28,11 +28,11 @@ public class IdentityStoreTests(IdentityDatabase db) : IClassFixture<IdentityDat
         var personId = await db.AddPersonAsync($"hacker-{Guid.NewGuid():N}@example.com");
         var (links, _) = ServicesAt(Now);
 
-        var token = await links.IssueAsync($"hacker-{personId}@example.com");
+        var token = (await links.IssueAsync($"hacker-{personId}@example.com"))?.Token;
         Assert.Null(token); // unknown address
 
         var email = await EmailOf(personId);
-        token = await links.IssueAsync(email);
+        token = (await links.IssueAsync(email))?.Token;
         Assert.NotNull(token);
 
         var result = await links.ConsumeAsync(token);
@@ -57,7 +57,7 @@ public class IdentityStoreTests(IdentityDatabase db) : IClassFixture<IdentityDat
     {
         var personId = await db.AddPersonAsync($"once-{Guid.NewGuid():N}@example.com");
         var (links, _) = ServicesAt(Now);
-        var token = await links.IssueAsync(await EmailOf(personId));
+        var token = (await links.IssueAsync(await EmailOf(personId)))?.Token;
 
         var first = await links.ConsumeAsync(token!);
         var second = await links.ConsumeAsync(token!);
@@ -76,7 +76,7 @@ public class IdentityStoreTests(IdentityDatabase db) : IClassFixture<IdentityDat
         // both would succeed and one token would mint two sessions.
         var personId = await db.AddPersonAsync($"race-{Guid.NewGuid():N}@example.com");
         var (links, _) = ServicesAt(Now);
-        var token = await links.IssueAsync(await EmailOf(personId));
+        var token = (await links.IssueAsync(await EmailOf(personId)))?.Token;
 
         var attempts = await Task.WhenAll(
             Enumerable.Range(0, 8).Select(_ => links.ConsumeAsync(token!)));
@@ -92,7 +92,7 @@ public class IdentityStoreTests(IdentityDatabase db) : IClassFixture<IdentityDat
     {
         var personId = await db.AddPersonAsync($"expiry-{Guid.NewGuid():N}@example.com");
         var (issuer, _) = ServicesAt(Now);
-        var token = await issuer.IssueAsync(await EmailOf(personId));
+        var token = (await issuer.IssueAsync(await EmailOf(personId)))?.Token;
 
         var (justInside, _) = ServicesAt(Now.Add(MagicLinkService.Lifetime).AddSeconds(-1));
         var (justOutside, _) = ServicesAt(Now.Add(MagicLinkService.Lifetime).AddSeconds(1));

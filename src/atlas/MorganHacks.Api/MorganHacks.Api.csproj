@@ -12,6 +12,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MorganHacks.Identity\MorganHacks.Identity.csproj" />
+    <!-- lark owns notify.*, so queueing goes through lark's own API rather
+         than SQL written over here. -->
+    <ProjectReference Include="..\..\lark\MorganHacks.Lark.Data\MorganHacks.Lark.Data.csproj" />
     <ProjectReference Include="..\MorganHacks.Applications\MorganHacks.Applications.csproj" />
     <ProjectReference Include="..\MorganHacks.Profiles\MorganHacks.Profiles.csproj" />
   </ItemGroup>

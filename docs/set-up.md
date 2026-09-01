@@ -311,3 +311,31 @@ scripts/claim-staging --release    # hand it back to main
 ```
 
 Full detail in [`docs/architecture/deployments.md`](architecture/deployments.md).
+
+## Sending real email
+
+`lark` sends through SES. Locally it does not need AWS at all: mailpit in
+`docker-compose.yml` is the inbox, and nothing leaves the machine.
+
+For staging and production, `lark` reads standard AWS environment variables:
+
+```
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+Two things gate real delivery, and they are separate:
+
+- **Domain verification.** `auth.morganhacks.com` must exist in DNS and be
+  verified in SES with its own DKIM records. This is what the `magic_link`
+  template sends from. Until it is verified, nothing sends regardless of
+  sandbox status.
+- **Leaving the sandbox.** In the sandbox SES accepts mail only for verified
+  recipients. The code path is identical either way — a refused send is
+  recorded as an ordinary failure — so everything can be built and tested
+  before production access is granted.
+
+A transactional subdomain separate from the broadcast one is the point rather
+than decoration: a blast that collects spam complaints must not be able to take
+sign-in links down with it.

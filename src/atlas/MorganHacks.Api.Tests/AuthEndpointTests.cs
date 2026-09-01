@@ -107,7 +107,7 @@ public class AuthEndpointTests(IdentityDatabase db)
         using var scope = _app.Services.CreateScope();
         var links = scope.ServiceProvider
             .GetRequiredService<MorganHacks.Identity.Services.MagicLinkService>();
-        var token = await links.IssueAsync(email);
+        var token = (await links.IssueAsync(email))?.Token;
         Assert.NotNull(token);
 
         var response = await Client().GetAsync($"/auth/consume?token={token}");
@@ -138,7 +138,7 @@ public class AuthEndpointTests(IdentityDatabase db)
         using var scope = _app.Services.CreateScope();
         var links = scope.ServiceProvider
             .GetRequiredService<MorganHacks.Identity.Services.MagicLinkService>();
-        var token = await links.IssueAsync(email);
+        var token = (await links.IssueAsync(email))?.Token;
 
         var first = await Client().GetAsync($"/auth/consume?token={token}");
         var second = await Client().GetAsync($"/auth/consume?token={token}");

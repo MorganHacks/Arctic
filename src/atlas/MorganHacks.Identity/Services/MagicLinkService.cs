@@ -6,6 +6,9 @@ namespace MorganHacks.Identity.Services;
 /// Passwordless login for hackers. No password is ever created, stored or
 /// reset.
 /// </summary>
+/// <summary>A freshly minted link, and who it belongs to.</summary>
+public sealed record IssuedLink(Guid PersonId, string Token);
+
 public sealed class MagicLinkService(IIdentityStore store, TimeProvider clock)
 {
     /// <summary>
@@ -18,8 +21,8 @@ public sealed class MagicLinkService(IIdentityStore store, TimeProvider clock)
     /// Issues a link for an address, if that address belongs to anyone.
     /// </summary>
     /// <returns>
-    /// The raw token when one was issued, and <c>null</c> when the address is
-    /// unknown.
+    /// The person and their raw token when one was issued, and <c>null</c>
+    /// when the address belongs to nobody who may use a link.
     /// </returns>
     /// <remarks>
     /// The caller must respond identically either way. Returning "no account
@@ -32,7 +35,7 @@ public sealed class MagicLinkService(IIdentityStore store, TimeProvider clock)
     /// branch on the result.
     /// </para>
     /// </remarks>
-    public async Task<string?> IssueAsync(string email, CancellationToken ct = default)
+    public async Task<IssuedLink?> IssueAsync(string email, CancellationToken ct = default)
     {
         var personId = await store.FindHackerIdByEmailAsync(email, ct);
         if (personId is null)
@@ -44,7 +47,7 @@ public sealed class MagicLinkService(IIdentityStore store, TimeProvider clock)
         await store.InsertMagicLinkAsync(
             personId.Value, hash, clock.GetUtcNow().Add(Lifetime), ct);
 
-        return raw;
+        return new IssuedLink(personId.Value, raw);
     }
 
     /// <summary>

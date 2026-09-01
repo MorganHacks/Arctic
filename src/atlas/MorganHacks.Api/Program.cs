@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 using MorganHacks.Api;
 using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
+using MorganHacks.Lark.Data.Data;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -58,7 +60,13 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 builder.Services.AddIdentityModule(connectionString);
-builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
+// Magic links are queued, not sent here. Sending inline would put SES's
+// availability in the path of somebody clicking "sign in", and would skip the
+// suppression list that stops us mailing an address that already bounced.
+builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
+builder.Services.AddSingleton<TemplateStore>();
+builder.Services.AddSingleton<MessageQueue>();
+builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
 builder.Services.AddHttpClient();
 builder.Services.AddMemoryCache();
 
