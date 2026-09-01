@@ -79,15 +79,25 @@ DEPLOY_APPS=false az deployment sub create \
     -f "$HERE/main.bicep" -p "$PARAMS" -o none
 
 say "4/5  Migrations"
-az containerapp job start -g "$GROUP" -n "$JOB" -o none
+# Bounded, because an az command that hangs otherwise hangs until CI's own
+# limit — which on a hosted runner is six hours of a job doing nothing.
+timeout 300 az containerapp job start -g "$GROUP" -n "$JOB" -o none || {
+    echo "  could not start the migration job" >&2
+    exit 1
+}
 echo "  started; waiting"
 
+# Wall clock, not iterations. The obvious version counts loops and calls it a
+# ten-minute timeout, but each az call in the loop takes seconds of its own, so
+# the real bound is whatever that adds up to — which is how a "ten minute"
+# timeout ran for half an hour.
 STATUS=""
-for _ in $(seq 1 120); do
-    STATUS="$(az containerapp job execution list -g "$GROUP" -n "$JOB" \
+DEADLINE=$(( $(date +%s) + 600 ))
+while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+    STATUS="$(timeout 60 az containerapp job execution list -g "$GROUP" -n "$JOB" \
         --query "sort_by([], &properties.startTime)[-1].properties.status" -o tsv 2>/dev/null || echo "")"
     [[ "$STATUS" == "Succeeded" || "$STATUS" == "Failed" ]] && break
-    sleep 5
+    sleep 10
 done
 
 if [[ "$STATUS" != "Succeeded" ]]; then

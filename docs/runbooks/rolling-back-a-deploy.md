@@ -3,6 +3,12 @@
 **Takes about 7 minutes.** That is measured, not estimated — a rollback of
 staging from `f900572` to `03c9f55` took 7m10s end to end, including migrations.
 
+If it passes thirty minutes the job fails on its own. That bound exists because
+a deploy once ran for half an hour doing nothing: `az containerapp job start`
+hung, and the wait loop that was meant to give up after ten minutes counted
+iterations rather than clock, so it never did. Both are bounded now, and a
+failure is loud rather than quiet.
+
 ## Do this
 
 Actions → **Deploy to Azure** → Run workflow:
