@@ -1,0 +1,36 @@
+# The migration runner, as its own image.
+#
+# Separate from the API on purpose. Migrations run as a pre-deploy job with
+# exactly one owner; an API that migrates on startup means every replica racing
+# to alter the same schema, which is the most common way setups like this break
+# in production.
+#
+# Built from the repository root. Not built by the PR workflow — the deploy
+# job builds it, because it ships on a different schedule to the API.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY src/atlas/MorganHacks.Migrations/MorganHacks.Migrations.csproj src/atlas/MorganHacks.Migrations/
+COPY global.json ./
+COPY src/atlas/Directory.Build.props src/atlas/
+RUN dotnet restore src/atlas/MorganHacks.Migrations/MorganHacks.Migrations.csproj
+
+COPY src/atlas/MorganHacks.Migrations/ src/atlas/MorganHacks.Migrations/
+RUN dotnet publish src/atlas/MorganHacks.Migrations/MorganHacks.Migrations.csproj \
+    -c Release -o /app --no-restore
+
+# The runtime image, not aspnet: this is a console job that runs and exits.
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+
+# Npgsql probes for Kerberos support on every connection. Without this library
+# it still connects, but prints "Cannot load library libgssapi_krb5.so.2" to
+# stderr at every startup — a permanent error-shaped line in the logs for a
+# feature we do not use, which is how people learn to ignore real ones.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=build /app .
+USER $APP_UID
+ENTRYPOINT ["dotnet", "MorganHacks.Migrations.dll"]

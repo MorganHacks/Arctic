@@ -52,9 +52,16 @@ jobs:
             echo "No ${{ inputs.path }}/Dockerfile yet — skipping image build and scan."
           fi
 
+      # Context is the repository root, not the service directory. Services
+      # reference libs/observability, and atlas also references lark's data
+      # library, so a context scoped to one service cannot see what it needs.
       - name: Build image
         if: steps.image.outputs.exists == 'true'
-        run: docker build -t ${{ inputs.service }}:${{ github.sha }} ${{ inputs.path }}
+        run: |
+          docker build \
+            -f ${{ inputs.path }}/Dockerfile \
+            -t ${{ inputs.service }}:${{ github.sha }} \
+            .
 
       - name: Trivy scan
         if: steps.image.outputs.exists == 'true'
