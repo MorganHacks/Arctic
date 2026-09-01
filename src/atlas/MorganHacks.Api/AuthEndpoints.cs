@@ -29,9 +29,10 @@ public static class AuthEndpoints
         auth.MapPost("/logout", Logout);
         auth.MapGet("/me", WhoAmI);
 
-        // The first gated route. Proves the filter end to end and gives the
-        // admin screens something to call.
-        app.MapGet("/people", ListPeople)
+        // Under /admin because that is what harbor routes, and because the
+        // admin screens live there. At /people it was unreachable through the
+        // gateway — atlas answered it happily and nothing could ask.
+        app.MapGet("/admin/people", ListPeople)
            .RequirePermission(Permission.PeopleView);
 
         return app;

@@ -35,7 +35,16 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next)
 
         // Returned to the caller so a hacker can paste it into a support
         // message and we can find their exact request.
-        context.Response.Headers[Telemetry.CorrelationIdHeader] = correlationId;
+        //
+        // Assigned as the response starts rather than now, because a gateway
+        // copies the upstream's headers in between — and a caller who reads
+        // two different values for the one id they were told to quote is worse
+        // off than one who reads none.
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers[Telemetry.CorrelationIdHeader] = correlationId;
+            return Task.CompletedTask;
+        });
 
         using (LogContext.PushProperty(Telemetry.CorrelationIdProperty, correlationId))
         {

@@ -118,6 +118,8 @@ app.UseMiddleware<IdentityMiddleware>();
 // into a full outage, and harbor is the only path to the API.
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
+
+
 app.MapReverseProxy();
 
 app.Run();

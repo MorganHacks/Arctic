@@ -25,15 +25,15 @@ on:
         type: boolean
         default: false
       atlas:
-        description: "Re-run atlas (no deploy target yet)"
+        description: "Re-run atlas (deployed by deploy-azure.yml)"
         type: boolean
         default: false
       lark:
-        description: "Re-run lark (no deploy target yet)"
+        description: "Re-run lark (deployed by deploy-azure.yml)"
         type: boolean
         default: false
       harbor:
-        description: "Re-run harbor (no deploy target yet)"
+        description: "Re-run harbor (deployed by deploy-azure.yml)"
         type: boolean
         default: false
 

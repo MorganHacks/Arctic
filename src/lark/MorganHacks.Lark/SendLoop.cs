@@ -28,6 +28,15 @@ public sealed class SendLoopOptions
 
     /// <summary>How often stranded rows are recovered.</summary>
     public TimeSpan SweepEvery { get; set; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// How long to wait between complaints when there is no provider.
+    /// </summary>
+    /// <remarks>
+    /// Long, because the message is the same every time and a warning printed
+    /// every five seconds buries everything else in the log.
+    /// </remarks>
+    public TimeSpan UnconfiguredDelay { get; set; } = TimeSpan.FromMinutes(5);
 }
 
 /// <summary>
@@ -60,6 +69,16 @@ public sealed class SendLoop(
         {
             try
             {
+                if (!provider.IsConfigured)
+                {
+                    // Nothing is claimed, so nothing is lost. The queue keeps
+                    // filling and goes out untouched once credentials arrive.
+                    log.LogWarning(
+                        "No mail provider configured; not claiming anything to send.");
+                    await Task.Delay(_options.UnconfiguredDelay, clock, stoppingToken);
+                    continue;
+                }
+
                 if (clock.GetUtcNow() >= nextSweep)
                 {
                     var recovered = await queue.SweepExpiredLocksAsync(stoppingToken);
