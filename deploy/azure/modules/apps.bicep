@@ -144,6 +144,13 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
           env: concat([
             { name: 'ARCTIC_DB', secretRef: 'db-connection' }
             { name: 'ASPNETCORE_URLS', value: 'http://+:8080' }
+            // Two proxies sit in front of atlas, not one: harbor, and then the
+            // Container Apps internal ingress that fronts every app in the
+            // environment. With one, atlas stops at the internal ingress and
+            // records that instead of the caller — which is what made
+            // sessions.ip read 100.100.x and put every request in a single
+            // rate-limit bucket.
+            { name: 'Network__ForwardLimit', value: '2' }
             // Liveness only, and deliberately not the database: a Postgres
             // blip that restarts every replica turns a recoverable problem
             // into an outage.
@@ -222,10 +229,16 @@ resource harbor 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ASPNETCORE_URLS', value: 'http://+:8080' }
             { name: 'ReverseProxy__Clusters__atlas__Destinations__primary__Address', value: 'https://${atlas.properties.configuration.ingress.fqdn}/' }
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
-            // Container Apps terminates in front of harbor, so without this
-            // RemoteIpAddress is the platform's and every per-IP rate limit
-            // shares one bucket for the entire internet.
-            { name: 'Network__ForwardLimit', value: '2' }
+            // Exactly one proxy sits in front of harbor: the Container Apps
+            // ingress, which appends the real client to X-Forwarded-For. One
+            // means we take that entry and stop.
+            //
+            // Two was a hole rather than a margin. A caller who sends their
+            // own X-Forwarded-For has it appended to, not replaced, so
+            // consuming a second entry reaches the value they chose — proven
+            // against staging, where a forged header became the client IP and
+            // made every per-IP rate limit trivially bypassable.
+            { name: 'Network__ForwardLimit', value: '1' }
           ], sentryEnv)
           probes: [
             {
