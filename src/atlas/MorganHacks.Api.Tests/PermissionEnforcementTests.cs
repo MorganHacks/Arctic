@@ -52,6 +52,45 @@ public class PermissionEnforcementTests(IdentityDatabase db)
     private static string Unique(string prefix) => $"{prefix}-{Guid.NewGuid():N}@example.com";
 
     [Fact]
+    public async Task The_list_shows_people_and_the_teams_they_are_on()
+    {
+        // The screen this feeds is the first thing an organizer sees, and the
+        // team column is how somebody works out why a person cannot do a thing.
+        var email = Unique("listed");
+        var id = await db.AddPersonAsync(email, "organizer");
+        await db.AddToTeamAsync(id, "super-admin");
+
+        var viewer = await db.AddPersonAsync(Unique("viewer"), "organizer");
+        await db.AddToTeamAsync(viewer, "super-admin");
+        var cookie = await SignIn(viewer);
+
+        var response = await Client().SendAsync(Request("/admin/people", cookie));
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains(email, body);
+        Assert.Contains("super-admin", body);
+    }
+
+    [Fact]
+    public async Task A_person_on_no_team_still_appears()
+    {
+        // An organizer waiting for access has to be findable, because finding
+        // them is the first step of giving them any.
+        var email = Unique("waiting");
+        await db.AddPersonAsync(email, "organizer");
+
+        var viewer = await db.AddPersonAsync(Unique("viewer"), "organizer");
+        await db.AddToTeamAsync(viewer, "super-admin");
+        var cookie = await SignIn(viewer);
+
+        var body = await (await Client().SendAsync(Request("/admin/people", cookie)))
+            .Content.ReadAsStringAsync();
+
+        Assert.Contains(email, body);
+    }
+
+    [Fact]
     public async Task No_session_is_unauthorized_not_forbidden()
     {
         var r = await Client().GetAsync("/admin/people");

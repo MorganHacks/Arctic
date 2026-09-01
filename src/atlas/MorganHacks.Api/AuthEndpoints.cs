@@ -41,8 +41,24 @@ public static class AuthEndpoints
     public sealed record MagicLinkRequest(string Email);
 
     /// <summary>Requires <c>people.view</c>.</summary>
-    private static IResult ListPeople(HttpContext http) =>
-        Results.Ok(new { requestedBy = http.PersonId(), people = Array.Empty<object>() });
+    private static async Task<IResult> ListPeople(
+        HttpContext http, IIdentityStore store, CancellationToken ct)
+    {
+        var people = await store.ListPeopleAsync(ct);
+
+        return Results.Ok(new
+        {
+            requestedBy = http.PersonId(),
+            people = people.Select(p => new
+            {
+                id = p.Id,
+                kind = p.Kind,
+                email = p.Email,
+                revoked = p.Revoked,
+                teams = p.Teams,
+            }),
+        });
+    }
 
     /// <summary>
     /// Per-address request counter, checked before any database work.
