@@ -182,6 +182,34 @@ ignored and the call reports success without changing anything.
 
 ---
 
+## What lives in the database, and what does not
+
+Three kinds of rule, deliberately kept apart.
+
+**Invariants go down, as constraints and triggers.** Anything we would be
+alarmed to find violated *however it got violated*. The audit trail is the
+clearest case: before the trigger, `UPDATE applications SET status='accepted'`
+in psql succeeded silently and wrote no history row — which does not leave a
+gap in the trail, it leaves a trail that is wrong in a way nobody can detect
+afterwards. There is no version of "remember to write the history row" that
+survives an incident at 2am.
+
+**Set operations that must be atomic go down, as functions.** SQL is genuinely
+better at these than C# is. The RSVP expiry and waitlist promotion job is the
+case this exists for: expire everyone past their deadline, count the freed
+spots, promote the oldest waitlisted rows to fill them, all consistent for the
+duration. In C# that is a round trip per applicant and a window where two runs
+double-promote.
+
+**Decisions stay in C#.** Which transitions are legal, and what a person is
+permitted to do. These change when the team's thinking changes, and they belong
+in the language with the compiler, the tests and the stack traces. `plpgsql`
+has none of those, does not appear in Sentry, and is a much steeper ramp for a
+contributor than C# is.
+
+The test: would you be alarmed to find it violated regardless of how? Push it
+down. Might it change next season? Keep it up.
+
 ## Trusted proxies — required before either service goes live
 
 `harbor` and `atlas` both partition their rate limiters on the caller's IP, and

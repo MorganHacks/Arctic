@@ -75,18 +75,30 @@ public sealed class ApplicationsDatabase : IAsyncLifetime
     }
 
     /// <summary>Fills in the fields a submitted application is required to have.</summary>
-    public async Task CompleteAsync(Guid applicationId)
+    public async Task CompleteAsync(Guid applicationId, bool dataSharing = true)
     {
         await using var cmd = DataSource.CreateCommand("""
             UPDATE applications.applications
                SET first_name = 'Ada', last_name = 'Lovelace', age = 20,
                    phone = '+15550000000', school = 'Morgan State University',
                    level_of_study = 'undergraduate', country = 'United States',
-                   mlh_coc_agreed_at = now(), mlh_data_sharing_at = now()
+                   mlh_coc_agreed_at = now(),
+                   mlh_data_sharing_at = CASE WHEN @sharing THEN now() END
              WHERE id = @id
             """);
         cmd.Parameters.AddWithValue("id", applicationId);
+        cmd.Parameters.AddWithValue("sharing", dataSharing);
         await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task<DateTimeOffset> UpdatedAtOf(Guid applicationId)
+    {
+        await using var cmd = DataSource.CreateCommand(
+            "SELECT updated_at FROM applications.applications WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", applicationId);
+        await using var r = await cmd.ExecuteReaderAsync();
+        await r.ReadAsync();
+        return r.GetFieldValue<DateTimeOffset>(0);
     }
 
     /// <summary>
