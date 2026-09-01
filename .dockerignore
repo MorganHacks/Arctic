@@ -1,0 +1,19 @@
+# Build output and caches. Copying these in makes the context enormous and can
+# poison a build with binaries compiled against a different SDK.
+**/bin/
+**/obj/
+**/node_modules/
+**/.next/
+**/.vercel/
+
+.git/
+.github/
+docs/
+doc-starter/
+plan/
+**/*.md
+
+# Never in an image.
+**/.env
+**/.env.*
+**/appsettings.Development.json
