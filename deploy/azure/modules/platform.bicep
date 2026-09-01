@@ -110,10 +110,19 @@ resource extensions 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@20
   }
 }
 
-// Container Apps egress has no fixed address on the consumption plan, so this
-// is the rule that lets the services connect at all. It permits other Azure
-// services, not the open internet — but it is the weakest thing here, and the
-// upgrade is VNet integration with a private endpoint.
+// 0.0.0.0-0.0.0.0 is Azure's "any Azure service" rule, and it is the weakest
+// thing in this file: any resource in any tenant can open a connection, with
+// only the password in the way.
+//
+// It is here because a consumption environment has no fixed egress address.
+// The environment's staticIp is its *ingress* — narrowing the rule to it was
+// tried against staging and every connection failed, which is worth recording
+// so nobody tries it a second time.
+//
+// The real fix is VNet integration with a private endpoint. VNet cannot be
+// added to an existing Container Apps environment, so it means building a new
+// one — worth doing before production holds real applicant data, and not worth
+// rebuilding staging for on its own.
 resource allowAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
   parent: postgres
   name: 'allow-azure-services'
