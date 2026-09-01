@@ -142,9 +142,12 @@ public static class GoogleEndpoints
             // Logged with the reason but not the address: useful for support,
             // not worth storing PII for.
             log.LogInformation("Organizer sign-in refused: {Reason}", organizer.Rejection);
-            return Results.Json(
-                new { error = "That account is not set up as an organizer." },
-                statusCode: StatusCodes.Status403Forbidden);
+
+            // Back to the sign-in page, which says the same thing in a place
+            // the person can act on. The reason is deliberately not passed
+            // along: "not an organizer" and "revoked" and "bound to another
+            // account" are all the same instruction — ask an admin.
+            return Results.Redirect($"{SignInPath}?error=1");
         }
 
         var sessionToken = await sessions.StartAsync(
@@ -162,7 +165,7 @@ public static class GoogleEndpoints
             Path = "/",
         });
 
-        return Results.Ok(new { signedIn = true });
+        return Results.Redirect(SignedInPath);
     }
 
     /// <summary>
@@ -179,7 +182,24 @@ public static class GoogleEndpoints
     };
 
     private static string RedirectUri(IConfiguration config) =>
-        config["Google:RedirectUri"] ?? "http://localhost:5080/auth/google/callback";
+        config["Google:RedirectUri"] ?? "http://localhost:3000/api/auth/google/callback";
+
+    /// <summary>
+    /// Where the browser is sent once the callback is finished.
+    /// </summary>
+    /// <remarks>
+    /// The callback is a top-level navigation — a person clicked a Google
+    /// button and is watching the address bar. Answering it with a JSON body
+    /// leaves them looking at <c>{"signedIn":true}</c> with nowhere to go, and
+    /// a refusal at a URL they cannot get back from.
+    /// <para>
+    /// Relative paths on purpose, resolved against the app the browser is
+    /// already on. Taking a destination from configuration and redirecting to
+    /// it unchecked is how an open redirect gets built.
+    /// </para>
+    /// </remarks>
+    private const string SignedInPath = "/";
+    private const string SignInPath = "/sign-in";
 
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');

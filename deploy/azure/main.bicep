@@ -46,6 +46,15 @@ param awsAccessKeyId string = ''
 @secure()
 param awsSecretAccessKey string = ''
 
+@description('Google OAuth client id. Empty leaves organizer sign-in answering 503.')
+param googleClientId string = ''
+
+@secure()
+param googleClientSecret string = ''
+
+@description('Where Google sends the browser back. The admin app origin, not harbor.')
+param googleRedirectUri string = ''
+
 @description('Postgres major version. Keep this the same as docker-compose and the tests.')
 param postgresVersion string = '18'
 
@@ -168,6 +177,9 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     awsRegion: awsRegion
     awsAccessKeyId: awsAccessKeyId
     awsSecretAccessKey: awsSecretAccessKey
+    googleClientId: googleClientId
+    googleClientSecret: googleClientSecret
+    googleRedirectUri: googleRedirectUri
     pullIdentityId: pullIdentity.outputs.id
     tags: commonTags
   }
