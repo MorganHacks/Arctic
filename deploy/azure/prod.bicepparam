@@ -7,7 +7,7 @@ using 'main.bicep'
 
 param environmentName = 'prod'
 param location = 'eastus'
-param registryName = 'morganhacksacr'
+param registryName = 'crmorganhacks'
 
 param imageTag = readEnvironmentVariable('IMAGE_TAG')
 param dbPassword = readEnvironmentVariable('DB_PASSWORD')

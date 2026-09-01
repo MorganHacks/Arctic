@@ -26,7 +26,7 @@ param location string = resourceGroup().location
 param imageTag string
 
 param registryName string
-param registryResourceGroup string = 'morganhacks-shared'
+param registryResourceGroup string = 'rg-morganhacks-shared'
 
 @secure()
 param dbPassword string
@@ -39,11 +39,13 @@ param postgresVersion string = '17'
 
 param superAdminEmail string
 
+param tags object = {}
+
 @secure()
 @description('Empty disables error reporting, which is what lets this run with no accounts.')
 param sentryDsn string = ''
 
-var prefix = 'morganhacks-${environmentName}'
+var suffix = 'morganhacks-${environmentName}'
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: registryName
@@ -52,8 +54,9 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing =
 
 // ---------------------------------------------------------------- logging ---
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: '${prefix}-logs'
+  name: 'log-${suffix}'
   location: location
+  tags: tags
   properties: {
     sku: { name: 'PerGB2018' }
     retentionInDays: 30
@@ -62,8 +65,9 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
 
 // --------------------------------------------------------------- postgres ---
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
-  name: '${prefix}-pg'
+  name: 'psql-${suffix}'
   location: location
+  tags: tags
   sku: {
     // Smallest managed tier. Managed rather than self-hosted because the
     // database is the one place a mistake is permanent.
@@ -111,8 +115,9 @@ var connectionString = 'Host=${postgres.properties.fullyQualifiedDomainName};Por
 
 // -------------------------------------------------------- apps environment ---
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
-  name: '${prefix}-env'
+  name: 'cae-${suffix}'
   location: location
+  tags: tags
   properties: {
     appLogsConfiguration: {
       destination: 'log-analytics'
@@ -152,8 +157,9 @@ var sentrySecret = {
 // means every replica racing to alter one schema, which is the documented way
 // setups like this break.
 resource migrations 'Microsoft.App/jobs@2024-03-01' = {
-  name: 'migrations'
+  name: 'caj-migrations-${environmentName}'
   location: location
+  tags: union(tags, { service: 'migrations' })
   properties: {
     environmentId: environment.id
     configuration: {

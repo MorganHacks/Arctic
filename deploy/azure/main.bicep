@@ -23,7 +23,7 @@ param location string = 'eastus'
 param imageTag string
 
 @description('Globally unique, lowercase alphanumeric.')
-param registryName string = 'morganhacksacr'
+param registryName string = 'crmorganhacks'
 
 @secure()
 param dbPassword string
@@ -43,17 +43,41 @@ param deployApps bool = true
 // The registry outlives any one environment, and lives in its own group so
 // deleting an environment cannot take the images with it — including the image
 // a rollback needs.
-var sharedGroupName = 'morganhacks-shared'
-var groupName = 'morganhacks-${environmentName}'
+// Azure's own abbreviations rather than something invented here, so a group
+// reads by type and anyone who has used Azure before needs no explanation.
+// Conventions are in naming.md.
+var sharedGroupName = 'rg-morganhacks-shared'
+var groupName = 'rg-morganhacks-${environmentName}'
+
+// On every resource. Cost Analysis groups by these, and next year's team
+// inherits a subscription where "what is this and can I delete it" has an
+// answer rather than being a guess.
+var commonTags = {
+  workload: 'morganhacks'
+  environment: environmentName
+  managedBy: 'bicep'
+  repository: 'MorganHacks/Arctic'
+}
+
+// The registry outlives any one environment, so it is not tagged as belonging
+// to either.
+var sharedTags = {
+  workload: 'morganhacks'
+  environment: 'shared'
+  managedBy: 'bicep'
+  repository: 'MorganHacks/Arctic'
+}
 
 resource sharedGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: sharedGroupName
   location: location
+  tags: sharedTags
 }
 
 resource group 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: groupName
   location: location
+  tags: commonTags
 }
 
 module registry 'modules/registry.bicep' = {
@@ -62,6 +86,7 @@ module registry 'modules/registry.bicep' = {
   params: {
     registryName: registryName
     location: location
+    tags: sharedTags
   }
 }
 
@@ -77,6 +102,7 @@ module platform 'modules/platform.bicep' = {
     dbPassword: dbPassword
     postgresVersion: postgresVersion
     superAdminEmail: superAdminEmail
+    tags: commonTags
   }
   dependsOn: [registry]
 }
@@ -92,6 +118,7 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     registryResourceGroup: sharedGroupName
     dbPassword: dbPassword
     sentryDsn: sentryDsn
+    tags: commonTags
   }
   dependsOn: [platform]
 }

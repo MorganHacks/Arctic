@@ -14,7 +14,7 @@ param location string = resourceGroup().location
 param imageTag string
 
 param registryName string
-param registryResourceGroup string = 'morganhacks-shared'
+param registryResourceGroup string = 'rg-morganhacks-shared'
 
 @secure()
 param dbPassword string
@@ -26,7 +26,9 @@ param dbName string = 'morganhacks'
 @description('Empty disables error reporting, which is what lets this run with no accounts.')
 param sentryDsn string = ''
 
-var prefix = 'morganhacks-${environmentName}'
+param tags object = {}
+
+var suffix = 'morganhacks-${environmentName}'
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: registryName
@@ -34,11 +36,11 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing =
 }
 
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
-  name: '${prefix}-env'
+  name: 'cae-${suffix}'
 }
 
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' existing = {
-  name: '${prefix}-pg'
+  name: 'psql-${suffix}'
 }
 
 var connectionString = 'Host=${postgres.properties.fullyQualifiedDomainName};Port=5432;Database=${dbName};Username=${dbAdminUser};Password=${dbPassword};SSL Mode=Require;Trust Server Certificate=true'
@@ -71,8 +73,9 @@ var sentrySecret = {
 // own sessions and permissions rather than trusting the gateway, but there is
 // still no reason to also publish it.
 resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
-  name: 'atlas'
+  name: 'ca-atlas-${environmentName}'
   location: location
+  tags: union(tags, { service: 'atlas' })
   properties: {
     managedEnvironmentId: environment.id
     configuration: {
@@ -120,8 +123,9 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
 // and a queue with no worker is a queue that silently stops sending while
 // every dashboard reads green.
 resource lark 'Microsoft.App/containerApps@2024-03-01' = {
-  name: 'lark'
+  name: 'ca-lark-${environmentName}'
   location: location
+  tags: union(tags, { service: 'lark' })
   properties: {
     managedEnvironmentId: environment.id
     configuration: {
@@ -150,8 +154,9 @@ resource lark 'Microsoft.App/containerApps@2024-03-01' = {
 // ----------------------------------------------------------------- harbor ---
 // The only thing exposed to the internet.
 resource harbor 'Microsoft.App/containerApps@2024-03-01' = {
-  name: 'harbor'
+  name: 'ca-harbor-${environmentName}'
   location: location
+  tags: union(tags, { service: 'harbor' })
   properties: {
     managedEnvironmentId: environment.id
     configuration: {

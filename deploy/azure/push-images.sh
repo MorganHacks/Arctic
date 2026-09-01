@@ -12,7 +12,7 @@ set -euo pipefail
 
 ENVIRONMENT="${1:-}"
 TAG="${2:-$(git rev-parse --short HEAD)}"
-REGISTRY="${REGISTRY:-morganhacksacr}"
+REGISTRY="${REGISTRY:-crmorganhacks}"
 
 if [[ -z "$ENVIRONMENT" ]]; then
     echo "Usage: $0 <staging|prod> [tag]" >&2

@@ -36,6 +36,7 @@ a change to how production is provisioned should arrive as a diff.
 
 ```
 main.bicep              the front door — resource groups, then the modules
+naming.md               naming convention and what every tag is for
 modules/registry.bicep  the container registry, shared across environments
 modules/platform.bicep  Postgres, the apps environment, the migration job
 modules/apps.bicep      harbor, atlas, lark

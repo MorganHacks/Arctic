@@ -10,9 +10,12 @@ param registryName string
 
 param location string = resourceGroup().location
 
+param tags object = {}
+
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: registryName
   location: location
+  tags: tags
   sku: {
     // Basic holds a handful of small images. This is not a public feed.
     name: 'Basic'

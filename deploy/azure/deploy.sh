@@ -28,7 +28,8 @@ export SENTRY_DSN="${SENTRY_DSN:-}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCATION="${LOCATION:-eastus}"
-GROUP="morganhacks-${ENVIRONMENT}"
+GROUP="rg-morganhacks-${ENVIRONMENT}"
+JOB="caj-migrations-${ENVIRONMENT}"
 PARAMS="${HERE}/${ENVIRONMENT}.bicepparam"
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
@@ -61,12 +62,12 @@ PGPASSWORD="$DB_PASSWORD" psql \
 echo "  schemas present"
 
 say "3/4  Migrations"
-az containerapp job start -g "$GROUP" -n migrations -o none
+az containerapp job start -g "$GROUP" -n "$JOB" -o none
 echo "  started; waiting"
 
 STATUS=""
 for _ in $(seq 1 120); do
-    STATUS="$(az containerapp job execution list -g "$GROUP" -n migrations \
+    STATUS="$(az containerapp job execution list -g "$GROUP" -n "$JOB" \
         --query "sort_by([], &properties.startTime)[-1].properties.status" -o tsv 2>/dev/null || echo "")"
     [[ "$STATUS" == "Succeeded" || "$STATUS" == "Failed" ]] && break
     sleep 5
@@ -76,7 +77,7 @@ if [[ "$STATUS" != "Succeeded" ]]; then
     # Fatal on purpose. Deploying anyway would put new code in front of a
     # schema it does not expect, which is worse than not deploying at all.
     echo "  migrations ${STATUS:-timed out} — services NOT deployed" >&2
-    echo "  logs: az containerapp job logs show -g $GROUP -n migrations --container migrations" >&2
+    echo "  logs: az containerapp job logs show -g $GROUP -n $JOB --container migrations" >&2
     exit 1
 fi
 echo "  migrations succeeded"
