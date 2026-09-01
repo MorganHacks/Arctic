@@ -34,7 +34,7 @@ public sealed class MagicLinkService(IIdentityStore store, TimeProvider clock)
     /// </remarks>
     public async Task<string?> IssueAsync(string email, CancellationToken ct = default)
     {
-        var personId = await store.FindPersonIdByEmailAsync(email, ct);
+        var personId = await store.FindHackerIdByEmailAsync(email, ct);
         if (personId is null)
         {
             return null;

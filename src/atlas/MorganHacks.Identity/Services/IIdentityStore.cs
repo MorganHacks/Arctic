@@ -38,7 +38,7 @@ public interface IIdentityStore
     Task RevokeAllSessionsForPersonAsync(
         Guid personId, DateTimeOffset now, CancellationToken ct);
 
-    Task<Guid?> FindPersonIdByEmailAsync(string email, CancellationToken ct);
+    Task<Guid?> FindHackerIdByEmailAsync(string email, CancellationToken ct);
 
     /// <summary>
     /// Everything needed to work out what one person may do: their team

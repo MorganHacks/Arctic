@@ -182,6 +182,54 @@ ignored and the call reports success without changing anything.
 
 ---
 
+## Trusted proxies — required before either service goes live
+
+`harbor` and `atlas` both partition their rate limiters on the caller's IP, and
+`atlas` records one on every session row. Behind Cloudflare, and behind an
+ingress, that IP is the proxy's rather than the caller's unless we say so.
+
+Left unconfigured, every per-IP limit becomes **one bucket shared by the whole
+internet**: harbor's `auth-strict` policy is ten requests per fifteen minutes,
+so the eleventh person to try signing in anywhere in the world gets a 429. That
+is an outage we cause ourselves, not an attack.
+
+Both services read `X-Forwarded-For`, but only from proxies we name. This is
+deliberate and it is the whole point of the setting. The usual version of this
+fix clears the known-proxy list so the header is always honoured, which is
+worse than the bug it fixes: any caller can then set `X-Forwarded-For` to a
+random address per request and walk straight past the limiter.
+
+**With nothing configured, neither service trusts the header at all.** It
+behaves exactly as it did before. That means the setting is inert until someone
+fills it in, so it belongs in the deploy checklist rather than in a backlog.
+
+```jsonc
+{
+  "Network": {
+    // Number of proxies actually in front of this service. Each hop you allow
+    // is one more X-Forwarded-For entry a caller is permitted to have written.
+    "ForwardLimit": 2,
+
+    // Individual addresses. Use for atlas, whose only caller is harbor.
+    "KnownProxies": ["10.0.4.17"],
+
+    // CIDR ranges. Use for harbor, in front of which sits Cloudflare.
+    "KnownNetworks": ["173.245.48.0/20", "103.21.244.0/22"]
+  }
+}
+```
+
+Set them per environment as `Network__ForwardLimit`,
+`Network__KnownProxies__0`, `Network__KnownNetworks__0` and so on.
+
+Cloudflare publishes its ranges at <https://www.cloudflare.com/ips/> and they
+change. Pull them at deploy time rather than pasting them here and forgetting.
+
+**How to tell it is right:** sign in, then read `ip` on the new row in
+`identity.sessions`. Your own address means it works. A Cloudflare address, or
+the ingress's, means the header is not being trusted and every limiter is
+sharing one bucket.
+
 ## Environment variables
 
 Never committed. Vercel holds the values; the repo documents the contract in

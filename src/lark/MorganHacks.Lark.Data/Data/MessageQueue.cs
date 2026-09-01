@@ -28,6 +28,14 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
     /// thousand announcements.
     /// </para>
     /// <para>
+    /// The suppression check is part of the claim rather than a call the
+    /// sender is trusted to remember. A bounced address that stays claimable
+    /// is one forgotten <c>if</c> away from being mailed anyway, and that is
+    /// how a sending domain gets blocked. Lane rules match
+    /// <see cref="IsSuppressedAsync"/>: a bounce or complaint blocks both,
+    /// an unsubscribe blocks broadcast only.
+    /// </para>
+    /// <para>
     /// This is at-least-once, not exactly-once. A worker that sends and then
     /// dies before recording it will send again. That is the right way round:
     /// a duplicate acceptance email is mildly awkward, a missing one costs an
@@ -43,12 +51,16 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
                    locked_by = @worker,
                    locked_until = now() + @lock
              WHERE m.id IN (
-                   SELECT id FROM notify.messages
-                    WHERE status = 'pending'
-                      AND (next_attempt_at IS NULL OR next_attempt_at <= now())
-                    ORDER BY priority, created_at
+                   SELECT q.id FROM notify.messages q
+                    WHERE q.status = 'pending'
+                      AND (q.next_attempt_at IS NULL OR q.next_attempt_at <= now())
+                      AND NOT EXISTS (
+                            SELECT 1 FROM notify.suppressions s
+                             WHERE s.email = q.to_email
+                               AND (s.reason <> 'unsubscribed' OR q.priority > 0))
+                    ORDER BY q.priority, q.created_at
                     LIMIT @batch
-                    FOR UPDATE SKIP LOCKED
+                    FOR UPDATE OF q SKIP LOCKED
              )
             RETURNING m.id, m.campaign_id, m.to_email, m.priority, m.attempts,
                       m.rendered_subject, m.rendered_body_html, m.rendered_body_text
@@ -161,25 +173,71 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
     /// </remarks>
     public async Task<int> SweepExpiredLocksAsync(CancellationToken ct = default)
     {
+        // Recovering the row has to cost an attempt.
+        //
+        // Returning it to 'pending' untouched is the obvious version and it
+        // builds an infinite loop: a message that crashes the worker is swept
+        // back, claimed, crashes it again, forever. MaxAttempts cannot stop it
+        // because that count is only raised by RecordFailureAsync, which is
+        // exactly the code a dying process never reaches. Charging the attempt
+        // here is what makes a poison message eventually give up instead of
+        // taking the queue down with it.
         const string sql = """
             UPDATE notify.messages
-               SET status = 'pending', locked_by = NULL, locked_until = NULL
+               SET attempts = attempts + 1,
+                   status = CASE
+                       WHEN attempts + 1 >= @maxAttempts THEN 'failed_perm'
+                       ELSE 'pending'
+                   END,
+                   locked_by = NULL,
+                   locked_until = NULL,
+                   last_error = COALESCE(last_error, 'worker stopped mid-send')
              WHERE status = 'sending' AND locked_until < now()
             """;
         await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("maxAttempts", (short)RetrySchedule.MaxAttempts);
         return await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    /// <summary>
+    /// Records a suppression and stops anything already queued to that address.
+    /// </summary>
+    /// <remarks>
+    /// The claim query would skip those rows anyway, but skipping leaves them
+    /// pending forever and pending is the queue's way of saying "still owed".
+    /// Marking them says what actually happened, and keeps the backlog
+    /// readable when someone asks why a blast shows fewer sends than
+    /// recipients.
+    /// </remarks>
     public async Task SuppressAsync(string email, string reason, CancellationToken ct = default)
     {
-        const string sql = """
+        const string record = """
             INSERT INTO notify.suppressions (email, reason) VALUES (@email, @reason)
             ON CONFLICT (email) DO NOTHING
             """;
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue("email", email);
-        cmd.Parameters.AddWithValue("reason", reason);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await using (var cmd = dataSource.CreateCommand(record))
+        {
+            cmd.Parameters.AddWithValue("email", email);
+            cmd.Parameters.AddWithValue("reason", reason);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        // Same lane rule as the claim query and IsSuppressedAsync: an
+        // unsubscribe stops the announcements sitting in the queue and leaves
+        // their login link alone.
+        const string cancel = """
+            UPDATE notify.messages
+               SET status = 'suppressed', locked_by = NULL, locked_until = NULL
+             WHERE status = 'pending'
+               AND to_email = @email
+               AND (@reason <> 'unsubscribed' OR priority > 0)
+            """;
+        await using (var cmd = dataSource.CreateCommand(cancel))
+        {
+            cmd.Parameters.AddWithValue("email", email);
+            cmd.Parameters.AddWithValue("reason", reason);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
     }
 
     /// <summary>

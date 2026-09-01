@@ -30,16 +30,23 @@ public class PermissionEnforcementTests(IdentityDatabase db)
     private HttpClient Client() => _app.CreateClient(
         new WebApplicationFactoryClientOptions { HandleCookies = false });
 
-    /// <summary>Signs a person in and returns their session cookie.</summary>
-    private async Task<string> SignIn(string email)
+    /// <summary>Gives a person a live session and returns their cookie.</summary>
+    /// <remarks>
+    /// Mints the session directly rather than driving a login flow. These
+    /// tests are about what a session is permitted to do, not about how it was
+    /// obtained, and everyone here is an organizer — who cannot get a magic
+    /// link, because organizers sign in through Google.
+    /// <para>
+    /// This helper used to go through /auth/magic-link, which worked only
+    /// because that endpoint wrongly issued links to organizers. The tests
+    /// were quietly depending on the hole they should have caught.
+    /// </para>
+    /// </remarks>
+    private async Task<string> SignIn(Guid personId)
     {
         using var scope = _app.Services.CreateScope();
-        var links = scope.ServiceProvider.GetRequiredService<MagicLinkService>();
-        var token = await links.IssueAsync(email);
-        var response = await Client().GetAsync($"/auth/consume?token={token}");
-        return response.Headers.GetValues("Set-Cookie")
-            .First(c => c.StartsWith("mh_session", StringComparison.Ordinal))
-            .Split(';')[0];
+        var sessions = scope.ServiceProvider.GetRequiredService<SessionService>();
+        return $"mh_session={await sessions.StartAsync(personId)}";
     }
 
     private static string Unique(string prefix) => $"{prefix}-{Guid.NewGuid():N}@example.com";
@@ -57,8 +64,8 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         // Nothing is granted by default. Being able to log in is not being
         // able to do anything.
         var email = Unique("nobody");
-        await db.AddPersonAsync(email, "organizer");
-        var cookie = await SignIn(email);
+        var id = await db.AddPersonAsync(email, "organizer");
+        var cookie = await SignIn(id);
 
         var r = await Client().SendAsync(Request("/people", cookie));
 
@@ -71,7 +78,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         var email = Unique("admin");
         var id = await db.AddPersonAsync(email, "organizer");
         await db.AddToTeamAsync(id, "super-admin");
-        var cookie = await SignIn(email);
+        var cookie = await SignIn(id);
 
         var r = await Client().SendAsync(Request("/people", cookie));
 
@@ -87,7 +94,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         var email = Unique("reg");
         var id = await db.AddPersonAsync(email, "organizer");
         await db.AddToTeamAsync(id, "registration");
-        var cookie = await SignIn(email);
+        var cookie = await SignIn(id);
 
         var r = await Client().SendAsync(Request("/people", cookie));
 
@@ -102,7 +109,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         var email = Unique("expired");
         var id = await db.AddPersonAsync(email, "organizer");
         await db.AddToTeamAsync(id, "super-admin", DateTimeOffset.UtcNow.AddDays(-1));
-        var cookie = await SignIn(email);
+        var cookie = await SignIn(id);
 
         var r = await Client().SendAsync(Request("/people", cookie));
 
@@ -116,7 +123,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         var email = Unique("granted");
         var id = await db.AddPersonAsync(email, "organizer");
         await db.GrantAsync(id, "people.view");
-        var cookie = await SignIn(email);
+        var cookie = await SignIn(id);
 
         var r = await Client().SendAsync(Request("/people", cookie));
 
@@ -129,7 +136,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         var email = Unique("revoked");
         var id = await db.AddPersonAsync(email, "organizer");
         await db.AddToTeamAsync(id, "super-admin");
-        var cookie = await SignIn(email);
+        var cookie = await SignIn(id);
 
         Assert.Equal(HttpStatusCode.OK,
             (await Client().SendAsync(Request("/people", cookie))).StatusCode);
