@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MorganHacks.Api\MorganHacks.Api.csproj" />
+    <ProjectReference Include="..\MorganHacks.Applications\MorganHacks.Applications.csproj" />
     <ProjectReference Include="..\MorganHacks.Migrations\MorganHacks.Migrations.csproj" />
   </ItemGroup>
 
