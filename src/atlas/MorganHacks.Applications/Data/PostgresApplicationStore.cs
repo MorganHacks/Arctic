@@ -14,36 +14,24 @@ public sealed class PostgresApplicationStore(NpgsqlDataSource dataSource) : IApp
     /// they submit.
     /// </summary>
     /// <remarks>
-    /// The first history row is written here, in the same transaction. An
-    /// application whose trail begins at its second status is one whose trail
-    /// cannot be trusted.
+    /// The first history row is written by a trigger, not here. An application
+    /// whose trail begins at its second status is one whose trail cannot be
+    /// trusted, and that has to hold for rows this method did not create.
     /// </remarks>
     public async Task<Guid> StartAsync(
         Guid eventId, string email, Guid? personId = null, CancellationToken ct = default)
     {
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(ct);
-
-        Guid id;
-        const string insert = """
+        const string sql = """
             INSERT INTO applications.applications (event_id, person_id, email)
             VALUES (@eventId, @personId, @email)
             RETURNING id
             """;
-        await using (var cmd = new NpgsqlCommand(insert, connection, transaction))
-        {
-            cmd.Parameters.AddWithValue("eventId", eventId);
-            cmd.Parameters.AddWithValue("personId", (object?)personId ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("email", email);
-            id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
-        }
 
-        await WriteHistoryAsync(
-            connection, transaction, id, null, ApplicationStatus.Incomplete,
-            null, null, null, ct);
-
-        await transaction.CommitAsync(ct);
-        return id;
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("eventId", eventId);
+        cmd.Parameters.AddWithValue("personId", (object?)personId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("email", email);
+        return (Guid)(await cmd.ExecuteScalarAsync(ct))!;
     }
 
     public async Task<ApplicationStatus?> StatusOfAsync(
@@ -94,44 +82,52 @@ public sealed class PostgresApplicationStore(NpgsqlDataSource dataSource) : IApp
 
         StatusTransition.Validate(current, next);
 
-        // The lifecycle timestamps move with the status rather than being left
-        // to each caller. Every one of them is something somebody would
-        // eventually forget to set, and a decided_at that disagrees with the
-        // status is worse than not having the column.
+        // Who did this, and why, told to the transaction rather than passed to
+        // an INSERT. The trigger writes the history row for every status
+        // change including ones that never come through here, so this is how
+        // it learns the things only the application knows.
+        //
+        // Transaction-local, so it cannot leak onto the next request that
+        // borrows this pooled connection.
+        const string context = """
+            SELECT set_config('app.actor_id', @actorId, true),
+                   set_config('app.reason', @reason, true),
+                   set_config('app.batch_id', @batchId, true)
+            """;
+        await using (var cmd = new NpgsqlCommand(context, connection, transaction))
+        {
+            cmd.Parameters.AddWithValue("actorId", actorId?.ToString() ?? string.Empty);
+            cmd.Parameters.AddWithValue("reason", reason ?? string.Empty);
+            cmd.Parameters.AddWithValue("batchId", batchId?.ToString() ?? string.Empty);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        // Just the status. The lifecycle timestamps and the history row are
+        // both the database's job now, which is what makes them hold for a
+        // hand-written UPDATE during an incident as well as for this method.
         const string update = """
             UPDATE applications.applications
-               SET status = @next,
-                   updated_at = now(),
-                   submitted_at = CASE WHEN @next = 'submitted'
-                        THEN now() ELSE submitted_at END,
-                   decided_at = CASE WHEN @next IN ('accepted', 'rejected', 'waitlisted')
-                        THEN now() ELSE decided_at END,
-                   decided_by = CASE WHEN @next IN ('accepted', 'rejected', 'waitlisted')
-                        THEN @actorId ELSE decided_by END,
-                   confirmed_at = CASE WHEN @next = 'confirmed'
-                        THEN now() ELSE confirmed_at END,
-                   declined_at = CASE WHEN @next = 'declined'
-                        THEN now() ELSE declined_at END,
-                   checked_in_at = CASE WHEN @next = 'checked_in'
-                        THEN now() ELSE checked_in_at END,
-                   checked_in_by = CASE WHEN @next = 'checked_in'
-                        THEN @actorId ELSE checked_in_by END
+               SET status = @next
              WHERE id = @id
+            RETURNING updated_at
             """;
+
+        DateTimeOffset at;
         await using (var cmd = new NpgsqlCommand(update, connection, transaction))
         {
             cmd.Parameters.AddWithValue("id", applicationId);
             cmd.Parameters.AddWithValue("next", next.ToWire());
-            cmd.Parameters.AddWithValue("actorId", (object?)actorId ?? DBNull.Value);
-            await cmd.ExecuteNonQueryAsync(ct);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+
+            // now() is transaction start time, so this is the same instant the
+            // trigger stamped on the history row.
+            at = reader.GetFieldValue<DateTimeOffset>(0);
         }
 
-        var at = await WriteHistoryAsync(
-            connection, transaction, applicationId, current, next, actorId, reason, batchId, ct);
-
-        // One commit for both writes. If the status and its history row can
-        // drift apart they eventually will, and an audit trail that is
-        // sometimes wrong is one nobody can rely on when it matters.
+        // The trigger's insert is part of this transaction, so the status and
+        // its history row commit together or not at all. That was already true
+        // when this method wrote both; it is now true for every writer.
         await transaction.CommitAsync(ct);
 
         return new StatusChange(applicationId, current, next, actorId, reason, batchId, at);
@@ -169,37 +165,4 @@ public sealed class PostgresApplicationStore(NpgsqlDataSource dataSource) : IApp
         return history;
     }
 
-    private static async Task<DateTimeOffset> WriteHistoryAsync(
-        NpgsqlConnection connection,
-        NpgsqlTransaction transaction,
-        Guid applicationId,
-        ApplicationStatus? from,
-        ApplicationStatus to,
-        Guid? actorId,
-        string? reason,
-        Guid? batchId,
-        CancellationToken ct)
-    {
-        const string sql = """
-            INSERT INTO applications.status_history
-                (application_id, from_status, to_status, actor_id, reason, batch_id)
-            VALUES (@applicationId, @from, @to, @actorId, @reason, @batchId)
-            RETURNING created_at
-            """;
-
-        await using var cmd = new NpgsqlCommand(sql, connection, transaction);
-        cmd.Parameters.AddWithValue("applicationId", applicationId);
-        cmd.Parameters.AddWithValue("from", (object?)from?.ToWire() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("to", to.ToWire());
-        cmd.Parameters.AddWithValue("actorId", (object?)actorId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("reason", (object?)reason ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("batchId", (object?)batchId ?? DBNull.Value);
-
-        // Read through the reader rather than casting the scalar: Npgsql hands
-        // back a DateTime for timestamptz, and the conversion belongs here
-        // rather than in an unchecked cast that only fails at runtime.
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
-        return reader.GetFieldValue<DateTimeOffset>(0);
-    }
 }
