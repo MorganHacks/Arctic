@@ -105,6 +105,24 @@ already exist rather than rebuilding and hoping. Note it re-runs migrations —
 which is fine forward, and is why a migration that drops something needs a
 second thought.
 
+## Pulling images
+
+Services pull with a **user-assigned managed identity** granted `AcrPull` on
+the shared registry, one identity per environment. The registry has no admin
+user.
+
+The alternative was the registry's admin password: one static credential shared
+by every service, readable by anyone with access to the resource, and rotating
+it means redeploying everything at once. The identity is scoped to its
+environment, grants exactly pull, and has nothing to leak.
+
+Pushing still uses your own `az login`. Push belongs to a person or to CI, not
+to a running service.
+
+On a first deploy the role assignment occasionally has not propagated by the
+time the apps start, and they fail to pull. Re-running `deploy.sh` fixes it —
+the templates are idempotent and the grant is already there by then.
+
 ## Not in the templates
 
 **`Network__KnownNetworks`.** Container Apps terminates in front of harbor, so
@@ -113,9 +131,12 @@ limit shares one bucket for the whole internet. It needs the environment's
 subnet, which does not exist until the environment does.
 `docs/architecture/deployments.md` has the reasoning and how to check it.
 
-**A private endpoint for Postgres.** The firewall rule currently allows Azure
-services, which is the weakest thing in here. VNet integration with a private
-endpoint is the upgrade.
+**A private endpoint for Postgres.** The firewall rule allows Azure services,
+which is now the weakest thing here: any Azure tenant's resources can reach the
+server, though they still need the password. The fix is VNet integration with a
+private endpoint, and it means recreating the Container Apps environment —
+VNet cannot be added to an existing one. Worth doing before production carries
+real applicant data; not worth rebuilding staging for on its own.
 
 ## On subscriptions
 

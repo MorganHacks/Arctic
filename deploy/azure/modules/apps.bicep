@@ -38,6 +38,9 @@ param awsAccessKeyId string = ''
 @secure()
 param awsSecretAccessKey string = ''
 
+@description('Resource id of the identity that pulls images.')
+param pullIdentityId string
+
 param tags object = {}
 
 var suffix = 'mh-${environmentName}'
@@ -60,14 +63,17 @@ var connectionString = 'Host=${postgres.properties.fullyQualifiedDomainName};Por
 var registryConfig = [
   {
     server: registry.properties.loginServer
-    username: registry.listCredentials().username
-    passwordSecretRef: 'registry-password'
+    identity: pullIdentityId
   }
 ]
 
-var registrySecret = {
-  name: 'registry-password'
-  value: registry.listCredentials().passwords[0].value
+// Attached to every app and to the job, because a registry credential that is
+// an identity has to be an identity the resource actually holds.
+var pullIdentityConfig = {
+  type: 'UserAssigned'
+  userAssignedIdentities: {
+    '${pullIdentityId}': {}
+  }
 }
 
 var dbSecret = {
@@ -123,6 +129,7 @@ var sentryEnv = hasSentry ? [
 resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-atlas-${environmentName}'
   location: location
+  identity: pullIdentityConfig
   tags: union(tags, { service: 'atlas' })
   properties: {
     managedEnvironmentId: environment.id
@@ -133,7 +140,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
       }
       registries: registryConfig
-      secrets: concat([registrySecret, dbSecret], sentrySecrets)
+      secrets: concat([dbSecret], sentrySecrets)
     }
     template: {
       containers: [
@@ -178,12 +185,13 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
 resource lark 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-lark-${environmentName}'
   location: location
+  identity: pullIdentityConfig
   tags: union(tags, { service: 'lark' })
   properties: {
     managedEnvironmentId: environment.id
     configuration: {
       registries: registryConfig
-      secrets: concat([registrySecret, dbSecret], sentrySecrets, awsSecrets)
+      secrets: concat([dbSecret], sentrySecrets, awsSecrets)
     }
     template: {
       containers: [
@@ -207,6 +215,7 @@ resource lark 'Microsoft.App/containerApps@2024-03-01' = {
 resource harbor 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-harbor-${environmentName}'
   location: location
+  identity: pullIdentityConfig
   tags: union(tags, { service: 'harbor' })
   properties: {
     managedEnvironmentId: environment.id
@@ -217,7 +226,7 @@ resource harbor 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
       }
       registries: registryConfig
-      secrets: concat([registrySecret], sentrySecrets)
+      secrets: sentrySecrets
     }
     template: {
       containers: [

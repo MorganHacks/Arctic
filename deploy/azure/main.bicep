@@ -113,6 +113,29 @@ module registry 'modules/registry.bicep' = {
   }
 }
 
+// The identity every service pulls with, and its AcrPull grant on the shared
+// registry. Both have to exist before anything tries to start, because a
+// container app that cannot pull its image never runs at all.
+module pullIdentity 'modules/pull-identity.bicep' = {
+  name: 'pull-identity'
+  scope: group
+  params: {
+    environmentName: environmentName
+    location: location
+    tags: commonTags
+  }
+}
+
+module registryAccess 'modules/registry-access.bicep' = {
+  name: 'registry-access'
+  scope: sharedGroup
+  params: {
+    registryName: registryName
+    principalId: pullIdentity.outputs.principalId
+  }
+  dependsOn: [registry]
+}
+
 module platform 'modules/platform.bicep' = if (deployPlatform) {
   name: 'platform'
   scope: group
@@ -125,9 +148,10 @@ module platform 'modules/platform.bicep' = if (deployPlatform) {
     dbPassword: dbPassword
     postgresVersion: postgresVersion
     superAdminEmail: superAdminEmail
+    pullIdentityId: pullIdentity.outputs.id
     tags: commonTags
   }
-  dependsOn: [registry]
+  dependsOn: [registry, registryAccess]
 }
 
 module apps 'modules/apps.bicep' = if (deployApps) {
@@ -144,9 +168,10 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     awsRegion: awsRegion
     awsAccessKeyId: awsAccessKeyId
     awsSecretAccessKey: awsSecretAccessKey
+    pullIdentityId: pullIdentity.outputs.id
     tags: commonTags
   }
-  dependsOn: [platform]
+  dependsOn: [platform, registryAccess]
 }
 
 output registryLoginServer string = registry.outputs.loginServer

@@ -21,10 +21,10 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
     name: 'Basic'
   }
   properties: {
-    // Enabled because Container Apps pulls with a username and password.
-    // A managed identity is the better answer and is a change here plus the
-    // registries block in main.bicep.
-    adminUserEnabled: true
+    // Off. Services pull with a managed identity granted AcrPull, so there is
+    // no shared static password to leak, and nothing to rotate across every
+    // service at once.
+    adminUserEnabled: false
   }
 }
 

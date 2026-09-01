@@ -39,6 +39,9 @@ param postgresVersion string = '18'
 
 param superAdminEmail string
 
+@description('Resource id of the identity that pulls images.')
+param pullIdentityId string
+
 param tags object = {}
 
 var suffix = 'mh-${environmentName}'
@@ -141,14 +144,17 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
 var registryConfig = [
   {
     server: registry.properties.loginServer
-    username: registry.listCredentials().username
-    passwordSecretRef: 'registry-password'
+    identity: pullIdentityId
   }
 ]
 
-var registrySecret = {
-  name: 'registry-password'
-  value: registry.listCredentials().passwords[0].value
+// Attached to every app and to the job, because a registry credential that is
+// an identity has to be an identity the resource actually holds.
+var pullIdentityConfig = {
+  type: 'UserAssigned'
+  userAssignedIdentities: {
+    '${pullIdentityId}': {}
+  }
 }
 
 var dbSecret = {
@@ -163,6 +169,7 @@ var dbSecret = {
 resource migrations 'Microsoft.App/jobs@2024-03-01' = {
   name: 'caj-migrations-${environmentName}'
   location: location
+  identity: pullIdentityConfig
   tags: union(tags, { service: 'migrations' })
   properties: {
     environmentId: environment.id
@@ -172,7 +179,7 @@ resource migrations 'Microsoft.App/jobs@2024-03-01' = {
       replicaRetryLimit: 1
       manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
       registries: registryConfig
-      secrets: [registrySecret, dbSecret]
+      secrets: [dbSecret]
     }
     template: {
       containers: [

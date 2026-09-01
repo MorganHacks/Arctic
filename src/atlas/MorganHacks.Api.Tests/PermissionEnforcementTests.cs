@@ -54,7 +54,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
     [Fact]
     public async Task No_session_is_unauthorized_not_forbidden()
     {
-        var r = await Client().GetAsync("/people");
+        var r = await Client().GetAsync("/admin/people");
         Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
     }
 
@@ -67,7 +67,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         var id = await db.AddPersonAsync(email, "organizer");
         var cookie = await SignIn(id);
 
-        var r = await Client().SendAsync(Request("/people", cookie));
+        var r = await Client().SendAsync(Request("/admin/people", cookie));
 
         Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode);
     }
@@ -80,7 +80,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         await db.AddToTeamAsync(id, "super-admin");
         var cookie = await SignIn(id);
 
-        var r = await Client().SendAsync(Request("/people", cookie));
+        var r = await Client().SendAsync(Request("/admin/people", cookie));
 
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
     }
@@ -96,7 +96,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         await db.AddToTeamAsync(id, "registration");
         var cookie = await SignIn(id);
 
-        var r = await Client().SendAsync(Request("/people", cookie));
+        var r = await Client().SendAsync(Request("/admin/people", cookie));
 
         Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode);
     }
@@ -111,7 +111,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         await db.AddToTeamAsync(id, "super-admin", DateTimeOffset.UtcNow.AddDays(-1));
         var cookie = await SignIn(id);
 
-        var r = await Client().SendAsync(Request("/people", cookie));
+        var r = await Client().SendAsync(Request("/admin/people", cookie));
 
         Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode);
     }
@@ -125,7 +125,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         await db.GrantAsync(id, "people.view");
         var cookie = await SignIn(id);
 
-        var r = await Client().SendAsync(Request("/people", cookie));
+        var r = await Client().SendAsync(Request("/admin/people", cookie));
 
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
     }
@@ -139,7 +139,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         var cookie = await SignIn(id);
 
         Assert.Equal(HttpStatusCode.OK,
-            (await Client().SendAsync(Request("/people", cookie))).StatusCode);
+            (await Client().SendAsync(Request("/admin/people", cookie))).StatusCode);
 
         using (var scope = _app.Services.CreateScope())
         {
@@ -148,7 +148,7 @@ public class PermissionEnforcementTests(IdentityDatabase db)
         }
 
         Assert.Equal(HttpStatusCode.Unauthorized,
-            (await Client().SendAsync(Request("/people", cookie))).StatusCode);
+            (await Client().SendAsync(Request("/admin/people", cookie))).StatusCode);
     }
 
     private static HttpRequestMessage Request(string path, string cookie)

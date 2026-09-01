@@ -22,6 +22,9 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
+# Pushing uses your own Azure login rather than a registry password. The
+# registry has no admin user: the services pull with a managed identity, and
+# there is no shared static credential for anyone to leak.
 az acr login -n "$REGISTRY"
 LOGIN_SERVER="$(az acr show -n "$REGISTRY" --query loginServer -o tsv)"
 
