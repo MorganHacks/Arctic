@@ -157,6 +157,26 @@ variables, where anyone could read them out of the client bundle.
 
 ---
 
+## Seeing sign-in actually work
+
+Green tests prove the pieces. To watch the whole flow on your machine:
+
+```bash
+docker compose up -d
+scripts/try-login              # or: scripts/try-login you@example.com
+```
+
+It applies migrations, starts the API, requests a link, clicks it, proves the
+link is single use, checks who you are, logs out, and shows the session dying
+on the very next request. Then it stops the API again.
+
+Worth watching steps 5 and 6: the answer for an address that exists is
+byte-identical to one that does not.
+
+Google sign-in cannot be tried this way without credentials — see above.
+
+---
+
 ## Running the tests
 
 ```bash
