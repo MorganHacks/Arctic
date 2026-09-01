@@ -9,11 +9,21 @@ namespace MorganHacks.Identity.Data;
 /// </summary>
 public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdentityStore
 {
-    public async Task<Guid?> FindPersonIdByEmailAsync(string email, CancellationToken ct)
+    public async Task<Guid?> FindHackerIdByEmailAsync(string email, CancellationToken ct)
     {
+        // `kind = 'hacker'` is load-bearing, not tidiness.
+        //
+        // Organizers sign in through Google so that access is tied to an
+        // account we allowlisted and a subject id we bound on first login.
+        // Without this clause, posting an organizer's address to
+        // /auth/magic-link mails them a link that opens a session with every
+        // permission they hold — the allowlist, the binding and Google itself
+        // all skipped, on nothing stronger than reading an inbox.
         const string sql = """
             SELECT id FROM identity.people
-            WHERE lower(email) = lower(@email) AND revoked_at IS NULL
+            WHERE lower(email) = lower(@email)
+              AND kind = 'hacker'
+              AND revoked_at IS NULL
             """;
 
         await using var cmd = dataSource.CreateCommand(sql);
@@ -48,13 +58,19 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         //
         // This happens for real: mail clients and corporate link scanners
         // prefetch URLs, so the first "click" is often a machine.
+        // The join to people is part of the condition, not a lookup. A link
+        // issued before someone was revoked is still sitting in their inbox
+        // afterwards, and revoking access has to mean that link is dead too.
         const string consume = """
-            UPDATE identity.magic_link_tokens
+            UPDATE identity.magic_link_tokens t
                SET consumed_at = @now
-             WHERE token_hash = @tokenHash
-               AND consumed_at IS NULL
-               AND expires_at > @now
-            RETURNING person_id
+              FROM identity.people p
+             WHERE p.id = t.person_id
+               AND t.token_hash = @tokenHash
+               AND t.consumed_at IS NULL
+               AND t.expires_at > @now
+               AND p.revoked_at IS NULL
+            RETURNING t.person_id
             """;
 
         await using (var cmd = dataSource.CreateCommand(consume))
@@ -71,8 +87,10 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         // Nothing was consumed. Work out why, for the caller's error message
         // only — the security decision was already made above.
         const string classify = """
-            SELECT consumed_at, expires_at FROM identity.magic_link_tokens
-            WHERE token_hash = @tokenHash
+            SELECT t.consumed_at, t.expires_at, p.revoked_at
+              FROM identity.magic_link_tokens t
+              JOIN identity.people p ON p.id = t.person_id
+             WHERE t.token_hash = @tokenHash
             """;
 
         await using var classifyCmd = dataSource.CreateCommand(classify);
@@ -82,6 +100,13 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         if (!await reader.ReadAsync(ct))
         {
             return TokenResult.Reject(TokenRejection.NotFound);
+        }
+
+        // Revoked is reported ahead of the token's own state: it is the
+        // operative reason, and it stays true whatever the token looks like.
+        if (!await reader.IsDBNullAsync(2, ct))
+        {
+            return TokenResult.Reject(TokenRejection.Revoked);
         }
 
         var alreadyConsumed = !await reader.IsDBNullAsync(0, ct);
@@ -112,10 +137,15 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
     public async Task<TokenResult> ValidateSessionAsync(
         byte[] tokenHash, DateTimeOffset now, CancellationToken ct)
     {
+        // Revoking a person has to end their live sessions, not just stop
+        // them starting new ones. Doing it here rather than expecting every
+        // caller to also delete sessions means there is one place to get it
+        // right instead of one place per admin action.
         const string sql = """
-            SELECT person_id, expires_at, revoked_at
-              FROM identity.sessions
-             WHERE token_hash = @tokenHash
+            SELECT s.person_id, s.expires_at, s.revoked_at, p.revoked_at
+              FROM identity.sessions s
+              JOIN identity.people p ON p.id = s.person_id
+             WHERE s.token_hash = @tokenHash
             """;
 
         await using var cmd = dataSource.CreateCommand(sql);
@@ -129,7 +159,8 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
 
         var personId = reader.GetGuid(0);
         var expiresAt = reader.GetFieldValue<DateTimeOffset>(1);
-        var revoked = !await reader.IsDBNullAsync(2, ct);
+        var revoked = !await reader.IsDBNullAsync(2, ct)
+                      || !await reader.IsDBNullAsync(3, ct);
 
         // Revocation is checked before expiry so that revoking a session that
         // was going to expire anyway still reports as revoked.

@@ -65,11 +65,22 @@ public sealed class NotifyDatabase : IAsyncLifetime
         return (Guid)(await cmd.ExecuteScalarAsync())!;
     }
 
-    /// <summary>Creates a person, since messages reference one.</summary>
+    /// <summary>
+    /// The person a message points at, created on first use.
+    /// </summary>
+    /// <remarks>
+    /// Idempotent because one address is one person: queueing two messages to
+    /// the same recipient is normal, and the unique index on lower(email)
+    /// means a second insert would fail rather than give back the row that
+    /// already exists.
+    /// </remarks>
     public async Task<Guid> AddPersonAsync(string email)
     {
-        await using var cmd = DataSource.CreateCommand(
-            "INSERT INTO identity.people (kind, email) VALUES ('hacker', @e) RETURNING id");
+        await using var cmd = DataSource.CreateCommand("""
+            INSERT INTO identity.people (kind, email) VALUES ('hacker', @e)
+            ON CONFLICT (lower(email)) DO UPDATE SET updated_at = now()
+            RETURNING id
+            """);
         cmd.Parameters.AddWithValue("e", email);
         return (Guid)(await cmd.ExecuteScalarAsync())!;
     }

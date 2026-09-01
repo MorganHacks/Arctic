@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using MorganHacks.Identity.Domain;
 using MorganHacks.Identity.Services;
 
@@ -55,28 +56,36 @@ public static class AuthEndpoints
     /// for, and have fall over at 2am during registration week.
     /// </para>
     /// </remarks>
-    private static readonly Dictionary<string, (int Count, DateTimeOffset Window)> PerAddress = new();
-    private static readonly Lock PerAddressLock = new();
-    private const int MaxPerAddress = 3;
     private static readonly TimeSpan AddressWindow = TimeSpan.FromMinutes(15);
+    private const int MaxPerAddress = 3;
 
-    private static bool TooManyFor(string email, DateTimeOffset now)
+    private sealed class AddressCounter
     {
-        var key = email.Trim().ToLowerInvariant();
-        lock (PerAddressLock)
-        {
-            if (PerAddress.TryGetValue(key, out var entry) && now < entry.Window)
-            {
-                if (entry.Count >= MaxPerAddress)
-                {
-                    return true;
-                }
+        public int Count;
+    }
 
-                PerAddress[key] = (entry.Count + 1, entry.Window);
-                return false;
+    private static bool TooManyFor(IMemoryCache cache, string email)
+    {
+        var key = $"magic-link:{email.Trim().ToLowerInvariant()}";
+
+        // A cache rather than a dictionary, because entries have to expire on
+        // their own. Keying a plain dictionary by every address ever
+        // submitted only ever grows it, and this endpoint is open to the
+        // internet, so that is a memory leak anyone can drive.
+        var counter = cache.GetOrCreate(key, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = AddressWindow;
+            return new AddressCounter();
+        })!;
+
+        lock (counter)
+        {
+            if (counter.Count >= MaxPerAddress)
+            {
+                return true;
             }
 
-            PerAddress[key] = (1, now.Add(AddressWindow));
+            counter.Count++;
             return false;
         }
     }
@@ -100,7 +109,7 @@ public static class AuthEndpoints
         MagicLinkService links,
         IEmailSender email,
         IConfiguration config,
-        TimeProvider clock,
+        IMemoryCache cache,
         ILogger<MagicLinkRequest> log,
         CancellationToken ct)
     {
@@ -110,7 +119,7 @@ public static class AuthEndpoints
         }
 
         // Before any database work, as the auth doc requires.
-        if (TooManyFor(request.Email, clock.GetUtcNow()))
+        if (TooManyFor(cache, request.Email))
         {
             // Same body as success. Saying "too many requests for this address"
             // would confirm the address exists, which is what the identical
