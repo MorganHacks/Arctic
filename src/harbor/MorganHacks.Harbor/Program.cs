@@ -68,6 +68,12 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy("auth-strict", Limiter(permits: 10, perMinutes: 15));
+
+    // Deliberately generous. SNS delivers bounce notifications in bulk after a
+    // blast, and throttling them loses the record of who bounced — which is
+    // the one thing the webhook exists to capture. The endpoint verifies every
+    // signature, so volume alone buys an unauthenticated caller nothing.
+    options.AddPolicy("webhook", Limiter(permits: 600, perMinutes: 1));
     options.AddPolicy("standard", Limiter(permits: 300, perMinutes: 1));
 });
 

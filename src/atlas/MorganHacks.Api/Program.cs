@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using MorganHacks.Api;
 using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
+using MorganHacks.Api.Webhooks;
 using MorganHacks.Lark.Data.Data;
 using Npgsql;
 
@@ -68,6 +69,7 @@ builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<ISnsSignatureVerifier, SnsSignatureVerifier>();
 builder.Services.AddMemoryCache();
 
 // Registered even when unconfigured: the endpoints answer 503 rather than
@@ -87,6 +89,19 @@ builder.Services.AddSingleton<IGoogleTokenVerifier>(
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Generous, because SNS delivers bounce notifications in bulk after a
+    // blast and throttling them means losing the record of who bounced —
+    // which is the one thing this endpoint exists to capture.
+    options.AddPolicy("webhook", http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 600,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
 
     options.AddPolicy("magic-link", http =>
     {
@@ -111,6 +126,7 @@ app.UseRateLimiter();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapAuth();
+app.MapSesWebhook();
 app.MapGoogle();
 
 app.Run();
