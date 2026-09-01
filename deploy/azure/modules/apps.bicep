@@ -38,6 +38,19 @@ param awsAccessKeyId string = ''
 @secure()
 param awsSecretAccessKey string = ''
 
+@description('Google OAuth client id. Empty leaves organizer sign-in answering 503.')
+param googleClientId string = ''
+
+@secure()
+param googleClientSecret string = ''
+
+@description('''
+Must match, character for character, the URI registered with Google — and it is
+the origin the *browser* lands on, which is the admin app rather than harbor,
+because the admin app proxies the API from its own origin.
+''')
+param googleRedirectUri string = ''
+
 @description('Resource id of the identity that pulls images.')
 param pullIdentityId string
 
@@ -115,6 +128,23 @@ var awsEnv = hasAws ? [
   { name: 'AWS_SECRET_ACCESS_KEY', secretRef: 'aws-secret-access-key' }
 ] : []
 
+// Absent rather than blank, like the others: Container Apps rejects a secret
+// with an empty value.
+var hasGoogle = !empty(googleClientId) && !empty(googleClientSecret)
+
+var googleSecrets = hasGoogle ? [
+  {
+    name: 'google-client-secret'
+    value: googleClientSecret
+  }
+] : []
+
+var googleEnv = hasGoogle ? [
+  { name: 'Google__ClientId', value: googleClientId }
+  { name: 'Google__ClientSecret', secretRef: 'google-client-secret' }
+  { name: 'Google__RedirectUri', value: googleRedirectUri }
+] : []
+
 var sentryEnv = hasSentry ? [
   { name: 'Sentry__Dsn', secretRef: 'sentry-dsn' }
   // The deployed commit, so a spike in errors ties to what shipped rather
@@ -140,7 +170,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
       }
       registries: registryConfig
-      secrets: concat([dbSecret], sentrySecrets)
+      secrets: concat([dbSecret], sentrySecrets, googleSecrets)
     }
     template: {
       containers: [
@@ -162,7 +192,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
             // blip that restarts every replica turns a recoverable problem
             // into an outage.
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
-          ], sentryEnv)
+          ], sentryEnv, googleEnv)
           probes: [
             {
               type: 'Liveness'

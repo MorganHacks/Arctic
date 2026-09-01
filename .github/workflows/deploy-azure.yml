@@ -50,6 +50,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    # A deploy takes about seven minutes. Thirty means something is wedged, and
+    # failing then is better than holding a runner until GitHub's six-hour cap.
+    timeout-minutes: 30
+
     # Chooses the federated credential Azure will accept, and carries the
     # secrets for that environment. Production can require a review here.
     #
@@ -68,6 +72,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Installed explicitly rather than left to the CLI's dynamic install.
+      # That install prompts by default, and a prompt on a runner with no
+      # terminal is a hang that prints nothing.
+      - name: Azure CLI extensions
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az config set core.only_show_errors=true
+          az extension add --name containerapp --upgrade --only-show-errors
 
       - name: Work out what we are deploying
         id: target
@@ -111,6 +124,9 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REDIRECT_URI: ${{ vars.GOOGLE_REDIRECT_URI }}
         run: ./deploy/azure/deploy.sh ${{ steps.target.outputs.env }}
 
       - name: Deploy
@@ -121,6 +137,9 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REDIRECT_URI: ${{ vars.GOOGLE_REDIRECT_URI }}
           SKIP_PUSH: ${{ steps.target.outputs.skip_push }}
         run: ./deploy/azure/deploy.sh ${{ steps.target.outputs.env }} --apply ${{ steps.target.outputs.tag }}
 

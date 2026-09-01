@@ -325,12 +325,19 @@ AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 ```
 
+The region is **us-east-1**, and that is not arbitrary: production access is
+granted per region, so it has to be the region the support case was raised in.
+An identity verified in one region does nothing for another.
+
 Two things gate real delivery, and they are separate:
 
-- **Domain verification.** `auth.morganhacks.com` must exist in DNS and be
-  verified in SES with its own DKIM records. This is what the `magic_link`
-  template sends from. Until it is verified, nothing sends regardless of
-  sandbox status.
+- **Domain verification.** `auth.morganhacks.com`, verified in SES with DKIM,
+  plus a custom MAIL FROM at `bounce.auth.morganhacks.com` so bounce reports
+  come from our own subdomain rather than Amazon's. Done: DKIM and MAIL FROM
+  both report SUCCESS in us-east-1.
+
+  The MAIL FROM `MX` record names a region. Point it at the wrong one and SES
+  reports the domain unverified with no useful explanation.
 - **Leaving the sandbox.** In the sandbox SES accepts mail only for verified
   recipients. The code path is identical either way — a refused send is
   recorded as an ordinary failure — so everything can be built and tested

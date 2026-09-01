@@ -50,12 +50,26 @@ run time and wondering why every API call returns 500 with `ECONNREFUSED
 On Vercel this is ordinary: it is a build-time environment variable, set per
 environment, and changing it needs a redeploy rather than a restart.
 
-## Sign-in needs Google credentials
+## Sign-in and the redirect URI
 
 `/auth/google` answers 503 until `Google:ClientId` and `Google:ClientSecret` are
-configured on atlas, and the redirect URI registered with Google must point at
-**this app's** origin — `https://<admin-host>/api/auth/google/callback` — not at
-harbor, because that is where the browser goes.
+set on atlas.
 
-Until then the sign-in page renders and the button leads to a 503. Everything
-behind it is finished and waiting.
+The redirect URI registered with Google must be **this app's** origin, not
+harbor's:
+
+```
+http://localhost:3000/api/auth/google/callback
+https://<admin-host>/api/auth/google/callback
+```
+
+That catches people out, because the API is the thing doing the OAuth and the
+instinct is to register the API's address. The browser is what Google redirects,
+and the browser is on the console — which proxies `/api/*` inward. Registering
+harbor's address instead produces a callback the console never sees.
+
+It must match character for character, including the scheme and any trailing
+path. Google compares the string.
+
+No JavaScript origin is needed. This is a server-side authorization code flow
+with PKCE; the browser never talks to Google's SDK.
