@@ -178,3 +178,46 @@ region means deleting the record first:
 configured" therefore has to mean the secret is absent, not blank — otherwise
 the thing that lets this run with no accounts is the thing that stops it
 deploying.
+
+## Deploys run in CI, not on a laptop
+
+`.github/workflows/deploy-azure.yml` is what actually deploys.
+
+| Trigger | Goes to |
+|---|---|
+| push to `staging` | staging, no approval |
+| push to `main` | production, after a required review |
+| manual dispatch | either, and takes a tag — an older tag is a rollback |
+
+Running `deploy.sh` by hand still works and is the right tool when something is
+broken. It is not how a normal deploy should happen: a deploy that depends on
+one person's machine depends on that person being awake, having the tools, and
+being logged into the right account, and it leaves no record of what shipped or
+who shipped it.
+
+### There is no Azure credential in GitHub
+
+Authentication is OIDC. The workflow proves which repository and which
+environment it is running as, and Azure trusts that exact pair through a
+federated credential on `id-mh-deploy`. Nothing is stored that could leak,
+because nothing is stored.
+
+What the deploy identity may do:
+
+| Grant | Scope | Why |
+|---|---|---|
+| Contributor | subscription | creates the resource groups and everything in them |
+| User Access Administrator | `rg-mh-shared` only | grants AcrPull to each environment's pull identity |
+| AcrPush | the registry | pushes images; Contributor does not cover data-plane push |
+
+### Configuration
+
+Repository variables, because none of them are secrets: `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `SUPER_ADMIN_EMAIL`.
+
+Environment secrets, set per environment: `DB_PASSWORD`, and later
+`SENTRY_DSN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
+
+**Production deliberately has no `DB_PASSWORD` yet.** There is no production
+database, and it must not inherit staging's. Leaving it unset makes creating
+one a deliberate act rather than something that happens by copying.

@@ -1,0 +1,135 @@
+# Deploys the backend to Azure.
+#
+# Nothing here runs on anybody's laptop. A deploy that depends on one person's
+# machine depends on that person being awake, having the right tools, and
+# having logged into the right account — and it leaves no record of what was
+# deployed or by whom.
+#
+#   staging     automatically, whenever the staging branch moves
+#   production  on merge to main, behind whatever approval the Production
+#               environment requires
+#
+# Authentication is OIDC. There is no Azure credential stored in GitHub: the
+# workflow proves which repository and environment it is running as, and Azure
+# trusts that specific pair. A leaked secret is not a risk that exists here,
+# because there is no secret.
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main, staging]
+    paths:
+      - "src/atlas/**"
+      - "src/harbor/**"
+      - "src/lark/**"
+      - "libs/**"
+      - "deploy/azure/**"
+      - ".github/workflows/deploy-azure.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Where to deploy"
+        type: choice
+        options: [staging, production]
+        default: staging
+      tag:
+        description: "Image tag to deploy. Blank builds this commit; an older tag is a rollback."
+        type: string
+        default: ""
+
+concurrency:
+  # One deploy per environment at a time. Two overlapping deploys can run
+  # migrations concurrently, and the second would be applying a schema change
+  # against a database the first is still changing.
+  group: >-
+    deploy-azure-${{ inputs.environment != '' && inputs.environment
+                     || (github.ref_name == 'main' && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    # Chooses the federated credential Azure will accept, and carries the
+    # secrets for that environment. Production can require a review here.
+    #
+    # The manual input wins when present, so dispatching a staging deploy from
+    # main goes to staging rather than to production — which the more obvious
+    # spelling of this gets wrong.
+    environment: >-
+      ${{ (inputs.environment != '' && inputs.environment
+           || (github.ref_name == 'main' && 'production' || 'staging'))
+          == 'production' && 'Production' || 'Staging' }}
+
+    permissions:
+      # Required for OIDC. Without it there is no token to exchange.
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out what we are deploying
+        id: target
+        run: |
+          if [ -n "${{ inputs.environment }}" ]; then
+            ENV="${{ inputs.environment }}"
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            ENV="prod"
+          else
+            ENV="staging"
+          fi
+          # The scripts take 'prod'; the GitHub environment is called Production.
+          [ "$ENV" = "production" ] && ENV="prod"
+
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="$(git rev-parse --short HEAD)"
+            echo "skip_push=" >> "$GITHUB_OUTPUT"
+          else
+            # An explicit tag is a rollback. Rebuilding it would produce
+            # different bytes from the ones being rolled back to.
+            echo "skip_push=1" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Deploying $TAG to $ENV"
+
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Show the plan
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SUPER_ADMIN_EMAIL: ${{ vars.SUPER_ADMIN_EMAIL }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: ./deploy/azure/deploy.sh ${{ steps.target.outputs.env }}
+
+      - name: Deploy
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SUPER_ADMIN_EMAIL: ${{ vars.SUPER_ADMIN_EMAIL }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SKIP_PUSH: ${{ steps.target.outputs.skip_push }}
+        run: ./deploy/azure/deploy.sh ${{ steps.target.outputs.env }} --apply ${{ steps.target.outputs.tag }}
+
+      - name: Record what shipped
+        if: always()
+        run: |
+          {
+            echo "### ${{ steps.target.outputs.env }} — \`${{ steps.target.outputs.tag }}\`"
+            echo
+            echo "Commit: ${{ github.sha }}"
+            echo "By: ${{ github.actor }}"
+          } >> "$GITHUB_STEP_SUMMARY"
