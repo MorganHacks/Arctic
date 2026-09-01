@@ -126,6 +126,22 @@ public class SendLoopTests(NotifyDatabase db) : IClassFixture<NotifyDatabase>
     }
 
     [Fact]
+    public async Task A_reply_reaches_an_inbox_somebody_reads()
+    {
+        // The from address has no mailbox behind it. Without a reply-to, a
+        // person replying to ask for help is answered by silence and concludes
+        // they were ignored.
+        var campaign = await db.AddCampaignAsync(replyTo: "hello@morganhacks.com");
+        await db.QueueAsync(campaign, Email("replier"));
+        var clock = new FakeTimeProvider();
+        var provider = new FakeProvider(_ => SendOutcome.Sent("ses-message-3"));
+
+        await RunOnce(LoopWith(provider, clock), clock);
+
+        Assert.All(provider.Sent, m => Assert.Equal("hello@morganhacks.com", m.ReplyTo));
+    }
+
+    [Fact]
     public async Task The_send_carries_the_templates_own_from_address()
     {
         // Not a worker-level default. A login link sent from the broadcast

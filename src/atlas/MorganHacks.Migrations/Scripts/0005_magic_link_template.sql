@@ -36,5 +36,10 @@ VALUES (
 
     'login',
     'auth.morganhacks.com',
-    NULL
+
+    -- Replies go to an inbox somebody actually reads. People do reply to
+    -- sign-in emails to ask for help, and without this the reply goes to
+    -- login@auth.morganhacks.com, which has no mailbox behind it — so it
+    -- disappears and the person thinks they were ignored.
+    'hello@morganhacks.com'
 );
