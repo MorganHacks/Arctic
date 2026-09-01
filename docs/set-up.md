@@ -339,3 +339,21 @@ Two things gate real delivery, and they are separate:
 A transactional subdomain separate from the broadcast one is the point rather
 than decoration: a blast that collects spam complaints must not be able to take
 sign-in links down with it.
+
+### Bounce and complaint handling
+
+SES publishes delivery events to an SNS topic, which posts them to
+`https://<host>/api/webhooks/ses`. Subscribe that URL to the topic and the
+endpoint confirms the subscription itself on the first request.
+
+Point the topic at **staging** as well as production. A bounce arriving in
+production for a message staging sent is indistinguishable from any other, and
+splitting them is what keeps the two suppression lists honest.
+
+Every request is verified against AWS's signing certificate before anything is
+written. An unverified caller gets a 403 and no other information — this
+endpoint writes to the suppression list, so an unauthenticated one would let
+anybody stop an applicant receiving email, including their sign-in link.
+
+Nothing to configure: verification uses the certificate AWS names in each
+message, restricted to `sns.<region>.amazonaws.com`.

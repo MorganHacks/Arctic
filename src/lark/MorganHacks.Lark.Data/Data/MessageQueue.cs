@@ -170,6 +170,83 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    /// <summary>
+    /// Records what the recipient's mail server eventually did, arriving by
+    /// webhook long after the send.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the provider's id rather than ours, because that is the only
+    /// handle the provider knows us by.
+    /// <para>
+    /// Every one of these is naturally idempotent, which matters because SNS
+    /// redelivers as a matter of course: setting a status to the value it
+    /// already holds changes nothing, and the suppression insert ignores
+    /// conflicts. There is deliberately no separate table of seen event ids to
+    /// keep in step with reality.
+    /// </para>
+    /// </remarks>
+    public async Task<bool> MarkDeliveredAsync(
+        string providerMessageId, CancellationToken ct = default)
+    {
+        // Only from 'sent'. Providers do not promise ordering, and a delivery
+        // notification arriving after a bounce must not erase the bounce —
+        // that would put a dead address back in circulation.
+        const string sql = """
+            UPDATE notify.messages
+               SET status = 'delivered'
+             WHERE provider_message_id = @providerId AND status = 'sent'
+            """;
+        return await ExecuteAsync(sql, providerMessageId, ct) > 0;
+    }
+
+    public async Task<bool> MarkBouncedAsync(
+        string providerMessageId, string detail, CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE notify.messages
+               SET status = 'bounced', last_error = @detail
+             WHERE provider_message_id = @providerId
+               AND status IN ('sent', 'delivered')
+            """;
+        return await ExecuteAsync(sql, providerMessageId, ct, detail) > 0;
+    }
+
+    public async Task<bool> MarkComplainedAsync(
+        string providerMessageId, string detail, CancellationToken ct = default)
+    {
+        // A complaint outranks everything, including a delivery that already
+        // landed. It did arrive — and the person pressed "this is spam".
+        const string sql = """
+            UPDATE notify.messages
+               SET status = 'complained', last_error = @detail
+             WHERE provider_message_id = @providerId
+            """;
+        return await ExecuteAsync(sql, providerMessageId, ct, detail) > 0;
+    }
+
+    /// <summary>Finds who a provider message was addressed to.</summary>
+    public async Task<string?> RecipientOfAsync(
+        string providerMessageId, CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand(
+            "SELECT to_email FROM notify.messages WHERE provider_message_id = @providerId");
+        cmd.Parameters.AddWithValue("providerId", providerMessageId);
+        return await cmd.ExecuteScalarAsync(ct) as string;
+    }
+
+    private async Task<int> ExecuteAsync(
+        string sql, string providerMessageId, CancellationToken ct, string? detail = null)
+    {
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("providerId", providerMessageId);
+        if (detail is not null)
+        {
+            cmd.Parameters.AddWithValue("detail", detail);
+        }
+
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     /// <summary>Applies the outcome of a failed attempt.</summary>
     public async Task RecordFailureAsync(
         Guid id, FailureClass failure, string error, CancellationToken ct = default)
