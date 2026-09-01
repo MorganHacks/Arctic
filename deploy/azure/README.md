@@ -9,15 +9,14 @@ az login                      # into the MorganHacks account, not a personal one
 export DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
 export SUPER_ADMIN_EMAIL=olola73@morgan.edu
 
-az group create -n morganhacks-shared  -l eastus
-az group create -n morganhacks-staging -l eastus
-az deployment group create -g morganhacks-shared -f deploy/azure/shared.bicep \
-    --parameters registryName=morganhacksacr
-
 ./deploy/azure/push-images.sh staging
 ./deploy/azure/deploy.sh      staging              # what-if — changes nothing
 ./deploy/azure/deploy.sh      staging --apply
 ```
+
+Resource groups included. `main.bicep` is subscription-scoped and owns them,
+so an environment is one thing that either exists or does not rather than a
+group somebody has to remember to create first.
 
 Keep `DB_PASSWORD` somewhere real. Bicep never reads it back, so losing it
 means resetting the admin password on the server.
@@ -33,16 +32,37 @@ reviewed before it happens, the same way a code change is. That is the same
 argument that rules out clicking through the portal, taken one step further:
 a change to how production is provisioned should arrive as a diff.
 
-## Why two templates and not one
+## Layout
 
-`platform.bicep` creates Postgres, the environment and the migration job.
-`apps.bicep` creates the three services.
+```
+main.bicep              the front door — resource groups, then the modules
+modules/registry.bicep  the container registry, shared across environments
+modules/platform.bicep  Postgres, the apps environment, the migration job
+modules/apps.bicep      harbor, atlas, lark
+staging.bicepparam      per-environment values
+prod.bicepparam
+deploy.sh               the sequence Bicep cannot express
+push-images.sh
+```
 
-One template would update the job and the services in the same deployment,
-which puts new code in front of an old schema for however long the job takes.
-That window is where every migration bug lives. `deploy.sh` runs them in order
-and **stops if migrations fail** — not deploying is better than deploying onto
-a schema the code does not expect.
+Values live in the `.bicepparam` files, which are type-checked against
+`main.bicep` — a wrong or missing parameter fails at compile time rather than
+half way through a deployment. Secrets are read from the environment with
+`readEnvironmentVariable`, so these files are safe in the repository and there
+is one fewer place a password gets committed by accident.
+
+## Why it deploys in two passes
+
+`deployApps` is false on the first pass. Migrations run between the two.
+
+One pass would update the migration job and the services in the same
+deployment, which puts new code in front of an old schema for however long the
+job takes — and that window is where every migration bug lives. `deploy.sh`
+runs platform, then migrations, then apps, and **stops if migrations fail**.
+Not deploying beats deploying onto a schema the code does not expect.
+
+This is the one thing Bicep cannot express: "run this and wait for it" is a
+sequence, not a state.
 
 ## Shape of it
 
