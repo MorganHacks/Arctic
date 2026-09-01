@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="MorganHacks.Lark/MorganHacks.Lark.csproj" />
+  <Project Path="MorganHacks.Lark.Data/MorganHacks.Lark.Data.csproj" />
+  <Project Path="MorganHacks.Lark.Tests/MorganHacks.Lark.Tests.csproj" />
+</Solution>

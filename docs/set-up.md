@@ -204,6 +204,7 @@ value turns it into one query rather than four log searches lined up by hand.
 ```bash
 cd src/atlas  && dotnet test Solution.slnx
 cd src/harbor && dotnet test Solution.slnx
+cd src/lark   && dotnet test Solution.slnx
 ```
 
 ```bash
