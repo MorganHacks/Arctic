@@ -13,6 +13,66 @@ namespace MorganHacks.Lark.Data.Data;
 /// </remarks>
 public sealed class MessageQueue(NpgsqlDataSource dataSource)
 {
+    /// <summary>
+    /// Queues one transactional message, rendered now and stored.
+    /// </summary>
+    /// <remarks>
+    /// A campaign per send, which looks heavier than it is. A campaign is the
+    /// intent, and each login link genuinely is its own intent — while the
+    /// unique index on (campaign_id, person_id) is what stops a broadcast
+    /// going out twice. Sharing one campaign across every login link would
+    /// mean either dropping that index or refusing somebody a second sign-in
+    /// link, and both are worse than an extra row.
+    /// </remarks>
+    public async Task<Guid> EnqueueTransactionalAsync(
+        EmailTemplate template,
+        string toEmail,
+        Guid? personId,
+        IReadOnlyDictionary<string, string> values,
+        CancellationToken ct = default)
+    {
+        var rendered = TemplateRenderer.Render(template, values);
+
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        Guid campaignId;
+        const string campaign = """
+            INSERT INTO notify.campaigns (template_id, name, status, recipient_count, queued_at)
+            VALUES (@templateId, @name, 'queued', 1, now())
+            RETURNING id
+            """;
+        await using (var cmd = new NpgsqlCommand(campaign, connection, transaction))
+        {
+            cmd.Parameters.AddWithValue("templateId", template.Id);
+            cmd.Parameters.AddWithValue("name", template.Key);
+            campaignId = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
+        }
+
+        Guid messageId;
+        const string message = """
+            INSERT INTO notify.messages
+                (campaign_id, person_id, to_email, priority,
+                 rendered_subject, rendered_body_html, rendered_body_text)
+            VALUES (@campaignId, @personId, @toEmail, @priority, @subject, @html, @text)
+            RETURNING id
+            """;
+        await using (var cmd = new NpgsqlCommand(message, connection, transaction))
+        {
+            cmd.Parameters.AddWithValue("campaignId", campaignId);
+            cmd.Parameters.AddWithValue("personId", (object?)personId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("toEmail", toEmail);
+            cmd.Parameters.AddWithValue("priority", template.Priority);
+            cmd.Parameters.AddWithValue("subject", rendered.Subject);
+            cmd.Parameters.AddWithValue("html", rendered.BodyHtml);
+            cmd.Parameters.AddWithValue("text", rendered.BodyText);
+            messageId = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
+        }
+
+        await transaction.CommitAsync(ct);
+        return messageId;
+    }
+
     /// <summary>How long a claim is held before the sweeper may take it back.</summary>
     public static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(2);
 
@@ -50,7 +110,10 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
                SET status = 'sending',
                    locked_by = @worker,
                    locked_until = now() + @lock
-             WHERE m.id IN (
+              FROM notify.campaigns c
+              JOIN notify.templates t ON t.id = c.template_id
+             WHERE c.id = m.campaign_id
+               AND m.id IN (
                    SELECT q.id FROM notify.messages q
                     WHERE q.status = 'pending'
                       AND (q.next_attempt_at IS NULL OR q.next_attempt_at <= now())
@@ -63,7 +126,8 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
                     FOR UPDATE OF q SKIP LOCKED
              )
             RETURNING m.id, m.campaign_id, m.to_email, m.priority, m.attempts,
-                      m.rendered_subject, m.rendered_body_html, m.rendered_body_text
+                      m.rendered_subject, m.rendered_body_html, m.rendered_body_text,
+                      t.from_local || '@' || t.from_domain, t.reply_to
             """;
 
         await using var cmd = dataSource.CreateCommand(sql);
@@ -78,7 +142,9 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
             claimed.Add(new ClaimedMessage(
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2),
                 reader.GetInt16(3), reader.GetInt16(4),
-                reader.GetString(5), reader.GetString(6), reader.GetString(7)));
+                reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                reader.GetString(8),
+                await reader.IsDBNullAsync(9, ct) ? null : reader.GetString(9)));
         }
 
         return claimed;
@@ -108,8 +174,11 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
     public async Task RecordFailureAsync(
         Guid id, FailureClass failure, string error, CancellationToken ct = default)
     {
-        // Attempts is incremented here rather than at claim time, so a worker
-        // that dies mid-send does not burn one of the five.
+        // Attempts is incremented here rather than at claim time, so a message
+        // is only charged for an attempt that actually reached the provider.
+        // The sweeper charges one too, for the case where the worker died
+        // before it could get here — otherwise a message that crashes its
+        // worker is never charged at all and retries forever.
         const string sql = """
             UPDATE notify.messages
                SET attempts = attempts + 1,

@@ -130,13 +130,14 @@ public static class AuthEndpoints
             });
         }
 
-        var token = await links.IssueAsync(request.Email, ct);
+        var issued = await links.IssueAsync(request.Email, ct);
 
-        if (token is not null)
+        if (issued is not null)
         {
             var baseUrl = config["PublicBaseUrl"] ?? "http://localhost:3000";
             await email.SendMagicLinkAsync(
-                request.Email, $"{baseUrl}/auth/consume?token={token}", ct);
+                issued.PersonId, request.Email,
+                $"{baseUrl}/auth/consume?token={issued.Token}", ct);
         }
         else
         {

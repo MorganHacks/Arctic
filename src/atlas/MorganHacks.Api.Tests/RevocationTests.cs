@@ -107,7 +107,7 @@ public class RevocationTests(IdentityDatabase db)
         // in their mail. Revocation has to reach it.
         var email = Unique("hacker");
         var personId = await db.AddPersonAsync(email);
-        var token = await Links.IssueAsync(email);
+        var token = (await Links.IssueAsync(email))?.Token;
 
         await db.RevokeAsync(personId);
 

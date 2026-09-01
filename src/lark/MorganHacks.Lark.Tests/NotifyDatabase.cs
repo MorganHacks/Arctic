@@ -48,13 +48,16 @@ public sealed class NotifyDatabase : IAsyncLifetime
     }
 
     /// <summary>Creates a campaign and returns its id.</summary>
-    public async Task<Guid> AddCampaignAsync(string kind = "transactional")
+    public async Task<Guid> AddCampaignAsync(
+        string kind = "transactional", string? replyTo = null)
     {
         await using var cmd = DataSource.CreateCommand("""
             WITH t AS (
               INSERT INTO notify.templates
-                (key, kind, subject, body_html, body_text, from_local, from_domain)
-              VALUES (gen_random_uuid()::text, @kind, 's', '<p>h</p>', 't', 'no-reply', 'auth.example.com')
+                (key, kind, subject, body_html, body_text,
+                 from_local, from_domain, reply_to)
+              VALUES (gen_random_uuid()::text, @kind, 's', '<p>h</p>', 't',
+                      'no-reply', 'auth.example.com', @replyTo)
               RETURNING id
             )
             INSERT INTO notify.campaigns (template_id, name, status)
@@ -62,6 +65,7 @@ public sealed class NotifyDatabase : IAsyncLifetime
             RETURNING id
             """);
         cmd.Parameters.AddWithValue("kind", kind);
+        cmd.Parameters.AddWithValue("replyTo", (object?)replyTo ?? DBNull.Value);
         return (Guid)(await cmd.ExecuteScalarAsync())!;
     }
 
