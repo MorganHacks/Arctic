@@ -2,8 +2,11 @@ using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using MorganHacks.Harbor;
+using MorganHacks.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.UseArcticLogging("harbor");
 
 // Behind Cloudflare and an ingress, every request arrives from a proxy, so
 // RemoteIpAddress is that proxy rather than the caller. Left uncorrected the

@@ -357,3 +357,44 @@ anybody stop an applicant receiving email, including their sign-in link.
 
 Nothing to configure: verification uses the certificate AWS names in each
 message, restricted to `sns.<region>.amazonaws.com`.
+
+## Logs and error reporting
+
+Every service writes structured JSON to stdout. Nothing reads these with eyes,
+so they are shaped for an aggregator: `service`, `environment` and
+`CorrelationId` are fields, not parts of a sentence.
+
+```json
+{"@t":"2026-09-01T04:36:01Z","service":"atlas","CorrelationId":"trace-abc-123"}
+```
+
+The correlation id starts at harbor, reaches atlas on a header, and is stamped
+onto `notify.messages` so lark logs under it too — minutes later, in another
+process. That chain is what turns "I never got my sign-in link" into one query.
+
+Sentry is enabled by setting a DSN and stays off without one, so this all runs
+locally with no accounts:
+
+```
+Sentry__Dsn=https://...@...ingest.sentry.io/...
+Sentry__Release=<git sha>
+```
+
+Set `Sentry__Release` to the deployed SHA. Without it a spike in errors has to
+be tied to a deploy by comparing timestamps.
+
+**PII never leaves the process.** Sentry's own scrubbing knows about passwords
+and card numbers; it does not know that `resume_key` points at somebody's CV or
+that `responses` is a whole answer set. The list is ours, lives in
+`libs/observability/Redaction.cs`, and covers log properties, Sentry extras,
+tags, headers and message text. Request query strings and bodies are dropped
+entirely — a magic-link token lives in a query string, and one captured in an
+error report is a working sign-in sitting in an error tracker.
+
+### The alert that matters is an absence
+
+`magic_link.requested` staying healthy while `magic_link.consumed` collapses
+means mail is not arriving. Every service is up, every dashboard is green, and
+nobody can log in. No error rate catches it, because nothing is erroring. Both
+are emitted as an `event` property on a log line, so an aggregator can count
+them without a metrics stack to run.

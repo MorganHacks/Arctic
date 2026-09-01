@@ -29,6 +29,7 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
         string toEmail,
         Guid? personId,
         IReadOnlyDictionary<string, string> values,
+        string? correlationId = null,
         CancellationToken ct = default)
     {
         var rendered = TemplateRenderer.Render(template, values);
@@ -52,9 +53,10 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
         Guid messageId;
         const string message = """
             INSERT INTO notify.messages
-                (campaign_id, person_id, to_email, priority,
+                (campaign_id, person_id, to_email, priority, correlation_id,
                  rendered_subject, rendered_body_html, rendered_body_text)
-            VALUES (@campaignId, @personId, @toEmail, @priority, @subject, @html, @text)
+            VALUES (@campaignId, @personId, @toEmail, @priority, @correlationId,
+                    @subject, @html, @text)
             RETURNING id
             """;
         await using (var cmd = new NpgsqlCommand(message, connection, transaction))
@@ -63,6 +65,8 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
             cmd.Parameters.AddWithValue("personId", (object?)personId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("toEmail", toEmail);
             cmd.Parameters.AddWithValue("priority", template.Priority);
+            cmd.Parameters.AddWithValue(
+                "correlationId", (object?)correlationId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("subject", rendered.Subject);
             cmd.Parameters.AddWithValue("html", rendered.BodyHtml);
             cmd.Parameters.AddWithValue("text", rendered.BodyText);
@@ -127,7 +131,8 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
              )
             RETURNING m.id, m.campaign_id, m.to_email, m.priority, m.attempts,
                       m.rendered_subject, m.rendered_body_html, m.rendered_body_text,
-                      t.from_local || '@' || t.from_domain, t.reply_to
+                      t.from_local || '@' || t.from_domain, t.reply_to,
+                      m.correlation_id
             """;
 
         await using var cmd = dataSource.CreateCommand(sql);
@@ -144,7 +149,8 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
                 reader.GetInt16(3), reader.GetInt16(4),
                 reader.GetString(5), reader.GetString(6), reader.GetString(7),
                 reader.GetString(8),
-                await reader.IsDBNullAsync(9, ct) ? null : reader.GetString(9)));
+                await reader.IsDBNullAsync(9, ct) ? null : reader.GetString(9),
+                await reader.IsDBNullAsync(10, ct) ? null : reader.GetString(10)));
         }
 
         return claimed;

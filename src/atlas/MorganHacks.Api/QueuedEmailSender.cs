@@ -1,4 +1,5 @@
 using MorganHacks.Identity.Services;
+using MorganHacks.Observability;
 using MorganHacks.Lark.Data.Data;
 
 namespace MorganHacks.Api;
@@ -26,6 +27,7 @@ namespace MorganHacks.Api;
 public sealed class QueuedEmailSender(
     TemplateStore templates,
     MessageQueue queue,
+    IHttpContextAccessor http,
     ILogger<QueuedEmailSender> log) : IEmailSender
 {
     /// <summary>The template this sender needs to exist. Seeded by migration.</summary>
@@ -48,6 +50,14 @@ public sealed class QueuedEmailSender(
 
         await queue.EnqueueTransactionalAsync(
             template, email, personId,
-            new Dictionary<string, string> { ["link"] = link }, ct);
+            new Dictionary<string, string> { ["link"] = link },
+            http.HttpContext?.CorrelationId(), ct);
+
+        // Counted, so the absence can be alerted on. A healthy request rate
+        // against a collapsing consumed rate means mail is not arriving —
+        // everything green, nobody able to log in.
+        log.LogInformation(
+            "Queued a sign-in link for {PersonId}. {event}",
+            personId, Events.MagicLinkRequested);
     }
 }

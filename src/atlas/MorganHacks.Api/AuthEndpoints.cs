@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using MorganHacks.Observability;
 using MorganHacks.Identity.Domain;
 using MorganHacks.Identity.Services;
 
@@ -157,6 +158,7 @@ public static class AuthEndpoints
         MagicLinkService links,
         SessionService sessions,
         HttpContext http,
+        ILogger<MagicLinkRequest> log,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -190,6 +192,12 @@ public static class AuthEndpoints
             MaxAge = SessionService.Lifetime,
             Path = "/",
         });
+
+        // The other half of the pair. Requested staying healthy while this
+        // collapses is the signal that mail is not being delivered, and it is
+        // the failure no error rate catches because nothing is erroring.
+        log.LogInformation(
+            "Signed in from a link. {event}", Events.MagicLinkConsumed);
 
         return Results.Ok(new { signedIn = true });
     }

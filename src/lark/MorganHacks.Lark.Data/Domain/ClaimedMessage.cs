@@ -16,4 +16,9 @@ public sealed record ClaimedMessage(
     // that silently sends a login link from the broadcast domain — which is
     // exactly how login deliverability gets poisoned.
     string From,
-    string? ReplyTo);
+    string? ReplyTo,
+
+    // Carried from the request that queued this, minutes ago in another
+    // process. It is what makes "I never got my sign-in link" one query
+    // instead of two log searches lined up by hand.
+    string? CorrelationId);

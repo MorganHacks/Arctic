@@ -2,6 +2,8 @@ using Microsoft.Extensions.Options;
 using MorganHacks.Lark.Data.Data;
 using MorganHacks.Lark.Data.Domain;
 using MorganHacks.Lark.Sending;
+using MorganHacks.Observability;
+using Serilog.Context;
 
 namespace MorganHacks.Lark;
 
@@ -114,6 +116,12 @@ public sealed class SendLoop(
 
     private async Task SendOneAsync(ClaimedMessage message, CancellationToken ct)
     {
+        // Everything below is logged under the id of the request that queued
+        // this, which happened in another process some minutes ago. That is
+        // the whole point of carrying it on the row.
+        using var _ = LogContext.PushProperty(
+            Telemetry.CorrelationIdProperty, message.CorrelationId);
+
         var outcome = await provider.SendAsync(message, ct);
 
         if (outcome.Accepted)
@@ -122,6 +130,8 @@ public sealed class SendLoop(
             // 'delivered' comes later by webhook, and conflating the two means
             // believing a blast worked when half of it bounced.
             await queue.MarkSentAsync(message.Id, outcome.ProviderMessageId!, ct);
+            log.LogInformation(
+                "Message accepted by the provider. {event}", Events.MessageSent);
             return;
         }
 
@@ -137,6 +147,9 @@ public sealed class SendLoop(
         if (failure == FailureClass.PermanentAndSuppress)
         {
             await queue.SuppressAsync(message.ToEmail, "hard_bounce", ct);
+            log.LogWarning(
+                "Suppressed an address after a permanent failure. {event}",
+                Events.AddressSuppressed);
         }
     }
 }
