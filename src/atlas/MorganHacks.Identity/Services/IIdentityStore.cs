@@ -2,6 +2,19 @@ using MorganHacks.Identity.Domain;
 
 namespace MorganHacks.Identity.Services;
 
+/// <summary>One row on the admin people screen.</summary>
+/// <remarks>
+/// Deliberately not the whole person. A screen that lists everybody does not
+/// need their Google subject id or when they last signed in, and the less of
+/// that leaves the module the less there is to leak.
+/// </remarks>
+public sealed record PersonSummary(
+    Guid Id,
+    string Kind,
+    string Email,
+    bool Revoked,
+    IReadOnlyList<string> Teams);
+
 /// <summary>
 /// The persistence this module needs. Kept as a port so the state machine
 /// above it can be tested without a database, and so the one operation that
@@ -39,6 +52,17 @@ public interface IIdentityStore
         Guid personId, DateTimeOffset now, CancellationToken ct);
 
     Task<Guid?> FindHackerIdByEmailAsync(string email, CancellationToken ct);
+
+    /// <summary>
+    /// Everyone with an account, for the admin people screen.
+    /// </summary>
+    /// <remarks>
+    /// Unpaged on purpose. This lists people who can sign in — organizers and
+    /// registered hackers — not applicants, so it is tens of rows rather than
+    /// hundreds. Paging it now would be machinery guarding against a number
+    /// that is not coming.
+    /// </remarks>
+    Task<IReadOnlyList<PersonSummary>> ListPeopleAsync(CancellationToken ct);
 
     /// <summary>
     /// Everything needed to work out what one person may do: their team

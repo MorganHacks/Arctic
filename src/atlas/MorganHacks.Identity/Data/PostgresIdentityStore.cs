@@ -31,6 +31,39 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         return await cmd.ExecuteScalarAsync(ct) as Guid?;
     }
 
+    public async Task<IReadOnlyList<PersonSummary>> ListPeopleAsync(CancellationToken ct)
+    {
+        // Teams aggregated in the query rather than fetched per person. The
+        // list is small either way, but a loop that issues one query per row is
+        // the shape that stops being small quietly.
+        const string sql = """
+            SELECT p.id, p.kind, p.email, p.revoked_at IS NOT NULL,
+                   coalesce(array_agg(t.slug ORDER BY t.slug)
+                            FILTER (WHERE t.slug IS NOT NULL), '{}')
+              FROM identity.people p
+              LEFT JOIN identity.team_members m ON m.person_id = p.id
+              LEFT JOIN identity.teams t ON t.id = m.team_id
+             GROUP BY p.id, p.kind, p.email, p.revoked_at
+             ORDER BY p.kind, lower(p.email)
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+
+        var people = new List<PersonSummary>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            people.Add(new PersonSummary(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetBoolean(3),
+                await reader.GetFieldValueAsync<string[]>(4, ct)));
+        }
+
+        return people;
+    }
+
     public async Task InsertMagicLinkAsync(
         Guid personId, byte[] tokenHash, DateTimeOffset expiresAt, CancellationToken ct)
     {
