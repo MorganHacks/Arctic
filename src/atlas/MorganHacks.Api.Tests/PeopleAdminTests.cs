@@ -429,7 +429,7 @@ public class PeopleAdminTests(IdentityDatabase db)
         var store = new PostgresIdentityStore(db.DataSource);
 
         Assert.False(await store.RevokePersonAsync(
-            Guid.NewGuid(), DateTimeOffset.UtcNow, CancellationToken.None));
+            Guid.NewGuid(), DateTimeOffset.UtcNow, Guid.NewGuid(), CancellationToken.None));
     }
 
     // ------------------------------------------------------------- helpers ---

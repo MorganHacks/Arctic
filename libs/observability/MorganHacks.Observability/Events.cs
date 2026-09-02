@@ -37,10 +37,16 @@ public static class Events
     /// </summary>
     /// <remarks>
     /// The permission model requires that every grant change be attributable:
-    /// "who gave this person export at 2am" must have an answer. Until there
-    /// is an audit table these lines are that answer, which is why they carry
-    /// both person ids and never the address — <c>actor</c> did it,
-    /// <c>subject</c> had it done to them.
+    /// "who gave this person export at 2am" must have an answer. That answer
+    /// is now <c>audit.entries</c>, which the database writes inside the same
+    /// transaction as the change and which outlives any log retention window.
+    /// <para>
+    /// These lines stay, for the job a table cannot do: an alert fires on a
+    /// log line arriving, and a burst of <c>access.grant_changed</c> at 3am is
+    /// something somebody should be woken by rather than something to notice
+    /// during the next access review. They carry both person ids and never the
+    /// address — <c>actor</c> did it, <c>subject</c> had it done to them.
+    /// </para>
     /// </remarks>
     public const string OrganizerAdded = "access.organizer_added";
 

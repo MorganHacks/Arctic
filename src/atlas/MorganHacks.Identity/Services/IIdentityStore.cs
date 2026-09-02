@@ -21,6 +21,20 @@ public sealed record PersonSummary(
 /// genuinely must be atomic is a single named method rather than a read
 /// followed by a write.
 /// </summary>
+/// <remarks>
+/// Every method that changes what somebody may do takes an <c>actorId</c>, and
+/// it is not nullable. The trail records null where nobody was behind a change
+/// — a seed, an import, a fix run by hand — and that is a real and useful
+/// answer, which is exactly why these methods must not be able to produce it.
+/// Every caller of them is an endpoint the permission gate has already
+/// resolved a person for. A nullable parameter would let one of them pass null
+/// by accident and have an admin's action recorded as anonymous, and there is
+/// no way to tell that apart afterwards from the honest kind.
+/// <para>
+/// None of them takes an audit row, or returns one. The database writes the
+/// trail inside the same transaction as the change; see <c>libs/audit</c>.
+/// </para>
+/// </remarks>
 public interface IIdentityStore
 {
     Task InsertMagicLinkAsync(
@@ -117,7 +131,8 @@ public interface IIdentityStore
     /// the account, which is exactly what first-sign-in binding exists to
     /// avoid.
     /// </remarks>
-    Task<AddOrganizerResult> AddOrganizerAsync(string email, CancellationToken ct);
+    Task<AddOrganizerResult> AddOrganizerAsync(
+        string email, Guid actorId, CancellationToken ct);
 
     /// <summary>
     /// Adds someone to a team, or changes the expiry if they are already on it.
@@ -130,10 +145,12 @@ public interface IIdentityStore
     /// </remarks>
     /// <returns>False when no such person or no such team.</returns>
     Task<bool> AddToTeamAsync(
-        Guid personId, string teamSlug, DateTimeOffset? expiresAt, CancellationToken ct);
+        Guid personId, string teamSlug, DateTimeOffset? expiresAt,
+        Guid actorId, CancellationToken ct);
 
     /// <returns>False when the person was not on that team to begin with.</returns>
-    Task<bool> RemoveFromTeamAsync(Guid personId, string teamSlug, CancellationToken ct);
+    Task<bool> RemoveFromTeamAsync(
+        Guid personId, string teamSlug, Guid actorId, CancellationToken ct);
 
     /// <summary>
     /// Grants one permission to one person directly, or changes its expiry.
@@ -150,7 +167,8 @@ public interface IIdentityStore
         Guid grantedBy, CancellationToken ct);
 
     /// <returns>False when the person did not hold that grant.</returns>
-    Task<bool> RevokeGrantAsync(Guid personId, Permission permission, CancellationToken ct);
+    Task<bool> RevokeGrantAsync(
+        Guid personId, Permission permission, Guid actorId, CancellationToken ct);
 
     /// <summary>
     /// Takes someone off the allowlist and ends every session they hold, in
@@ -169,5 +187,6 @@ public interface IIdentityStore
     /// </para>
     /// </remarks>
     /// <returns>False when no such person.</returns>
-    Task<bool> RevokePersonAsync(Guid personId, DateTimeOffset now, CancellationToken ct);
+    Task<bool> RevokePersonAsync(
+        Guid personId, DateTimeOffset now, Guid actorId, CancellationToken ct);
 }

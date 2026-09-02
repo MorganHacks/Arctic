@@ -191,7 +191,7 @@ public static class PeopleEndpoints
             return Results.BadRequest(new { error = "That is not an email address." });
         }
 
-        var result = await store.AddOrganizerAsync(request!.Email, ct);
+        var result = await store.AddOrganizerAsync(request!.Email, http.PersonId(), ct);
 
         if (!result.Accepted)
         {
@@ -241,7 +241,8 @@ public static class PeopleEndpoints
             return Results.BadRequest(new { error = ExpiryInThePast });
         }
 
-        if (!await store.AddToTeamAsync(id, request.Slug.Trim(), request.ExpiresAt, ct))
+        if (!await store.AddToTeamAsync(
+                id, request.Slug.Trim(), request.ExpiresAt, http.PersonId(), ct))
         {
             return Results.NotFound(new { error = "No such person, or no such team." });
         }
@@ -262,7 +263,7 @@ public static class PeopleEndpoints
         ILogger<JoinTeamRequest> log,
         CancellationToken ct)
     {
-        if (!await store.RemoveFromTeamAsync(id, slug, ct))
+        if (!await store.RemoveFromTeamAsync(id, slug, http.PersonId(), ct))
         {
             return Results.NotFound(new { error = "They were not on that team." });
         }
@@ -321,7 +322,7 @@ public static class PeopleEndpoints
         // Unparseable permissions are still removable. A row left behind by a
         // permission the code has dropped grants nothing, but it is visible,
         // and refusing to delete it would leave it there forever.
-        if (!await store.RevokeGrantAsync(id, new Permission(permission), ct))
+        if (!await store.RevokeGrantAsync(id, new Permission(permission), http.PersonId(), ct))
         {
             return Results.NotFound(new { error = "They did not hold that grant." });
         }
@@ -357,7 +358,7 @@ public static class PeopleEndpoints
             });
         }
 
-        if (!await store.RevokePersonAsync(id, clock.GetUtcNow(), ct))
+        if (!await store.RevokePersonAsync(id, clock.GetUtcNow(), http.PersonId(), ct))
         {
             return Results.NotFound(new { error = "No such person." });
         }
