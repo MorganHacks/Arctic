@@ -126,7 +126,11 @@ app.Run();
 
 static Func<HttpContext, RateLimitPartition<string>> Limiter(int permits, int perMinutes) =>
     http => RateLimitPartition.GetFixedWindowLimiter(
-        http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        // Not RemoteIpAddress. Both front ends call this from their own server
+        // rather than from the browser, so that address is Vercel's and every
+        // applicant in the world shares one bucket — ten sign-ins a quarter of
+        // an hour for everybody. Measured against staging, not assumed.
+        ClientAddress.ForRateLimit(http),
         _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = permits,

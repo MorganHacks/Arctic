@@ -210,6 +210,42 @@ contributor than C# is.
 The test: would you be alarmed to find it violated regardless of how? Push it
 down. Might it change next season? Keep it up.
 
+## Which caller a rate limit counts against
+
+Both front ends call the API from their own server, not from the browser — the
+session cookie is `SameSite=Lax` and a browser will not send one cross-site.
+That is the right call, and it means the connection harbor sees comes from
+Vercel. Partitioning a rate limit on it puts every applicant in the world in one
+bucket.
+
+Measured against staging rather than assumed:
+
+| Path | What harbor sees | Where the caller is |
+|---|---|---|
+| straight to harbor | the caller | — |
+| through a front end | Vercel's address | `X-Real-IP`, `X-Vercel-Forwarded-For` |
+
+`X-Forwarded-For` arrives **empty** on a proxied request, which is why the
+forwarded-headers middleware never found the caller.
+
+`ClientAddress.ForRateLimit` prefers those headers and falls back to the
+connection. It trusts a header, and that is worth being clear about: somebody
+reaching harbor directly can put anything in it and get a fresh bucket. It is
+still strictly better than one bucket for everybody, and the controls that
+actually stop abuse are elsewhere:
+
+- **Per address**, in atlas — three sign-in links per address per quarter hour.
+  This is what stops one person being mailed repeatedly, and it does not depend
+  on the caller's address at all.
+- **Per source volume**, at Cloudflare — the only layer that sees the real
+  connection. `harbor/Program.cs` has said this from the beginning: Cloudflare
+  absorbs volume, harbor handles the per-identity limits Cloudflare cannot
+  express.
+
+**Cloudflare's rate limiting is not configured yet.** Until it is, volume
+control from a single source has no home. Worth doing before registration
+opens rather than after.
+
 ## Trusted proxies — required before either service goes live
 
 `harbor` and `atlas` both partition their rate limiters on the caller's IP, and
