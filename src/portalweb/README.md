@@ -14,12 +14,32 @@ npm run typecheck
 
 ## Current state
 
-One route, `/` — the MorganHacks 2027 organizer application page. **Single
-screen, no scroll.**
+Two things that share a hostname and nothing else:
 
-**All copy on this page is approved by the team. Do not reword it, and do not
-add new user-facing text, without asking first.** Facts come from the 2027
+| Route | What it is |
+|---|---|
+| `/` | The MorganHacks 2027 organizer application page. **Single screen, no scroll.** |
+| `/portal/*` | The hacker portal. A document that scrolls, on the shared palette. |
+
+**All copy on the `/` page is approved by the team. Do not reword it, and do
+not add new user-facing text, without asking first.** Facts come from the 2027
 recruitment deck, not from the old event site.
+
+**The portal's copy is not signed off yet.** Everything an applicant reads
+about their *application* comes from the API — `ApplicantView` in
+`MorganHacks.Applications` — so it changes there, not here. The rest (labels,
+hints, the sign-in page) is drafted in these files and needs a read-through.
+
+### Why the route group
+
+`app/(site)/` and `app/portal/` each bring their own stylesheet, and the root
+layout brings none. `globals.css` sets `overflow: hidden` on `body` to enforce
+the single-screen rule; while it was imported by the root layout it applied to
+the portal too, which left the portal unable to scroll past the fold. The group
+is stripped from the URL, so `/` is still `/`.
+
+Cross-links between the two are plain `<a>`, not `next/link`. A client-side
+navigation would carry one group's stylesheet into the other.
 
 ## Before this goes live
 
@@ -35,8 +55,33 @@ freeing the apex for the next cycle.
 
 ## Configuration
 
-Everything the page asserts — year, form URL, socials — lives in
+Everything the public page asserts — year, form URL, socials — lives in
 `site.config.ts`. Nothing under `app/` hardcodes a year or a URL.
+
+`API_ORIGIN` points at harbor, and defaults to `http://localhost:5080`.
+
+## The portal
+
+Four screens: `/portal` (status), `/portal/profile`, `/portal/messages` and
+`/portal/sign-in`. Each page checks the session for itself — the tab row is
+chrome, not a gate.
+
+**The API is served from this app's own origin**, by the `/api/*` rewrite in
+`next.config.ts`. Not a convenience: the session cookie is `SameSite=Lax` and a
+browser will not send a Lax cookie on a cross-site fetch, so a portal on one
+origin calling an API on another simply cannot authenticate. It is also what
+makes the emailed sign-in link work — the link points at `/api/auth/consume`
+here, so the cookie is set on the host the applicant is actually browsing.
+
+Three rules the screens must keep:
+
+1. **The sign-in form says the same thing whether or not the address exists.**
+   The API answers identically for both, and that counts for nothing if the
+   screen in front of it branches.
+2. **No internal status is ever rendered.** The API sends a sentence, not an
+   enum, and there is deliberately no mapping on this side to disagree with it.
+3. **Read-only is explained, not just disabled.** The reason comes from the API
+   and is shown above the form.
 
 ## The theme
 

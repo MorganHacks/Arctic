@@ -29,6 +29,15 @@ public static class Events
     /// <summary>A message was accepted by the provider.</summary>
     public const string MessageSent = "message.sent";
 
+    /// <summary>Somebody finished an application.</summary>
+    /// <remarks>
+    /// The counter registration watches on the day. Paired with the form's own
+    /// view count, a submission rate that falls away says the form is asking
+    /// something people will not answer — which is a content problem no error
+    /// rate reports.
+    /// </remarks>
+    public const string ApplicationSubmitted = "application.submitted";
+
     /// <summary>An address was added to the suppression list.</summary>
     public const string AddressSuppressed = "address.suppressed";
 
@@ -37,10 +46,16 @@ public static class Events
     /// </summary>
     /// <remarks>
     /// The permission model requires that every grant change be attributable:
-    /// "who gave this person export at 2am" must have an answer. Until there
-    /// is an audit table these lines are that answer, which is why they carry
-    /// both person ids and never the address — <c>actor</c> did it,
-    /// <c>subject</c> had it done to them.
+    /// "who gave this person export at 2am" must have an answer. That answer
+    /// is now <c>audit.entries</c>, which the database writes inside the same
+    /// transaction as the change and which outlives any log retention window.
+    /// <para>
+    /// These lines stay, for the job a table cannot do: an alert fires on a
+    /// log line arriving, and a burst of <c>access.grant_changed</c> at 3am is
+    /// something somebody should be woken by rather than something to notice
+    /// during the next access review. They carry both person ids and never the
+    /// address — <c>actor</c> did it, <c>subject</c> had it done to them.
+    /// </para>
     /// </remarks>
     public const string OrganizerAdded = "access.organizer_added";
 
@@ -53,15 +68,28 @@ public static class Events
     /// <summary>Somebody was taken off the allowlist and their sessions cut.</summary>
     public const string PersonRevoked = "access.person_revoked";
 
+    /// <summary>A form was made, and got the code that goes on a flyer.</summary>
+    public const string FormCreated = "form.created";
+
     /// <summary>
-    /// Somebody finished the application form.
+    /// A draft's questions were written.
     /// </summary>
     /// <remarks>
-    /// The absence to watch during registration week. The form being served
-    /// and the form being completed are separate things, and a bad question,
-    /// a broken validation rule, or a submit button that silently 500s all
-    /// look identical from the outside: traffic arrives, nothing errors, and
-    /// the count of applications stops climbing.
+    /// The builder autosaves, so this is chatty by design and is not worth
+    /// alerting on by itself. It is worth having: when somebody asks why the
+    /// form changed the evening before launch, this is the only record of who
+    /// was typing and when.
     /// </remarks>
-    public const string ApplicationSubmitted = "application.submitted";
+    public const string FormDraftSaved = "form.draft_saved";
+
+    /// <summary>
+    /// A form went live in front of applicants.
+    /// </summary>
+    /// <remarks>
+    /// The one in this group worth watching. Every application records the
+    /// version it answered, so a publish is the moment two applicants stop
+    /// having been asked the same thing — and if one lands during registration
+    /// somebody should know without being told.
+    /// </remarks>
+    public const string FormPublished = "form.published";
 }

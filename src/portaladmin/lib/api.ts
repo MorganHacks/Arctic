@@ -87,7 +87,123 @@ export async function apiWrite(
   }
 }
 
-export type Person = { personId: string };
+/**
+ * The question types the form can ask.
+ *
+ * The names are the enum's, camel-cased on the way out by atlas. Not a copy of
+ * a list that lives elsewhere in TypeScript — the API is the only place these
+ * exist, and a field whose type does not round-trip is one that renders as an
+ * empty box in front of applicants.
+ */
+export type FieldType =
+  | "shortText"
+  | "paragraph"
+  | "email"
+  | "phone"
+  | "number"
+  | "date"
+  | "select"
+  | "radio"
+  | "checkboxes"
+  | "consent"
+  | "file";
+
+export type FieldOption = { value: string; label: string };
+
+/**
+ * One question, exactly as it is stored.
+ *
+ * Sent back whole on every save, including the properties the builder never
+ * shows — `storage`, `column`, the length bounds. Dropping what this screen
+ * does not edit would mean the first autosave quietly rewriting how MLH's
+ * answers are filed.
+ */
+export type FormField = {
+  key: string;
+  type: FieldType;
+  label: string;
+  help?: string | null;
+  required: boolean;
+  options: FieldOption[];
+  storage: "column" | "responses";
+  column?: string | null;
+  locked: boolean;
+  minLength?: number | null;
+  maxLength?: number | null;
+  min?: number | null;
+  max?: number | null;
+};
+
+/** Something wrong with a form, and which question it belongs to. */
+export type FormProblem = { message: string; fieldKey: string | null };
+
+export type EventSummary = {
+  id: string;
+  slug: string;
+  name: string;
+  startsAt: string | null;
+};
+
+export type FormSummary = {
+  id: string;
+  eventId: string;
+  code: string;
+  name: string;
+  kind: string;
+  closesAt: string | null;
+};
+
+/** A row on the forms list. */
+export type FormRow = {
+  id: string;
+  code: string;
+  name: string;
+  kind: string;
+  closesAt: string | null;
+  published: boolean;
+  publishedVersion: number | null;
+  questions: number | null;
+};
+
+export type FormsView = {
+  events: EventSummary[];
+  chosen: EventSummary | null;
+  forms: FormRow[];
+};
+
+/** Everything the builder needs to draw itself, in one response. */
+export type DraftView = {
+  form: FormSummary;
+  draft: { id: string; version: number; fields: FormField[] };
+  published: { version: number; publishedAt: string | null } | null;
+
+  /**
+   * The keys the server will refuse to let go of.
+   *
+   * Its own list rather than read off the `locked` flag on each field. The
+   * flag says what this draft happens to record; this says what the API will
+   * actually enforce, and those are the same only when nothing has gone wrong.
+   */
+  locked: string[];
+};
+
+export type VersionRow = {
+  version: number;
+  status: string;
+  questions: number;
+  createdAt: string;
+  publishedAt: string | null;
+};
+
+/**
+ * Who is signed in, and what they may do.
+ *
+ * The permissions come from `/auth/me` rather than from this person's own
+ * record. Reading that record needs `people.view`, and somebody on the
+ * registration team holds `forms.manage` without it — so asking the wrong
+ * endpoint got an empty set back and hid every button they were entitled to.
+ */
+export type Person = { personId: string; permissions: Set<string> };
 
 /** A row on the people list. */
 export type Listed = {
@@ -113,6 +229,35 @@ export type PersonDetail = {
 export type Team = { slug: string; name: string; permissions: string[] };
 
 /**
+ * One recorded change to what somebody may do.
+ *
+ * Ids and slugs, never an address — the table holds none, and this type is the
+ * shape the screen sees, so a page built on it cannot show what was never
+ * recorded. The audit screen resolves ids to addresses through
+ * `/admin/people`, which is gated separately.
+ *
+ * `action` is a string rather than a union of the actions that exist today.
+ * The database writes it, and a union here would make an action the triggers
+ * started recording into a type error on the screen that most needs to show
+ * it.
+ */
+export type AuditEntry = {
+  id: number;
+  occurredAt: string;
+  action: string;
+  /** Null where nobody was behind it — a seed, an import, a fix run by hand. */
+  actorId: string | null;
+  /** Null exactly when `subjectTeam` is set. */
+  subjectId: string | null;
+  /** Set instead of `subjectId` when a team's baseline changed. */
+  subjectTeam: string | null;
+  /** The team slug or permission that changed. */
+  target: string | null;
+  expiresAt: string | null;
+  detail: Record<string, unknown>;
+};
+
+/**
  * Teams and the permissions that exist at all, both from the API.
  *
  * The catalogue is deliberately not a constant in this repo. Twenty-three
@@ -131,6 +276,13 @@ export type Catalogue = {
  * Null covers every reason equally — no cookie, expired, revoked, or the API
  * being unreachable. The screens treat all of them as "sign in again", which
  * is the only thing a person can do about any of them.
+ *
+ * The permission set comes back with it, so no screen needs a second round
+ * trip to work out what to offer.
+ *
+ * That set is cosmetic. Hiding a button is a courtesy; the API refuses the
+ * request whether or not the button was there, and that refusal is the actual
+ * boundary. Anything that treats this set as the gate has the model backwards.
  */
 export async function currentPerson(): Promise<Person | null> {
   try {
@@ -139,30 +291,13 @@ export async function currentPerson(): Promise<Person | null> {
       return null;
     }
 
-    return (await response.json()) as Person;
+    const { personId, permissions } = (await response.json()) as {
+      personId: string;
+      permissions: string[];
+    };
+
+    return { personId, permissions: new Set(permissions) };
   } catch {
     return null;
-  }
-}
-
-/**
- * What the signed-in person may do, so the screens can stop offering what they
- * cannot.
- *
- * Cosmetic only. Hiding a button is a courtesy; the API refuses the request
- * whether or not the button was there, and that refusal is the actual
- * boundary. Anything that treats this list as the gate has the model backwards.
- */
-export async function currentPermissions(personId: string): Promise<Set<string>> {
-  try {
-    const response = await apiFetch(`/admin/people/${personId}`);
-    if (!response.ok) {
-      return new Set();
-    }
-
-    const { effective } = (await response.json()) as PersonDetail;
-    return new Set(effective);
-  } catch {
-    return new Set();
   }
 }

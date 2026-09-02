@@ -18,6 +18,7 @@
     <ProjectReference Include="..\MorganHacks.Applications\MorganHacks.Applications.csproj" />
     <ProjectReference Include="..\MorganHacks.Profiles\MorganHacks.Profiles.csproj" />
     <ProjectReference Include="..\\..\\..\\libs\\observability\\MorganHacks.Observability\\MorganHacks.Observability.csproj" />
+    <ProjectReference Include="..\\..\\..\\libs\\audit\\MorganHacks.Audit\\MorganHacks.Audit.csproj" />
   </ItemGroup>
 
 </Project>

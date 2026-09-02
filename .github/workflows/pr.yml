@@ -37,17 +37,25 @@ jobs:
         id: filter
         with:
           filters: |
+            # Every lib a service compiles into belongs in its filter. atlas
+            # referenced libs/observability without listing it, so a change
+            # there could break atlas and go green: the only job that would
+            # have caught it never ran.
             atlas:
               - 'src/atlas/**'
+              - 'libs/audit/**'
               - 'libs/contracts/**'
               - 'libs/data/**'
+              - 'libs/observability/**'
             lark:
               - 'src/lark/**'
               - 'libs/contracts/**'
               - 'libs/data/**'
+              - 'libs/observability/**'
             harbor:
               - 'src/harbor/**'
               - 'libs/contracts/**'
+              - 'libs/observability/**'
             portalweb:
               - 'src/portalweb/**'
               - 'libs/contracts/**'

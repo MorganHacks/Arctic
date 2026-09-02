@@ -31,6 +31,16 @@ public interface IFormStore
     /// </remarks>
     Task<Form?> ByCodeAsync(string code, CancellationToken ct = default);
 
+    /// <summary>The form behind an id. Null when there is no such form.</summary>
+    /// <remarks>
+    /// The code is what a link carries and the id is what an admin route
+    /// carries, so both are needed. This one exists so a builder route can
+    /// answer 404 for a form that is not there — <see cref="DraftAsync"/>
+    /// otherwise happily creates a draft hanging off a made-up id, and an
+    /// unreachable orphan row is a worse answer than "no such form".
+    /// </remarks>
+    Task<Form?> ByIdAsync(Guid id, CancellationToken ct = default);
+
     Task<IReadOnlyList<Form>> ForEventAsync(Guid eventId, CancellationToken ct = default);
 
     /// <summary>The version applicants are currently being shown, if any.</summary>

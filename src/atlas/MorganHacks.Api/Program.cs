@@ -1,8 +1,13 @@
 using System.Net;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using MorganHacks.Api;
 using MorganHacks.Applications.Forms;
+using MorganHacks.Applications.Data;
+using MorganHacks.Applications.Services;
+using MorganHacks.Audit;
 using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
 using MorganHacks.Api.Webhooks;
@@ -69,6 +74,10 @@ builder.Services.AddIdentityModule(connectionString);
 // availability in the path of somebody clicking "sign in", and would skip the
 // suppression list that stops us mailing an address that already bounced.
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
+// Only the read side. The trail is written by triggers whether or not this
+// line is here, which is the point — recording a permission change is not
+// something a service can be configured out of.
+builder.Services.AddAuditTrail();
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
 
@@ -78,6 +87,28 @@ builder.Services.AddSingleton<IFormStore, PostgresFormStore>();
 builder.Services.AddSingleton<ISubmissionStore, PostgresSubmissionStore>();
 
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
+
+// Singletons, because both hold nothing but the data source — which is itself
+// a singleton owning the connection pool. Scoping them would build a new
+// wrapper per request around the same pool for no reason.
+builder.Services.AddSingleton<IFormStore, PostgresFormStore>();
+builder.Services.AddSingleton<IEventStore, PostgresEventStore>();
+
+// Enums cross the wire as names, matching how PostgresFormStore writes them
+// to the column. A form field's type would otherwise be a 6 in the JSON and a
+// "consent" in the database, so the builder would be reading and writing
+// numbers that mean nothing on screen and change meaning if the enum is ever
+// reordered.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+});
+
+// The applicant's own view of their application. Registered separately from
+// the organizers' store because it is a different surface with the opposite
+// default: every query on it is scoped to one person.
+builder.Services.AddScoped<IApplicantPortalStore, PostgresApplicantPortalStore>();
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<ISnsSignatureVerifier, SnsSignatureVerifier>();
 builder.Services.AddMemoryCache();
@@ -170,7 +201,10 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapAuth();
 app.MapForms();
+app.MapPortal();
 app.MapPeopleAdmin();
+app.MapAuditTrail();
+app.MapFormsAdmin();
 app.MapSesWebhook();
 app.MapGoogle();
 

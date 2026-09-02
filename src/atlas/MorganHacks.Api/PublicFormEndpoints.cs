@@ -23,7 +23,7 @@ namespace MorganHacks.Api;
 /// tells a log reader nothing about who anybody is.
 /// </para>
 /// </remarks>
-public static class FormEndpoints
+public static class PublicFormEndpoints
 {
     public static IEndpointRouteBuilder MapForms(this IEndpointRouteBuilder app)
     {

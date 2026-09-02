@@ -30,6 +30,24 @@ public readonly record struct Permission(string Value)
 
     public static readonly Permission ApplicationsNote = new("applications.note");
 
+    // Forms
+
+    /// <summary>
+    /// Building the form applicants answer.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ApplicationsView"/>, which every team that
+    /// reads the queue holds. Reading applications is a large group; deciding
+    /// what several hundred people will be asked, once, with no way to correct
+    /// it for the ones who already answered, is a small one.
+    /// <para>
+    /// Not on the sensitive list. It changes what is collected rather than
+    /// moving anything already collected out of the system, and a confirmation
+    /// step on every keystroke of an autosaving editor would be noise.
+    /// </para>
+    /// </remarks>
+    public static readonly Permission FormsManage = new("forms.manage");
+
     // Email
     public static readonly Permission EmailSendTemplated = new("email.send_templated");
     public static readonly Permission EmailSendBroadcast = new("email.send_broadcast");
@@ -73,6 +91,7 @@ public readonly record struct Permission(string Value)
     {
         ApplicationsView, ApplicationsDecide, ApplicationsBulkDecide,
         ApplicationsExport, ApplicationsViewResume, ApplicationsNote,
+        FormsManage,
         EmailSendTemplated, EmailSendBroadcast, EmailManageTemplates, EmailViewStats,
         SponsorsView, SponsorsEdit, SponsorsViewFinancials,
         CheckinScan, SwagScan, CheckinViewStats,
