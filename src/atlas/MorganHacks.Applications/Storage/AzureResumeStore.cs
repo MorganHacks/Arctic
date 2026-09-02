@@ -90,6 +90,25 @@ public sealed class AzureResumeStore : IResumeStore
         _container = _service?.GetBlobContainerClient(options.Container);
     }
 
+    /// <summary>
+    /// A store over a client somebody else built.
+    /// </summary>
+    /// <remarks>
+    /// This exists so the delegation-key path can be exercised against the
+    /// emulator. Reaching it needs an endpoint, a credential and a transport
+    /// that the options above deliberately do not expose — the emulator speaks
+    /// https on a loopback port with a certificate nothing trusts, and none of
+    /// that should be reachable from configuration in a deployed environment.
+    /// Handing in the client keeps those knobs out of the record entirely.
+    /// </remarks>
+    public AzureResumeStore(
+        BlobServiceClient service, string container, bool canCreateContainer = false)
+    {
+        _service = service;
+        _canCreateContainer = canCreateContainer;
+        _container = service.GetBlobContainerClient(container);
+    }
+
     public bool Available => _container is not null;
 
     public async Task<string> StoreAsync(

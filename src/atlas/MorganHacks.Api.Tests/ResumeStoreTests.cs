@@ -42,12 +42,11 @@ public sealed class BlobStorage : IAsyncLifetime
 /// What a stored resume is, and what a link to one lets somebody do.
 /// </summary>
 /// <remarks>
-/// Deployed environments sign with a user delegation key and a managed
-/// identity, which the emulator has no way to offer; these run through the
-/// shared-key path instead. Everything the assertions are about — the
-/// container being private, the five-minute life, the type and disposition
-/// riding inside the signature — is built the same way either way, so what is
-/// not covered is the credential, not the link.
+/// These run the shared-key path, which is what a developer with the
+/// docker-compose stack has. Deployed environments sign with a user delegation
+/// key instead; that branch is covered by
+/// <see cref="DelegatedResumeLinkTests"/> against the same emulator with OAuth
+/// switched on, so neither path is left to staging to discover.
 /// </remarks>
 public class ResumeStoreTests(BlobStorage blobs) : IClassFixture<BlobStorage>
 {
