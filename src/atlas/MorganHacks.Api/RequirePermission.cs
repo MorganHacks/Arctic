@@ -63,6 +63,54 @@ public static class RequirePermissionExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Gates an endpoint on a live session and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// For the endpoints an applicant uses. An applicant is not an organizer
+    /// and holds no permissions at all — that is the model working, not a gap
+    /// in it — so gating their own application on a permission would either
+    /// deny everybody or mean inventing a permission granted to the entire
+    /// world.
+    /// <para>
+    /// What replaces the permission check is the scope of the query. Every
+    /// handler behind this gate reads and writes by
+    /// <see cref="PersonId(HttpContext)"/> and never by an id from the
+    /// request, so "signed in" and "may see this row" are the same fact.
+    /// Anything behind this gate that takes an id from the caller is a bug.
+    /// </para>
+    /// </remarks>
+    public static TBuilder RequireSession<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        builder.AddEndpointFilter(async (context, next) =>
+        {
+            var http = context.HttpContext;
+            var token = http.Request.Cookies[SessionCookie];
+
+            if (string.IsNullOrEmpty(token))
+            {
+                return Results.Unauthorized();
+            }
+
+            var sessions = http.RequestServices.GetRequiredService<SessionService>();
+            var session = await sessions.ValidateAsync(token, http.RequestAborted);
+
+            // Revalidated against the database on every request, like the
+            // permission gate above it. Revoking a session has to end an
+            // applicant's access on the next request too, not at expiry.
+            if (!session.Accepted)
+            {
+                return Results.Unauthorized();
+            }
+
+            http.Items["PersonId"] = session.PersonId;
+            return await next(context);
+        });
+
+        return builder;
+    }
+
     /// <summary>The person this request is acting as, once a gate has run.</summary>
     public static Guid PersonId(this HttpContext http) => (Guid)http.Items["PersonId"]!;
 }

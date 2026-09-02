@@ -6,6 +6,8 @@ using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
 using MorganHacks.Api.Webhooks;
 using MorganHacks.Observability;
+using MorganHacks.Applications.Data;
+using MorganHacks.Applications.Services;
 using MorganHacks.Lark.Data.Data;
 using Npgsql;
 
@@ -71,6 +73,11 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
+
+// The applicant's own view of their application. Registered separately from
+// the organizers' store because it is a different surface with the opposite
+// default: every query on it is scoped to one person.
+builder.Services.AddScoped<IApplicantPortalStore, PostgresApplicantPortalStore>();
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<ISnsSignatureVerifier, SnsSignatureVerifier>();
 builder.Services.AddMemoryCache();
@@ -139,6 +146,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 
 app.MapAuth();
+app.MapPortal();
 app.MapPeopleAdmin();
 app.MapSesWebhook();
 app.MapGoogle();
