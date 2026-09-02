@@ -199,6 +199,17 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 
 
+// TEMPORARY. Reports what this hop sees, so the client-IP chain through
+// Vercel can be read rather than reasoned about. Removed once measured.
+app.MapGet("/auth/whatismyip", (HttpContext http) => Results.Ok(new
+{
+    remoteIp = http.Connection.RemoteIpAddress?.ToString(),
+    forwardedFor = http.Request.Headers["X-Forwarded-For"].ToString(),
+    originalFor = http.Request.Headers["X-Original-For"].ToString(),
+    vercelFor = http.Request.Headers["X-Vercel-Forwarded-For"].ToString(),
+    realIp = http.Request.Headers["X-Real-IP"].ToString(),
+}));
+
 app.MapAuth();
 app.MapForms();
 app.MapPortal();
