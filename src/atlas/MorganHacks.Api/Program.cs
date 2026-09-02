@@ -2,6 +2,7 @@ using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using MorganHacks.Api;
+using MorganHacks.Audit;
 using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
 using MorganHacks.Api.Webhooks;
@@ -70,6 +71,10 @@ builder.Services.AddIdentityModule(connectionString);
 // availability in the path of somebody clicking "sign in", and would skip the
 // suppression list that stops us mailing an address that already bounced.
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
+// Only the read side. The trail is written by triggers whether or not this
+// line is here, which is the point — recording a permission change is not
+// something a service can be configured out of.
+builder.Services.AddAuditTrail();
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
@@ -148,6 +153,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuth();
 app.MapPortal();
 app.MapPeopleAdmin();
+app.MapAuditTrail();
 app.MapSesWebhook();
 app.MapGoogle();
 

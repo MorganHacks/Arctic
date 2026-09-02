@@ -1,9 +1,9 @@
 # atlas — the API.
 #
 # Built from the repository root rather than from src/atlas, because atlas
-# references libs/observability and lark's data library. A context of src/atlas
-# cannot see either, and the alternative — copying them in beforehand — is a
-# build that works in CI and not on a laptop.
+# references libs/observability, libs/audit and lark's data library. A context
+# of src/atlas cannot see any of them, and the alternative — copying them in
+# beforehand — is a build that works in CI and not on a laptop.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
@@ -17,6 +17,8 @@ COPY src/atlas/MorganHacks.Migrations/MorganHacks.Migrations.csproj   src/atlas/
 COPY src/lark/MorganHacks.Lark.Data/MorganHacks.Lark.Data.csproj      src/lark/MorganHacks.Lark.Data/
 COPY libs/observability/MorganHacks.Observability/MorganHacks.Observability.csproj \
      libs/observability/MorganHacks.Observability/
+COPY libs/audit/MorganHacks.Audit/MorganHacks.Audit.csproj \
+     libs/audit/MorganHacks.Audit/
 COPY global.json ./
 COPY src/atlas/Directory.Build.props src/atlas/
 COPY src/lark/Directory.Build.props  src/lark/

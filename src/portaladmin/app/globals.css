@@ -309,6 +309,21 @@ code,
   background: var(--warn-soft);
 }
 
+/* Audit entries, coloured by direction rather than by action.
+   A reviewer scanning a week of the trail is looking for the changes that gave
+   somebody something; those are the ones that need a second look. Removals are
+   the safe direction and stay quiet, because colouring both would leave
+   nothing standing out. */
+.pill.widened {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.pill.narrowed {
+  color: var(--muted);
+  background: var(--sunken);
+}
+
 .permissions {
   display: flex;
   flex-wrap: wrap;
