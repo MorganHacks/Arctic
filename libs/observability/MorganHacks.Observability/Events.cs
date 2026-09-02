@@ -29,6 +29,15 @@ public static class Events
     /// <summary>A message was accepted by the provider.</summary>
     public const string MessageSent = "message.sent";
 
+    /// <summary>Somebody finished an application.</summary>
+    /// <remarks>
+    /// The counter registration watches on the day. Paired with the form's own
+    /// view count, a submission rate that falls away says the form is asking
+    /// something people will not answer — which is a content problem no error
+    /// rate reports.
+    /// </remarks>
+    public const string ApplicationSubmitted = "application.submitted";
+
     /// <summary>An address was added to the suppression list.</summary>
     public const string AddressSuppressed = "address.suppressed";
 

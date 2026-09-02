@@ -21,7 +21,7 @@ namespace MorganHacks.Api;
 /// was asked to tell us.
 /// </para>
 /// </remarks>
-public static class FormEndpoints
+public static class AdminFormEndpoints
 {
     public static IEndpointRouteBuilder MapFormsAdmin(this IEndpointRouteBuilder app)
     {

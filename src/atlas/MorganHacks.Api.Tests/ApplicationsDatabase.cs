@@ -22,13 +22,6 @@ public sealed class ApplicationsDatabase : IAsyncLifetime
     public NpgsqlDataSource DataSource { get; private set; } = null!;
 
     /// <summary>Exposed so the API can be pointed at this same database.</summary>
-    /// <remarks>
-    /// The form builder's tests need both halves at once: the gate reads
-    /// identity, and the form it is guarding lives in applications. This
-    /// fixture already runs every migration, so it has both — spinning the API
-    /// up against a second container would only mean a permission check that
-    /// cannot see the form it just refused.
-    /// </remarks>
     public string ConnectionString { get; private set; } = null!;
 
     public async Task InitializeAsync()

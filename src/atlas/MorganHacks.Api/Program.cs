@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using MorganHacks.Api;
-using MorganHacks.Applications.Data;
 using MorganHacks.Applications.Forms;
+using MorganHacks.Applications.Data;
 using MorganHacks.Applications.Services;
 using MorganHacks.Audit;
 using MorganHacks.Identity;
@@ -80,6 +80,12 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddAuditTrail();
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
+
+// The public forms site reads one and writes the other. Both are stateless
+// over the shared data source, so a singleton each.
+builder.Services.AddSingleton<IFormStore, PostgresFormStore>();
+builder.Services.AddSingleton<ISubmissionStore, PostgresSubmissionStore>();
+
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
 
 // Singletons, because both hold nothing but the data source — which is itself
@@ -141,6 +147,29 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 
+    // Submitting an application. Deliberately loose, and the looseness is the
+    // decision worth explaining.
+    //
+    // A real applicant submits once — the unique index on (event_id,
+    // lower(email)) is what actually stops one person applying repeatedly, and
+    // it holds no matter how many requests they make. So this limiter is not
+    // there to stop an individual; it is there so a script cannot hold the
+    // endpoint open all night inventing addresses.
+    //
+    // Tightening it hurts the wrong people. The partition is an IP, and on
+    // campus that is an entire building behind one NAT: a launch meeting where
+    // sixty people submit in the same five minutes is the exact traffic this
+    // must not refuse.
+    options.AddPolicy("form-submit", http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0,
+            }));
+
     options.AddPolicy("magic-link", http =>
     {
         var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -171,6 +200,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 
 app.MapAuth();
+app.MapForms();
 app.MapPortal();
 app.MapPeopleAdmin();
 app.MapAuditTrail();

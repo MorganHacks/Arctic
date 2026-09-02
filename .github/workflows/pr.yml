@@ -29,6 +29,7 @@ jobs:
       harbor: ${{ steps.filter.outputs.harbor }}
       portalweb: ${{ steps.filter.outputs.portalweb }}
       portaladmin: ${{ steps.filter.outputs.portaladmin }}
+      portalforms: ${{ steps.filter.outputs.portalforms }}
       contracts: ${{ steps.filter.outputs.contracts }}
     steps:
       - uses: actions/checkout@v7
@@ -61,6 +62,10 @@ jobs:
               - 'libs/ui/**'
             portaladmin:
               - 'src/portaladmin/**'
+              - 'libs/contracts/**'
+              - 'libs/ui/**'
+            portalforms:
+              - 'src/portalforms/**'
               - 'libs/contracts/**'
               - 'libs/ui/**'
             contracts:
@@ -106,6 +111,14 @@ jobs:
       service: portaladmin
       path: src/portaladmin
 
+  portalforms:
+    needs: changes
+    if: needs.changes.outputs.portalforms == 'true'
+    uses: ./.github/workflows/build-node.yml
+    with:
+      service: portalforms
+      path: src/portalforms
+
   contract-tests:
     needs: changes
     if: needs.changes.outputs.contracts == 'true'
@@ -118,7 +131,11 @@ jobs:
     # `changes` is in this list deliberately. Without it, a dispatcher failure
     # leaves every service job skipped, the loop below sees nothing but
     # "skipped", and the gate goes green having verified nothing at all.
-    needs: [changes, atlas, lark, harbor, portalweb, portaladmin, contract-tests]
+    needs:
+      [
+        changes, atlas, lark, harbor,
+        portalweb, portaladmin, portalforms, contract-tests,
+      ]
     if: always()
     runs-on: ubuntu-latest
     steps:
