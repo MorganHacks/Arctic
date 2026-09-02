@@ -139,7 +139,7 @@ builder.Services.AddRateLimiter(options =>
     // which is the one thing this endpoint exists to capture.
     options.AddPolicy("webhook", http =>
         RateLimitPartition.GetFixedWindowLimiter(
-            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            ClientAddress.ForRateLimit(http),
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 600,
@@ -172,7 +172,8 @@ builder.Services.AddRateLimiter(options =>
 
     options.AddPolicy("magic-link", http =>
     {
-        var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        // The caller, not the front end that relayed them. See ClientAddress.
+        var ip = ClientAddress.ForRateLimit(http);
         return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 5,
@@ -198,17 +199,6 @@ app.UseRateLimiter();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 
-
-// TEMPORARY. Reports what this hop sees, so the client-IP chain through
-// Vercel can be read rather than reasoned about. Removed once measured.
-app.MapGet("/auth/whatismyip", (HttpContext http) => Results.Ok(new
-{
-    remoteIp = http.Connection.RemoteIpAddress?.ToString(),
-    forwardedFor = http.Request.Headers["X-Forwarded-For"].ToString(),
-    originalFor = http.Request.Headers["X-Original-For"].ToString(),
-    vercelFor = http.Request.Headers["X-Vercel-Forwarded-For"].ToString(),
-    realIp = http.Request.Headers["X-Real-IP"].ToString(),
-}));
 
 app.MapAuth();
 app.MapForms();
