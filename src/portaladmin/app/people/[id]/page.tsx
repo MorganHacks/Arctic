@@ -3,7 +3,6 @@ import { notFound, redirect } from "next/navigation";
 import {
   apiFetch,
   currentPerson,
-  currentPermissions,
   type Catalogue,
   type PersonDetail,
 } from "@/lib/api";
@@ -62,7 +61,7 @@ export default async function PersonPage({
 
   const person = (await personResponse.json()) as PersonDetail;
   const catalogue = (await catalogueResponse.json()) as Catalogue;
-  const mine = await currentPermissions(viewer.personId);
+  const mine = viewer.permissions;
 
   // Expiry is decided here rather than in the browser. The two clocks disagree
   // by whatever the reader's machine is wrong by, and a row that renders as
