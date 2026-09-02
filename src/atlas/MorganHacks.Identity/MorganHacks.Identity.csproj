@@ -13,4 +13,12 @@
     <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The audit trail names the actor on the transaction each write runs in.
+         A library reference rather than a service call: an audit write that
+         could fail on its own would leave a grant nobody is recorded as
+         having made. -->
+    <ProjectReference Include="..\..\..\libs\audit\MorganHacks.Audit\MorganHacks.Audit.csproj" />
+  </ItemGroup>
+
 </Project>

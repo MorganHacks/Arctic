@@ -113,6 +113,35 @@ export type PersonDetail = {
 export type Team = { slug: string; name: string; permissions: string[] };
 
 /**
+ * One recorded change to what somebody may do.
+ *
+ * Ids and slugs, never an address — the table holds none, and this type is the
+ * shape the screen sees, so a page built on it cannot show what was never
+ * recorded. The audit screen resolves ids to addresses through
+ * `/admin/people`, which is gated separately.
+ *
+ * `action` is a string rather than a union of the actions that exist today.
+ * The database writes it, and a union here would make an action the triggers
+ * started recording into a type error on the screen that most needs to show
+ * it.
+ */
+export type AuditEntry = {
+  id: number;
+  occurredAt: string;
+  action: string;
+  /** Null where nobody was behind it — a seed, an import, a fix run by hand. */
+  actorId: string | null;
+  /** Null exactly when `subjectTeam` is set. */
+  subjectId: string | null;
+  /** Set instead of `subjectId` when a team's baseline changed. */
+  subjectTeam: string | null;
+  /** The team slug or permission that changed. */
+  target: string | null;
+  expiresAt: string | null;
+  detail: Record<string, unknown>;
+};
+
+/**
  * Teams and the permissions that exist at all, both from the API.
  *
  * The catalogue is deliberately not a constant in this repo. Twenty-three

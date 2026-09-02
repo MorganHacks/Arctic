@@ -1,3 +1,4 @@
+using MorganHacks.Audit;
 using MorganHacks.Identity.Domain;
 using MorganHacks.Identity.Services;
 using Npgsql;
@@ -7,6 +8,15 @@ namespace MorganHacks.Identity.Data;
 /// <summary>
 /// The Identity module's own tables. Nothing outside this module reads them.
 /// </summary>
+/// <remarks>
+/// Every method under "administration" below opens a transaction it would not
+/// otherwise need, and none of them writes an audit row. Both facts have the
+/// same cause: <c>audit.entries</c> is written by triggers, so the audit row
+/// commits with the change or not at all, and the only thing left for this
+/// class to do is name the person responsible — which
+/// <see cref="AuditContext"/> does on the transaction, and which nothing
+/// outside a transaction can do at all.
+/// </remarks>
 public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdentityStore
 {
     public async Task<Guid?> FindHackerIdByEmailAsync(string email, CancellationToken ct)
@@ -487,8 +497,13 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             .ToList();
     }
 
-    public async Task<AddOrganizerResult> AddOrganizerAsync(string email, CancellationToken ct)
+    public async Task<AddOrganizerResult> AddOrganizerAsync(
+        string email, Guid actorId, CancellationToken ct)
     {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await AuditContext.SetActorAsync(conn, tx, actorId, ct);
+
         // Insert first and ask questions afterwards. Checking whether the
         // address is taken and then inserting leaves a window two admins can
         // both pass through; the unique index on lower(email) is the only
@@ -499,11 +514,15 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             RETURNING id
             """;
 
-        await using (var cmd = dataSource.CreateCommand(insert))
+        await using (var cmd = new NpgsqlCommand(insert, conn, tx))
         {
             cmd.Parameters.AddWithValue("email", email.Trim());
             if (await cmd.ExecuteScalarAsync(ct) is Guid created)
             {
+                // The trigger's entry is in this transaction, so committing is
+                // what makes both the allowlist row and the record of who
+                // added it real at the same instant.
+                await tx.CommitAsync(ct);
                 return AddOrganizerResult.Accept(created);
             }
         }
@@ -515,9 +534,14 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             SELECT kind FROM identity.people WHERE lower(email) = lower(@email)
             """;
 
-        await using var lookup = dataSource.CreateCommand(existing);
+        await using var lookup = new NpgsqlCommand(existing, conn, tx);
         lookup.Parameters.AddWithValue("email", email.Trim());
         var kind = await lookup.ExecuteScalarAsync(ct) as string;
+
+        // Nothing was written, so there is nothing to commit and nothing for
+        // the trail to say. A refused request is not a change to anybody's
+        // access.
+        await tx.RollbackAsync(ct);
 
         // A null kind means the row was deleted between the two statements,
         // which nothing in this system does. Reporting the conflict we already
@@ -528,7 +552,8 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
     }
 
     public async Task<bool> AddToTeamAsync(
-        Guid personId, string teamSlug, DateTimeOffset? expiresAt, CancellationToken ct)
+        Guid personId, string teamSlug, DateTimeOffset? expiresAt,
+        Guid actorId, CancellationToken ct)
     {
         // Selecting the two ids rather than passing them in means an unknown
         // person or an unknown team inserts nothing and returns nothing,
@@ -542,28 +567,34 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             RETURNING person_id
             """;
 
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue("personId", personId);
-        cmd.Parameters.AddWithValue("slug", teamSlug);
-        cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
-        return await cmd.ExecuteScalarAsync(ct) is Guid;
+        return await WriteAsync(actorId, sql, ct, cmd =>
+        {
+            cmd.Parameters.AddWithValue("personId", personId);
+            cmd.Parameters.AddWithValue("slug", teamSlug);
+            cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
+        });
     }
 
     public async Task<bool> RemoveFromTeamAsync(
-        Guid personId, string teamSlug, CancellationToken ct)
+        Guid personId, string teamSlug, Guid actorId, CancellationToken ct)
     {
+        // RETURNING so the caller can be told nothing matched without a second
+        // round trip, and so this shares the one transactional write path
+        // below with everything else here.
         const string sql = """
             DELETE FROM identity.team_members m
              USING identity.teams t
              WHERE t.id = m.team_id
                AND m.person_id = @personId
                AND t.slug = @slug
+            RETURNING m.person_id
             """;
 
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue("personId", personId);
-        cmd.Parameters.AddWithValue("slug", teamSlug);
-        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+        return await WriteAsync(actorId, sql, ct, cmd =>
+        {
+            cmd.Parameters.AddWithValue("personId", personId);
+            cmd.Parameters.AddWithValue("slug", teamSlug);
+        });
     }
 
     public async Task<bool> GrantAsync(
@@ -585,36 +616,48 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             RETURNING person_id
             """;
 
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue("personId", personId);
-        cmd.Parameters.AddWithValue("permission", permission.Value);
-        cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("grantedBy", grantedBy);
-        return await cmd.ExecuteScalarAsync(ct) is Guid;
+        // grantedBy is the actor: this is one action, and recording two
+        // different people as having taken it would be a fiction. It stays a
+        // separate column because the grants table answers "who decided this
+        // grant, currently" where the trail answers "what happened, ever".
+        return await WriteAsync(grantedBy, sql, ct, cmd =>
+        {
+            cmd.Parameters.AddWithValue("personId", personId);
+            cmd.Parameters.AddWithValue("permission", permission.Value);
+            cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("grantedBy", grantedBy);
+        });
     }
 
     public async Task<bool> RevokeGrantAsync(
-        Guid personId, Permission permission, CancellationToken ct)
+        Guid personId, Permission permission, Guid actorId, CancellationToken ct)
     {
         // Deleted rather than expired-in-place. An admin removing a grant
         // means it should stop counting now, and a row with expires_at set to
         // the present moment is the same thing said less clearly.
+        //
+        // Deleting the row does not delete the history of it: the trail keeps
+        // grant.added and grant.removed either side of it, which is the whole
+        // reason removing a grant can be a clean delete rather than a tombstone.
         const string sql = """
             DELETE FROM identity.grants
              WHERE person_id = @personId AND permission = @permission
+            RETURNING person_id
             """;
 
-        await using var cmd = dataSource.CreateCommand(sql);
-        cmd.Parameters.AddWithValue("personId", personId);
-        cmd.Parameters.AddWithValue("permission", permission.Value);
-        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+        return await WriteAsync(actorId, sql, ct, cmd =>
+        {
+            cmd.Parameters.AddWithValue("personId", personId);
+            cmd.Parameters.AddWithValue("permission", permission.Value);
+        });
     }
 
     public async Task<bool> RevokePersonAsync(
-        Guid personId, DateTimeOffset now, CancellationToken ct)
+        Guid personId, DateTimeOffset now, Guid actorId, CancellationToken ct)
     {
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        await AuditContext.SetActorAsync(conn, tx, actorId, ct);
 
         // coalesce keeps the first revocation's timestamp. Re-revoking someone
         // is how an admin finishes a job that half-failed, and it should not
@@ -644,5 +687,41 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
 
         await tx.CommitAsync(ct);
         return true;
+    }
+
+    /// <summary>
+    /// One access-changing statement, with the actor named on its transaction.
+    /// </summary>
+    /// <remarks>
+    /// Every admin write goes through here so that the transaction and the
+    /// <see cref="AuditContext"/> call cannot be forgotten on one of them.
+    /// Forgetting would not fail loudly — the trigger still records the change
+    /// — it would record it as having no actor, which is indistinguishable
+    /// from a row somebody fixed in psql. A path that quietly relabels an
+    /// admin's action as anonymous is worse than one that throws.
+    /// <para>
+    /// The statement must end in <c>RETURNING</c>, so that one helper has one
+    /// way of asking "did that match anything" across an upsert and a delete
+    /// alike. Two ways — a returned id here, a row count there — is how one of
+    /// them comes to mean something slightly different from the other.
+    /// </para>
+    /// </remarks>
+    /// <returns>False when the statement matched nothing.</returns>
+    private async Task<bool> WriteAsync(
+        Guid actorId, string sql, CancellationToken ct, Action<NpgsqlCommand> bind)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await AuditContext.SetActorAsync(conn, tx, actorId, ct);
+
+        await using var cmd = new NpgsqlCommand(sql, conn, tx);
+        bind(cmd);
+        var matched = await cmd.ExecuteScalarAsync(ct) is Guid;
+
+        // Committed either way. A statement that matched nothing wrote
+        // nothing, so there is nothing to undo and nothing in the trail — and
+        // rolling back would be the same outcome reached more slowly.
+        await tx.CommitAsync(ct);
+        return matched;
     }
 }
