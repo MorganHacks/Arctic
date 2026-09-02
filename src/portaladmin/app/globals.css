@@ -404,3 +404,303 @@ code,
   color: var(--muted);
   margin-bottom: 1.25rem;
 }
+
+/* The form builder ---------------------------------------------------- */
+
+/* Denser than the rest of the console on purpose. This is the one screen
+   somebody sits in for an hour, and a form of twenty questions has to fit on
+   a laptop next to its own preview. Everything is still a token; the only
+   thing coloured here is a question with something wrong with it. */
+
+.form-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.tab.on {
+  color: var(--ink);
+  border-color: var(--muted);
+  background: var(--sunken);
+}
+
+/* The bar that says whether the work is safe. It sticks because "Saved" is
+   worthless if you have to scroll to it. */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  margin-bottom: 1rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+
+.save {
+  font-size: var(--step-1);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Only the failure is coloured. "Saved" is the state a person is in for
+   fifty-nine minutes of the hour, and colouring it would make the colour mean
+   nothing by the time it mattered. */
+.save.failed {
+  color: var(--stop);
+}
+
+.builder {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .builder {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.side {
+  position: sticky;
+  top: 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.questions {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.question {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 0.75rem 0.9rem 0.6rem;
+}
+
+/* A question the API has complained about. The left edge rather than a fill,
+   so a form with six problems still reads as a form. */
+.question.flagged {
+  border-left: 2px solid var(--stop);
+}
+
+.question label {
+  margin-top: 0.5rem;
+}
+
+.question input[type="text"],
+.question > input:not([type]) {
+  width: 100%;
+}
+
+.question > input {
+  width: 100%;
+}
+
+.question-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ordinal {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--step-1);
+  min-width: 1.25rem;
+}
+
+button.icon {
+  padding: 0.15rem 0.45rem;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+button.icon:disabled {
+  color: var(--faint);
+  border-color: var(--line-soft);
+}
+
+button.icon.danger:not(:disabled):hover {
+  color: var(--stop);
+  border-color: var(--stop);
+}
+
+/* MLH's wording, shown as text because it is not ours to edit. Set at reading
+   size rather than in a disabled input: a sixty-word agreement in a one-line
+   box is unreadable, and being unable to read it is how it stops being checked. */
+.locked-label {
+  margin: 0.5rem 0 0.35rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--sunken);
+  border-radius: var(--radius);
+  border: 1px solid var(--line-soft);
+}
+
+.options {
+  margin-top: 0.6rem;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.option input {
+  flex: 1;
+}
+
+/* What the answer is actually stored as, beside the label people see. The two
+   are separate so rewording an option later does not silently change what past
+   applicants appear to have answered, and that only helps if it is visible. */
+.option-value {
+  color: var(--faint);
+  min-width: 5rem;
+}
+
+.add-option {
+  margin-top: 0.15rem;
+}
+
+button.link.add-option:hover {
+  color: var(--accent);
+}
+
+.question-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.7rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.check.consent {
+  align-items: flex-start;
+}
+
+.check input {
+  margin: 0;
+}
+
+.problems {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+}
+
+.problems li {
+  color: var(--stop);
+  font-size: var(--step-1);
+  padding: 0.15rem 0;
+}
+
+.problems-panel {
+  border-left: 2px solid var(--stop);
+}
+
+.add-question {
+  margin-bottom: 0;
+}
+
+/* The preview ---------------------------------------------------------- */
+
+.preview {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 0.9rem 1.1rem 1.1rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.preview legend {
+  padding: 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.asked {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.asked:last-child {
+  border-bottom: none;
+}
+
+.asked-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.asked input,
+.asked select,
+.asked textarea {
+  width: 100%;
+  font: inherit;
+  background: var(--sunken);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.5rem;
+}
+
+.asked input[type="checkbox"],
+.asked input[type="radio"] {
+  width: auto;
+}
+
+.asked .choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* The one place a required marker earns colour: it changes whether somebody
+   can submit. */
+.req {
+  color: var(--stop);
+}
