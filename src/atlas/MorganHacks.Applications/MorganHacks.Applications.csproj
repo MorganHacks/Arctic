@@ -8,6 +8,12 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="10.0.3" />
+
+    <!-- Resumes. The only object store in the system, and it is reached with
+         the managed identity this service already holds rather than with an
+         account key somebody has to keep somewhere. -->
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.29.2" />
   </ItemGroup>
 
 </Project>

@@ -26,16 +26,18 @@ cd Arctic
 docker compose up -d
 ```
 
-That gives you four things:
+That gives you three things:
 
 | Service | Where | What it is |
 |---|---|---|
 | Postgres | `localhost:5432` | one database, one schema per module |
-| MinIO | `localhost:9000`, console on `:9001` | S3-compatible storage, standing in for Cloudflare R2 |
+| Azurite | blob service on `:10000` | Azure Blob emulator; resumes land here |
 | Mailpit | SMTP on `:1025`, UI on `:8025` | catches every email so nothing leaves your machine |
 
-Credentials are `arctic` / `local-dev-only` everywhere. They are meant to be
-boring and public — nothing here should ever hold real data.
+Credentials are `arctic` / `local-dev-only` for Postgres, and Azurite's own
+published development account for storage — atlas already has both in
+`appsettings.Development.json`, so there is nothing to set. They are meant to
+be boring and public: nothing here should ever hold real data.
 
 Check it came up:
 
@@ -43,7 +45,7 @@ Check it came up:
 docker compose ps
 ```
 
-All three should say `healthy`.
+All three should be running, and Postgres should say `healthy`.
 
 ---
 

@@ -35,41 +35,28 @@ services:
       timeout: 3s
       retries: 10
 
-  # S3-compatible object storage, standing in for Cloudflare R2. Resumes are
-  # uploaded here in local development so nobody needs cloud credentials to
-  # work on the application form.
-  minio:
-    image: minio/minio:latest
-    container_name: arctic-minio
+  # Object storage for resumes. Azurite is Microsoft's own emulator for Azure
+  # Blob, which is what the deployed environments use — this replaces the MinIO
+  # that stood in for Cloudflare R2 before that decision was made.
+  #
+  # Emulating the real thing matters more here than it usually does. The part
+  # that is easy to get wrong is the signed URL: its expiry, its content type
+  # and its disposition are all in the signature, and against an S3-shaped
+  # stand-in none of that would be the code that actually runs.
+  #
+  # Atlas creates the container on first upload when it is pointed at a
+  # connection string, so there is nothing to initialise here. In Azure the
+  # container comes from Bicep instead, because a service that provisions its
+  # own storage is one that keeps working while aimed at the wrong account.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: arctic-azurite
     restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: arctic
-      MINIO_ROOT_PASSWORD: local-dev-only
+    command: azurite-blob --blobHost 0.0.0.0 --location /data
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # web console
+      - "10000:10000"   # blob service
     volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  # Creates the resume bucket, then exits. Without this the first upload fails
-  # against a bucket that does not exist.
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 arctic local-dev-only &&
-      mc mb --ignore-existing local/resumes &&
-      echo 'bucket ready: resumes'
-      "
+      - azurite-data:/data
 
   # Catches every email the platform sends in local development. Nothing
   # leaves the machine, so a stray send during development can never touch
@@ -86,4 +73,4 @@ services:
 
 volumes:
   postgres-data:
-  minio-data:
+  azurite-data:

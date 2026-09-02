@@ -42,9 +42,23 @@ param superAdminEmail string
 @description('Resource id of the identity that pulls images.')
 param pullIdentityId string
 
+@description('''
+Principal id of that same identity. It is what a role assignment grants to, and
+it is a different value from the resource id — passing the wrong one deploys
+without complaint and denies every request at run time.
+''')
+param pullIdentityPrincipalId string
+
 param tags object = {}
 
 var suffix = 'mh-${environmentName}'
+
+// Globally unique, lowercase alphanumeric, at most 24 characters. Derived from
+// the subscription and the environment rather than typed, so two environments
+// cannot collide and a redeploy always lands on the same account.
+var storageName = 'stmh${environmentName}${uniqueString(subscription().subscriptionId, environmentName)}'
+
+var resumeContainerName = 'resumes'
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: registryName
@@ -134,6 +148,113 @@ resource allowAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@202
 
 var connectionString = 'Host=${postgres.properties.fullyQualifiedDomainName};Port=5432;Database=${dbName};Username=${dbAdminUser};Password=${dbPassword};SSL Mode=Require;Trust Server Certificate=true'
 
+// ---------------------------------------------------------------- resumes ---
+// Azure Blob rather than the Cloudflare R2 the build plan recommends.
+//
+// The plan's argument for R2 is egress cost and portability. Neither survives
+// contact with what this is: a few hundred PDFs a year, read by a dozen
+// reviewers, where the egress bill is rounding error either way. What we get
+// instead is that it is declared here, in the same deployment as everything
+// else, with no second account to open, no second bill, and no access key to
+// store or rotate — atlas reaches it with the managed identity it already
+// holds. The portability the plan actually cares about is that the database
+// stores a key rather than a URL, and that is bought in the code by putting an
+// interface in front of this, not by which vendor holds the bytes.
+//
+// Every property below that says "no" is the point of the resource. These are
+// files uploaded by strangers and opened by organizers in a browser.
+resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  // Storage account names are globally unique and allow no hyphens, so this
+  // cannot follow the `st-mh-<env>` shape the rest of the file uses. The
+  // environment is still in the name, because running a command against the
+  // wrong environment is the mistake worth making hard.
+  name: storageName
+  location: location
+  tags: union(tags, { service: 'resumes' })
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+  properties: {
+    // The single most important line here. Without it a container can be
+    // flipped to anonymous read from the portal by somebody who does not
+    // realise what is in it, and every resume becomes a public URL.
+    allowBlobPublicAccess: false
+
+    // No account key, for anybody, ever. It closes off the credential that
+    // cannot be scoped, cannot be attributed to a person, and does not expire:
+    // with this set, the only way in is an identity Azure can revoke, and the
+    // read links atlas issues are signed with a user delegation key rather
+    // than with a secret sitting in configuration.
+    allowSharedKeyAccess: false
+    defaultToOAuthAuthentication: true
+
+    supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
+
+    // Reachable from the internet, and it has to be: the signed link is opened
+    // by a reviewer's own browser, so a private endpoint would mean proxying
+    // every resume through the API. The access control is the SAS and its
+    // five-minute life, not the network — an unsigned request to a blob here
+    // is refused whether it came from inside the VNet or not.
+    publicNetworkAccess: 'Enabled'
+    networkAcls: {
+      bypass: 'AzureServices'
+      defaultAction: 'Allow'
+    }
+  }
+}
+
+resource blobs 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: storage
+  name: 'default'
+  properties: {
+    // A deleted resume is recoverable for a month. Applications get withdrawn
+    // and rows get corrected, and the version of that mistake nobody can undo
+    // is the one where an applicant is asked to send their CV again.
+    deleteRetentionPolicy: {
+      enabled: true
+      days: 30
+    }
+    containerDeleteRetentionPolicy: {
+      enabled: true
+      days: 30
+    }
+  }
+}
+
+resource resumeContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobs
+  name: resumeContainerName
+  properties: {
+    // Said out loud rather than left to the default. This is the property that
+    // decides whether a stranger holding a URL can read somebody's CV.
+    publicAccess: 'None'
+  }
+}
+
+// The built-in Storage Blob Data Contributor role, referenced by id because
+// the name is display text and the id is the contract. Contributor rather than
+// Reader because atlas writes the uploads; the same role also carries
+// generateUserDelegationKey, which is what lets it sign a read link without
+// ever holding an account key.
+//
+// Scoped to the storage account and nothing wider. The identity can read and
+// write blobs here and cannot see the subscription it is in.
+var blobDataContributor = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+
+resource resumeAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: storage
+  // Deterministic, so re-running converges on one assignment rather than
+  // adding another. Same reasoning as the registry's AcrPull grant.
+  name: guid(storage.id, pullIdentityPrincipalId, blobDataContributor)
+  properties: {
+    roleDefinitionId: blobDataContributor
+    principalId: pullIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // -------------------------------------------------------- apps environment ---
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: 'cae-${suffix}'
@@ -211,3 +332,5 @@ resource migrations 'Microsoft.App/jobs@2024-03-01' = {
 output environmentId string = environment.id
 output postgresHost string = postgres.properties.fullyQualifiedDomainName
 output registryLoginServer string = registry.properties.loginServer
+output resumeStorageAccount string = storage.name
+output resumeContainer string = resumeContainer.name

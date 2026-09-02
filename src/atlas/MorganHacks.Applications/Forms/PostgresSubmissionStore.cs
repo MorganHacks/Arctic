@@ -19,6 +19,27 @@ public sealed class PostgresSubmissionStore(NpgsqlDataSource dataSource) : ISubm
 {
     private static readonly JsonSerializerOptions Json = new();
 
+    public async Task<Guid> RecordResumeAsync(
+        Guid formId,
+        string storageKey,
+        string filename,
+        int size,
+        CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand("""
+            INSERT INTO applications.resume_uploads (form_id, storage_key, filename, size)
+            VALUES (@form, @key, @filename, @size)
+            RETURNING id
+            """);
+
+        cmd.Parameters.AddWithValue("form", formId);
+        cmd.Parameters.AddWithValue("key", storageKey);
+        cmd.Parameters.AddWithValue("filename", filename);
+        cmd.Parameters.AddWithValue("size", size);
+
+        return (Guid)(await cmd.ExecuteScalarAsync(ct))!;
+    }
+
     public async Task<Guid> SubmitApplicationAsync(
         Form form,
         FormVersion version,
@@ -64,8 +85,7 @@ public sealed class PostgresSubmissionStore(NpgsqlDataSource dataSource) : ISubm
         Set("form_version", version.Version);
 
         var responses = new Dictionary<string, object?>(StringComparer.Ordinal);
-        string? resumeFilename = null;
-        int? resumeSize = null;
+        Guid? resumeUpload = null;
 
         foreach (var field in version.Fields)
         {
@@ -78,8 +98,7 @@ public sealed class PostgresSubmissionStore(NpgsqlDataSource dataSource) : ISubm
             {
                 if (answered)
                 {
-                    resumeFilename = SubmissionValidation.Filename(value);
-                    resumeSize = Size(value);
+                    resumeUpload = SubmissionValidation.Upload(value);
                 }
 
                 continue;
@@ -149,14 +168,22 @@ public sealed class PostgresSubmissionStore(NpgsqlDataSource dataSource) : ISubm
             Value = JsonSerializer.Serialize(responses, Json),
         });
 
-        if (resumeFilename is not null)
+        if (resumeUpload is { } upload)
         {
-            // The name and the size, and deliberately no resume_key. A key
-            // points at stored bytes and there is nowhere to store them yet,
-            // so a row with a filename and a null key is the accurate record:
-            // they named a file, we did not keep it.
-            Set("resume_filename", resumeFilename);
-            Set("resume_size", resumeSize);
+            // Spent inside this transaction, so the two things that must agree
+            // do. A submission that rolls back — the duplicate below is the
+            // ordinary way — leaves the upload unspent and usable on the next
+            // attempt, and an upload that is spent is one an application row
+            // points at.
+            var resume = await ClaimResumeAsync(connection, transaction, form.Id, upload, ct);
+
+            // All three come from the row we wrote when we held the bytes,
+            // including the size: the number is what was measured, not what
+            // the request said it would be.
+            Set("resume_key", resume.StorageKey);
+            Set("resume_filename", resume.Filename);
+            Set("resume_size", resume.Size);
+            SetNow("resume_uploaded_at");
         }
 
         insert.CommandText =
@@ -191,6 +218,47 @@ public sealed class PostgresSubmissionStore(NpgsqlDataSource dataSource) : ISubm
 
         await transaction.CommitAsync(ct);
         return id;
+    }
+
+    /// <summary>
+    /// Spends one upload, or refuses.
+    /// </summary>
+    /// <remarks>
+    /// One statement, so the check and the spend cannot be separated. Reading
+    /// the row first and updating it after leaves a gap two concurrent submits
+    /// both get through, and what comes out the other side is two applications
+    /// pointing at one person's resume.
+    /// <para>
+    /// The form id is part of the WHERE rather than something asserted
+    /// afterwards. It is what stops an upload made against one form being spent
+    /// on another — the two forms belong to different events, and the resume
+    /// would end up filed under a cycle it was never sent to.
+    /// </para>
+    /// </remarks>
+    private static async Task<(string StorageKey, string Filename, int Size)> ClaimResumeAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid formId,
+        Guid uploadId,
+        CancellationToken ct)
+    {
+        await using var claim = new NpgsqlCommand("""
+            UPDATE applications.resume_uploads
+               SET claimed_at = now()
+             WHERE id = @id AND form_id = @form AND claimed_at IS NULL
+            RETURNING storage_key, filename, size
+            """, connection, transaction);
+
+        claim.Parameters.AddWithValue("id", uploadId);
+        claim.Parameters.AddWithValue("form", formId);
+
+        await using var reader = await claim.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            throw new ResumeUploadNotClaimableException();
+        }
+
+        return (reader.GetString(0), reader.GetString(1), reader.GetInt32(2));
     }
 
     /// <summary>
@@ -247,11 +315,4 @@ public sealed class PostgresSubmissionStore(NpgsqlDataSource dataSource) : ISubm
     private static string[] Choices(JsonElement value) => value.ValueKind == JsonValueKind.Array
         ? [.. value.EnumerateArray().Select(SubmissionValidation.Text)]
         : [];
-
-    private static int? Size(JsonElement value) =>
-        value.ValueKind == JsonValueKind.Object
-        && value.TryGetProperty("size", out var size)
-        && size.TryGetInt32(out var bytes)
-            ? bytes
-            : null;
 }

@@ -65,9 +65,24 @@ param publicBaseUrl string = ''
 @description('Resource id of the identity that pulls images.')
 param pullIdentityId string
 
+@description('''
+Client id of that same identity, which is what the Azure SDK inside atlas needs
+to authenticate as it. A container app with a user-assigned identity attached
+still defaults to the system-assigned one, which holds no roles — so leaving
+this empty makes every resume upload fail as if the role assignment were
+missing.
+''')
+param pullIdentityClientId string
+
 param tags object = {}
 
 var suffix = 'mh-${environmentName}'
+
+// The same expression platform.bicep builds the account from. Duplicated
+// rather than passed, for the same reason the Postgres server is looked up by
+// name here: apps.bicep is deployed on its own, after platform, and must not
+// depend on that deployment's outputs still being available.
+var resumeStorageAccount = 'stmh${environmentName}${uniqueString(subscription().subscriptionId, environmentName)}'
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: registryName
@@ -164,6 +179,16 @@ var portalEnv = empty(publicBaseUrl) ? [] : [
   { name: 'PublicBaseUrl', value: publicBaseUrl }
 ]
 
+// Where resumes go. No key and no connection string: the account name plus the
+// identity is the whole configuration, which is the point of choosing an
+// object store in the subscription we already own. There is nothing here that
+// would be a secret if it leaked.
+var resumeEnv = [
+  { name: 'Resumes__AccountName', value: resumeStorageAccount }
+  { name: 'Resumes__Container', value: 'resumes' }
+  { name: 'Resumes__ClientId', value: pullIdentityClientId }
+]
+
 var sentryEnv = hasSentry ? [
   { name: 'Sentry__Dsn', secretRef: 'sentry-dsn' }
   // The deployed commit, so a spike in errors ties to what shipped rather
@@ -211,7 +236,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
             // blip that restarts every replica turns a recoverable problem
             // into an outage.
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
-          ], sentryEnv, googleEnv, portalEnv)
+          ], sentryEnv, googleEnv, portalEnv, resumeEnv)
           probes: [
             {
               type: 'Liveness'

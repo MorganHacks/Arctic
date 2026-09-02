@@ -13,6 +13,16 @@ public sealed record StatusChange(
     DateTimeOffset At);
 
 /// <summary>
+/// The resume attached to an application, as far as the database knows.
+/// </summary>
+/// <remarks>
+/// A key and a name, and no way to read the bytes. Resolving the key is
+/// <see cref="IResumeStore"/>'s job, and keeping the two apart is what stops a
+/// query that happens to select this record from also handing out a link.
+/// </remarks>
+public sealed record StoredResume(string StorageKey, string Filename, int? Size);
+
+/// <summary>
 /// The Applications module's own tables. Nothing outside this module reads them.
 /// </summary>
 public interface IApplicationStore
@@ -41,4 +51,15 @@ public interface IApplicationStore
 
     Task<IReadOnlyList<StatusChange>> HistoryOfAsync(
         Guid applicationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The resume on an application, or null when there is not one.
+    /// </summary>
+    /// <remarks>
+    /// Null covers both an application nobody uploaded a resume for and an id
+    /// that names no application. The caller is an organizer who already holds
+    /// <c>applications.view_resume</c>, so there is nothing to hide from them —
+    /// they simply have one answer to handle rather than two.
+    /// </remarks>
+    Task<StoredResume?> ResumeOfAsync(Guid applicationId, CancellationToken ct = default);
 }
