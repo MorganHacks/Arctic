@@ -33,6 +33,12 @@ public static class MlhFields
 
     public static IReadOnlyList<FormField> All { get; } =
     [
+        // First because everything else hangs off it. `applications.email` is
+        // NOT NULL and the dedupe index is built on it, so a form that does
+        // not ask for an address cannot create an applicant at all — and it is
+        // also the only way to tell somebody they got in.
+        Column("email", FieldType.Email, "Email", required: true),
+
         Column("first_name", FieldType.ShortText, "First name", required: true),
         Column("last_name", FieldType.ShortText, "Last name", required: true),
         Column("age", FieldType.Number, "Age", required: true),

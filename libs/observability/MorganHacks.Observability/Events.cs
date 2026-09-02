@@ -52,4 +52,16 @@ public static class Events
 
     /// <summary>Somebody was taken off the allowlist and their sessions cut.</summary>
     public const string PersonRevoked = "access.person_revoked";
+
+    /// <summary>
+    /// Somebody finished the application form.
+    /// </summary>
+    /// <remarks>
+    /// The absence to watch during registration week. The form being served
+    /// and the form being completed are separate things, and a bad question,
+    /// a broken validation rule, or a submit button that silently 500s all
+    /// look identical from the outside: traffic arrives, nothing errors, and
+    /// the count of applications stops climbing.
+    /// </remarks>
+    public const string ApplicationSubmitted = "application.submitted";
 }

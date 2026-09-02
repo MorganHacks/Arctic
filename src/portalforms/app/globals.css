@@ -1,0 +1,308 @@
+/*
+ * The public forms site.
+ *
+ * Mobile first, and not as a slogan: this is a link handed out at a club
+ * meeting and opened on a phone, standing up, on campus wifi. Every size below
+ * is written for that screen and widened afterwards, and nothing needs a
+ * pointer or a hover to be usable.
+ *
+ * Every colour comes from the shared tokens. Not one hex is written here, so a
+ * colour cannot come to mean one thing on this page and something else on the
+ * console. Colour carries meaning or it is absent — the accent marks the one
+ * thing to do next, and --stop marks something that went wrong. Nothing is
+ * coloured for decoration, which is why "required" is a word rather than a red
+ * asterisk: being required is not an error, and it should not look like one.
+ */
+
+@import "../../../libs/ui/tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--sunken);
+  color: var(--ink);
+  font-family: var(--font-inter), var(--body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* The page ------------------------------------------------------------- */
+
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 4rem;
+}
+
+@media (min-width: 40rem) {
+  .page {
+    padding: 2.5rem 1.5rem 5rem;
+  }
+}
+
+.masthead {
+  margin-bottom: 1.25rem;
+}
+
+.wordmark {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 0.75rem;
+}
+
+h1 {
+  font-family: var(--display);
+  font-size: 1.65rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+@media (min-width: 40rem) {
+  h1 {
+    font-size: 2rem;
+  }
+}
+
+.lede {
+  color: var(--muted);
+  margin: 0.5rem 0 0;
+}
+
+/* Questions ------------------------------------------------------------ */
+
+/*
+ * A card per question rather than one long card.
+ *
+ * On a phone a thirty-question form is a very long scroll, and unbroken it
+ * gives no sense of progress. Separate blocks also give an error somewhere
+ * obvious to live: against its own question, not stacked at the top where
+ * somebody has to work out which of thirty it means.
+ */
+.question {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.question:focus-within {
+  border-color: var(--muted);
+}
+
+.question.wrong {
+  border-color: var(--stop);
+}
+
+.question > legend,
+.question > .prompt {
+  display: block;
+  font-weight: 500;
+  padding: 0;
+  margin: 0 0 0.35rem;
+}
+
+fieldset.question {
+  min-width: 0;
+}
+
+.optional,
+.needed {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--faint);
+  margin-top: 0.1rem;
+}
+
+.help {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0 0 0.6rem;
+}
+
+/* Controls ------------------------------------------------------------- */
+
+/*
+ * 16px is a hard floor on inputs. Anything smaller makes iOS Safari zoom the
+ * page on focus and never zoom back out, which reads as the page being broken.
+ */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="number"],
+input[type="date"],
+input[type="file"],
+select,
+textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.7rem;
+  min-height: 2.75rem;
+}
+
+textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+select {
+  /* Native, on purpose. A custom dropdown is a keyboard trap waiting to
+     happen and the platform one is what a phone already knows how to open. */
+  appearance: auto;
+}
+
+input.wrong,
+select.wrong,
+textarea.wrong {
+  border-color: var(--stop);
+}
+
+/*
+ * Every tick target is a whole row, so it is comfortably past the 44px a
+ * thumb needs and the label is part of the target rather than a thing to aim
+ * beside.
+ */
+.choice {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.15rem;
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+
+.choice + .choice {
+  border-top: 1px solid var(--line-soft);
+}
+
+.choice input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0.2rem 0 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.choice span {
+  min-width: 0;
+}
+
+/* An agreement is one tick and sixty words. The tick stays with the first
+   line rather than centring itself against a paragraph. */
+.agreement {
+  align-items: flex-start;
+}
+
+.agreement span {
+  font-weight: 400;
+}
+
+/* Messages ------------------------------------------------------------- */
+
+.wrong-note {
+  display: block;
+  color: var(--stop);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.banner {
+  border: 1px solid var(--stop);
+  background: var(--stop-soft);
+  color: var(--stop);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.banner p {
+  margin: 0;
+}
+
+/* Submitting ----------------------------------------------------------- */
+
+.submit {
+  position: sticky;
+  bottom: 0;
+  padding: 1rem 0 0;
+  background: linear-gradient(to bottom, transparent, var(--sunken) 45%);
+}
+
+button[type="submit"] {
+  width: 100%;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 3rem;
+  padding: 0.75rem 1.25rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+button[type="submit"]:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.footnote {
+  color: var(--faint);
+  font-size: 0.8125rem;
+  text-align: center;
+  margin: 0.75rem 0 0;
+}
+
+/* Everything that is not a form ---------------------------------------- */
+
+/*
+ * The states where there is nothing to fill in: an unknown code, a form that
+ * closed, and the page after submitting. Deliberately the same shape, because
+ * all three are one short sentence and a full stop.
+ */
+.notice {
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 4rem 1.25rem;
+  text-align: center;
+}
+
+.notice h1 {
+  margin-bottom: 0.75rem;
+}
+
+.notice p {
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.notice code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.35rem;
+}

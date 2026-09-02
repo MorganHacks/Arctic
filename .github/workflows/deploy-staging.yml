@@ -24,6 +24,10 @@ on:
         description: "Re-run portaladmin (no deploy target yet)"
         type: boolean
         default: false
+      portalforms:
+        description: "Re-run portalforms (no deploy target yet)"
+        type: boolean
+        default: false
       atlas:
         description: "Re-run atlas (deployed by deploy-azure.yml)"
         type: boolean
@@ -112,17 +116,18 @@ jobs:
   # a deploy that did not happen.
   backends:
     needs: claim
-    if: inputs.atlas || inputs.lark || inputs.harbor || inputs.portaladmin
+    if: inputs.atlas || inputs.lark || inputs.harbor || inputs.portaladmin || inputs.portalforms
     runs-on: ubuntu-latest
     steps:
       - name: Not deployable yet
         run: |
-          for s in atlas lark harbor portaladmin; do
+          for s in atlas lark harbor portaladmin portalforms; do
             case "$s" in
               atlas)       want="${{ inputs.atlas }}" ;;
               lark)        want="${{ inputs.lark }}" ;;
               harbor)      want="${{ inputs.harbor }}" ;;
               portaladmin) want="${{ inputs.portaladmin }}" ;;
+              portalforms) want="${{ inputs.portalforms }}" ;;
             esac
             [ "$want" = "true" ] && echo "  $s: requested, but it has no staging deploy target yet."
           done

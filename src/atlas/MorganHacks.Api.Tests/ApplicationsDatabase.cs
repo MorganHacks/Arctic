@@ -21,10 +21,14 @@ public sealed class ApplicationsDatabase : IAsyncLifetime
 
     public NpgsqlDataSource DataSource { get; private set; } = null!;
 
+    /// <summary>Exposed so the API can be pointed at this same database.</summary>
+    public string ConnectionString { get; private set; } = null!;
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
         var connectionString = _container.GetConnectionString();
+        ConnectionString = connectionString;
 
         await using (var bootstrap = NpgsqlDataSource.Create(connectionString))
         await using (var cmd = bootstrap.CreateCommand(
