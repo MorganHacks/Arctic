@@ -1,0 +1,445 @@
+/*
+ * The hacker portal.
+ *
+ * Written mobile first, because that is where applicants are: the link arrives
+ * by email and gets opened on a phone, usually once, usually to check one
+ * thing. Everything below the base rules is an enhancement for a bigger
+ * screen, not a rescue for a small one.
+ *
+ * Deliberately calmer than the recruitment page next door. That page is
+ * persuading somebody; this one is answering them, and a person checking
+ * whether they got in does not want a marketing site. Cool neutrals, one blue
+ * accent, and colour only where it carries meaning — the shared rule from
+ * libs/ui/tokens.css, which is where every value here comes from. Not one hex
+ * is written in this file.
+ */
+
+@import "../../../../libs/ui/tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  /* The public page locks the body to one screen. This one is a document. */
+  height: auto;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), var(--body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.portal {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Chrome ------------------------------------------------------------------ */
+
+.portal__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.15rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--raised);
+}
+
+.portal__brand {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.portal__brand span {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/*
+ * The tabs sit under the bar rather than inside it. Three labels plus a
+ * wordmark plus sign-out do not fit across a 360px phone, and the version that
+ * "fits" does it by shrinking the tap targets to something nobody can hit.
+ */
+.portal__tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0 0.65rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--raised);
+  overflow-x: auto;
+  /* Momentum scrolling without a visible bar, for the narrowest phones where
+     the third tab is just off the edge. */
+  scrollbar-width: none;
+}
+
+.portal__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.portal__tabs a {
+  flex: none;
+  padding: 0.7rem 0.55rem;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+
+.portal__tabs a:hover {
+  color: var(--ink);
+}
+
+/* The current tab is the one thing in the chrome that carries the accent,
+   because it is the one thing in the chrome that means something. */
+.portal__tabs a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+/* Sign-out rides the tab row rather than the bar above it. Wordmark, three
+   tabs and a button do not fit across a 360px phone, and the version that
+   "fits" gets there by shrinking every tap target below the point anybody can
+   hit one. */
+.portal__tabs form {
+  margin: 0 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding-left: 0.75rem;
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 38rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.15rem 3rem;
+}
+
+.portal__foot {
+  border-top: 1px solid var(--line-soft);
+  padding: 1.25rem 1.15rem 2rem;
+  color: var(--faint);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.portal__foot a {
+  color: var(--muted);
+}
+
+/* Type -------------------------------------------------------------------- */
+
+h1 {
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0 0 0.35rem;
+}
+
+h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.6rem;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+.lede {
+  color: var(--muted);
+  margin-bottom: 1.75rem;
+}
+
+.quiet {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* The status panel -------------------------------------------------------- */
+
+/*
+ * The one place on the whole portal that uses the accent for a surface. It is
+ * the answer to the question the person came here to ask, and everything else
+ * on the screen is subordinate to it.
+ */
+.status {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 1.15rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.status__label {
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.4rem;
+}
+
+.status__next {
+  margin: 0;
+  color: var(--muted);
+}
+
+.status__meta {
+  margin: 0.9rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line-soft);
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+/* Panels, lists and forms ------------------------------------------------- */
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 1.15rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.empty {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  padding: 2.25rem 1.25rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.field {
+  margin-bottom: 1.1rem;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  width: 100%;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  /* 16px or larger, or iOS zooms the whole page on focus and the applicant
+     ends up scrolled sideways in the middle of typing. */
+  font-size: 16px;
+  padding: 0.6rem 0.7rem;
+}
+
+textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+}
+
+.hint {
+  margin: 0.35rem 0 0;
+  color: var(--faint);
+  font-size: 0.82rem;
+}
+
+button,
+.button {
+  font: inherit;
+  cursor: pointer;
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--ink);
+  /* Comfortably over the 44px minimum, because this is a phone screen and
+     these are the only two buttons on it. */
+  padding: 0.7rem 1.1rem;
+  text-decoration: none;
+  text-align: center;
+}
+
+button:hover,
+.button:hover {
+  border-color: var(--muted);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  color: var(--faint);
+}
+
+.button.primary,
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 0.9rem;
+}
+
+/* Full width on a phone: a button that shares a row with nothing else may as
+   well be easy to hit. */
+.actions button,
+.actions .button {
+  width: 100%;
+}
+
+/* Messages ---------------------------------------------------------------- */
+
+.messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.messages li {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.messages li:last-child {
+  border-bottom: none;
+}
+
+.messages__subject {
+  font-weight: 500;
+  margin: 0 0 0.2rem;
+}
+
+.messages__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+/* Status of one message. Coloured only when it changes what the person does
+   next: a delivered email needs no action, a bounced one does. */
+.pill {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--sunken);
+}
+
+.pill.delivered {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.pill.failed {
+  color: var(--stop);
+  background: var(--stop-soft);
+}
+
+/* Notices ----------------------------------------------------------------- */
+
+/*
+ * Said rather than shown. A greyed-out form with no explanation is the thing
+ * that generates the email this portal exists to prevent, so every locked or
+ * refused state carries a sentence.
+ */
+.notice {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.notice.problem {
+  border-left-color: var(--stop);
+}
+
+.notice.done {
+  border-left-color: var(--ok);
+}
+
+.notice p:last-child {
+  margin-bottom: 0;
+}
+
+/* Sign-in ----------------------------------------------------------------- */
+
+.signin {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.15rem 3rem;
+}
+
+.signin .panel {
+  width: 100%;
+  max-width: 24rem;
+  margin: 0;
+}
+
+/* Wider screens ----------------------------------------------------------- */
+
+@media (min-width: 40rem) {
+  body {
+    font-size: 17px;
+  }
+
+  .portal__bar,
+  .portal__tabs {
+    padding-inline: 2rem;
+  }
+
+  .portal__tabs a {
+    padding-inline: 0.85rem;
+  }
+
+  main {
+    padding: 2.5rem 2rem 4rem;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  /* Back to sitting on one line, now that there is room for them to. */
+  .actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .actions button,
+  .actions .button {
+    width: auto;
+  }
+}

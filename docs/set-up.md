@@ -113,6 +113,19 @@ npm install
 npm run dev          # http://localhost:3000
 ```
 
+The hacker portal lives here too, at `/portal`. It reaches the API through this
+app's own origin — `next.config.ts` rewrites `/api/*` to harbor — so nothing
+needs to be pointed anywhere else.
+
+Emailed sign-in links are built from `PublicBaseUrl` on atlas, which defaults
+to `http://localhost:3000` and therefore needs nothing set locally. In a
+deployed environment it is the portal's real origin, set from the
+`PUBLIC_BASE_URL` environment variable:
+
+```bash
+export PublicBaseUrl=http://localhost:3000
+```
+
 ---
 
 ## Google sign-in for organizers

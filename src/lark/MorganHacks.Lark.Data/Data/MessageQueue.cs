@@ -230,6 +230,59 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
         return await ExecuteAsync(sql, providerMessageId, ct, detail) > 0;
     }
 
+    /// <summary>
+    /// Every message we have queued for one person, newest first.
+    /// </summary>
+    /// <remarks>
+    /// This exists so "I never got it" has an answer the applicant can read
+    /// themselves, instead of being an email to an organizer who then reads
+    /// the database.
+    /// <para>
+    /// The projection is the contract. Subject, timestamps and status leave
+    /// this method; the rendered bodies never do. A decision letter is in
+    /// those columns, and an endpoint that returned them would be handing the
+    /// whole message back over an interface whose only job is to say whether
+    /// it arrived.
+    /// </para>
+    /// <para>
+    /// Narrowed on <c>person_id</c> rather than on the address. The two agree
+    /// today, but an address can be reassigned and a person id cannot, and
+    /// matching on the address would show whoever holds it next everything we
+    /// ever sent to whoever held it before.
+    /// </para>
+    /// </remarks>
+    public async Task<IReadOnlyList<SentMessage>> HistoryForPersonAsync(
+        Guid personId, int limit = 100, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT id, rendered_subject, created_at, sent_at, status
+              FROM notify.messages
+             WHERE person_id = @personId
+             ORDER BY created_at DESC
+             LIMIT @limit
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("limit", limit);
+
+        var history = new List<SentMessage>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            history.Add(new SentMessage(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetFieldValue<DateTimeOffset>(2),
+                await reader.IsDBNullAsync(3, ct)
+                    ? null
+                    : reader.GetFieldValue<DateTimeOffset>(3),
+                reader.GetString(4)));
+        }
+
+        return history;
+    }
+
     /// <summary>Finds who a provider message was addressed to.</summary>
     public async Task<string?> RecipientOfAsync(
         string providerMessageId, CancellationToken ct = default)
