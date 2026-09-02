@@ -90,15 +90,15 @@ public static class MlhFields
 
     private static FormField Column(
         string key, FieldType type, string label, bool required) => new()
-    {
-        Key = key,
-        Type = type,
-        Label = label,
-        Required = required,
-        Locked = true,
-        Storage = AnswerStorage.Column,
-        Column = key,
-    };
+        {
+            Key = key,
+            Type = type,
+            Label = label,
+            Required = required,
+            Locked = true,
+            Storage = AnswerStorage.Column,
+            Column = key,
+        };
 
     private static FormField Agreement(string key, string label, bool required) => new()
     {
