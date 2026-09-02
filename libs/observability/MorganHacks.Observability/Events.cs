@@ -31,4 +31,25 @@ public static class Events
 
     /// <summary>An address was added to the suppression list.</summary>
     public const string AddressSuppressed = "address.suppressed";
+
+    /// <summary>
+    /// Somebody changed somebody else's access.
+    /// </summary>
+    /// <remarks>
+    /// The permission model requires that every grant change be attributable:
+    /// "who gave this person export at 2am" must have an answer. Until there
+    /// is an audit table these lines are that answer, which is why they carry
+    /// both person ids and never the address — <c>actor</c> did it,
+    /// <c>subject</c> had it done to them.
+    /// </remarks>
+    public const string OrganizerAdded = "access.organizer_added";
+
+    /// <summary>A team membership was added, retimed, or removed.</summary>
+    public const string TeamChanged = "access.team_changed";
+
+    /// <summary>An individual grant was added, retimed, or removed.</summary>
+    public const string GrantChanged = "access.grant_changed";
+
+    /// <summary>Somebody was taken off the allowlist and their sessions cut.</summary>
+    public const string PersonRevoked = "access.person_revoked";
 }

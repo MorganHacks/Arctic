@@ -36,7 +36,94 @@ export async function apiFetch(
   });
 }
 
+/**
+ * Makes a change, and returns what to tell the person if it did not happen.
+ *
+ * Null means it worked. Anything else is a sentence to put on the screen —
+ * the API's own, because the API is the one that knows whether the address was
+ * taken, the team was wrong, or the permission does not exist. Inventing a
+ * message here would mean maintaining a second, worse copy of that knowledge.
+ */
+export async function apiWrite(
+  method: "POST" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<string | null> {
+  let response: Response;
+
+  try {
+    response = await apiFetch(path, {
+      method,
+      ...(body === undefined
+        ? {}
+        : {
+            body: JSON.stringify(body),
+            headers: { "content-type": "application/json" },
+          }),
+    });
+  } catch {
+    return "The API could not be reached. Try again.";
+  }
+
+  if (response.ok) {
+    return null;
+  }
+
+  // 403 is the gate answering, not a fault. Naming the missing permission is
+  // what turns "it doesn't work" into a request an admin can act on.
+  if (response.status === 403) {
+    return "You do not have permission to do that.";
+  }
+
+  if (response.status === 401) {
+    return "Your session has ended. Sign in again.";
+  }
+
+  try {
+    const { error } = (await response.json()) as { error?: string };
+    return error ?? "That did not work.";
+  } catch {
+    return "That did not work.";
+  }
+}
+
 export type Person = { personId: string };
+
+/** A row on the people list. */
+export type Listed = {
+  id: string;
+  kind: string;
+  email: string;
+  revoked: boolean;
+  teams: string[];
+};
+
+/** One person, with everything needed to explain what they can do. */
+export type PersonDetail = {
+  id: string;
+  kind: string;
+  email: string;
+  revoked: boolean;
+  revokedAt: string | null;
+  teams: { slug: string; expiresAt: string | null }[];
+  grants: { permission: string; expiresAt: string | null }[];
+  effective: string[];
+};
+
+export type Team = { slug: string; name: string; permissions: string[] };
+
+/**
+ * Teams and the permissions that exist at all, both from the API.
+ *
+ * The catalogue is deliberately not a constant in this repo. Twenty-three
+ * strings copied into TypeScript drift the moment one is added on the other
+ * side, and the drift is silent: a permission the API enforces that no admin
+ * can ever grant.
+ */
+export type Catalogue = {
+  teams: Team[];
+  permissions: { value: string; sensitive: boolean }[];
+};
 
 /**
  * Who is signed in, or null.
@@ -55,5 +142,27 @@ export async function currentPerson(): Promise<Person | null> {
     return (await response.json()) as Person;
   } catch {
     return null;
+  }
+}
+
+/**
+ * What the signed-in person may do, so the screens can stop offering what they
+ * cannot.
+ *
+ * Cosmetic only. Hiding a button is a courtesy; the API refuses the request
+ * whether or not the button was there, and that refusal is the actual
+ * boundary. Anything that treats this list as the gate has the model backwards.
+ */
+export async function currentPermissions(personId: string): Promise<Set<string>> {
+  try {
+    const response = await apiFetch(`/admin/people/${personId}`);
+    if (!response.ok) {
+      return new Set();
+    }
+
+    const { effective } = (await response.json()) as PersonDetail;
+    return new Set(effective);
+  } catch {
+    return new Set();
   }
 }

@@ -4,18 +4,16 @@
  * This is a console for people who use it every day, not a page anybody is
  * being persuaded by. Density and legibility over character — the moment it
  * competes with portalweb for attention it has gone wrong.
+ *
+ * Every colour comes from the shared tokens. Not one hex is written here, so a
+ * colour cannot come to mean one thing on this screen and something else on
+ * the public site. The tokens follow the reader's theme, which is why this
+ * console is no longer dark-only: an organizer reviewing at 2pm in a bright
+ * room was reading white-on-black because of a decision nobody made on
+ * purpose.
  */
 
-:root {
-  --bg: #0e1013;
-  --panel: #161a1f;
-  --line: #262c34;
-  --text: #e6e9ed;
-  --muted: #8b95a1;
-  --accent: #f4b942;
-  --danger: #e5484d;
-  --radius: 6px;
-}
+@import "../../../libs/ui/tokens.css";
 
 * {
   box-sizing: border-box;
@@ -25,9 +23,9 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), var(--body);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -50,7 +48,7 @@ a {
   gap: 1rem;
   padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  background: var(--raised);
 }
 
 .brand {
@@ -78,12 +76,12 @@ a {
 }
 
 .topbar nav a:hover {
-  color: var(--text);
+  color: var(--ink);
 }
 
 .who {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--step-1);
   font-variant-numeric: tabular-nums;
 }
 
@@ -94,10 +92,16 @@ main {
 }
 
 h1 {
-  font-size: 1.35rem;
+  font-size: var(--step2);
   font-weight: 600;
   letter-spacing: -0.01em;
   margin: 0 0 0.25rem;
+}
+
+h2 {
+  font-size: var(--step0);
+  font-weight: 600;
+  margin: 0 0 0.75rem;
 }
 
 .lede {
@@ -126,9 +130,13 @@ th {
   letter-spacing: 0.04em;
 }
 
+tbody tr:hover {
+  background: var(--sunken);
+}
+
 .empty {
   border: 1px dashed var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: 2.5rem 1.5rem;
   text-align: center;
   color: var(--muted);
@@ -139,8 +147,8 @@ button,
   font: inherit;
   cursor: pointer;
   border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
+  background: var(--raised);
+  color: var(--ink);
   padding: 0.5rem 0.9rem;
   border-radius: var(--radius);
   text-decoration: none;
@@ -152,11 +160,189 @@ button:hover,
   border-color: var(--muted);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  color: var(--faint);
+}
+
 .button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1a1400;
+  color: var(--accent-ink);
   font-weight: 600;
+}
+
+/* The one destructive action on these screens. Its own colour because "this
+   is interactive" and "this cannot be taken back" must never look alike. */
+.button.danger,
+button.danger {
+  color: var(--stop);
+  border-color: var(--stop);
+  background: transparent;
+}
+
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  font-size: var(--step-1);
+}
+
+button.link:hover {
+  color: var(--stop);
+}
+
+input,
+select {
+  font: inherit;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.6rem;
+}
+
+label {
+  display: block;
+  font-size: var(--step-1);
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+/* Panels, forms and rows ---------------------------------------------- */
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.columns {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  align-items: start;
+}
+
+.row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.row > * {
+  min-width: 0;
+}
+
+.grow {
+  flex: 1;
+}
+
+.listing {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.listing li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.listing li:last-child {
+  border-bottom: none;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+
+/* Status. Coloured because it changes what you do next, never for decoration. */
+
+.pill {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius);
+  font-size: var(--step-1);
+  border: 1px solid transparent;
+}
+
+.pill.active {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.pill.revoked {
+  color: var(--stop);
+  background: var(--stop-soft);
+}
+
+.pill.expiring {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.pill.lapsed {
+  color: var(--muted);
+  background: var(--sunken);
+}
+
+/* The four permissions that move PII out of the system or change who may. */
+.pill.sensitive {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.permissions span {
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  background: var(--sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.4rem;
+}
+
+.back {
+  display: inline-block;
+  color: var(--muted);
+  font-size: var(--step-1);
+  margin-bottom: 0.75rem;
+}
+
+.filters {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.count {
+  color: var(--faint);
+  font-size: var(--step-1);
+  margin: 0.75rem 0 0;
 }
 
 /* Sign-in ------------------------------------------------------------- */
@@ -171,9 +357,9 @@ button:hover,
 .card {
   width: 100%;
   max-width: 22rem;
-  background: var(--panel);
+  background: var(--raised);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: 1.75rem;
 }
 
@@ -193,12 +379,12 @@ button:hover,
 
 .note {
   margin-top: 1.25rem;
-  font-size: 0.85rem;
+  font-size: var(--step-1);
   color: var(--muted);
 }
 
 .error {
-  border-left: 2px solid var(--danger);
+  border-left: 2px solid var(--stop);
   padding-left: 0.75rem;
   color: var(--muted);
   margin-bottom: 1.25rem;

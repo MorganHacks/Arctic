@@ -1,0 +1,116 @@
+/*
+ * The design tokens both portals share.
+ *
+ * One file so a colour cannot mean two things in two places. Imported by
+ * portalweb and portaladmin; neither declares a raw hex of its own.
+ *
+ * The rule that shapes the palette: colour carries meaning or it is absent.
+ * Nothing is coloured for decoration. A person scanning a review queue for
+ * eight hours should be able to trust that anything coloured is telling them
+ * something.
+ */
+
+:root {
+  /* Ground and ink. Cool rather than warm — a neutral with a slight blue bias
+     reads as chosen, where a pure grey reads as a default nobody picked. */
+  --paper:      #fcfcfd;
+  --raised:     #ffffff;
+  --sunken:     #f5f7f9;
+  --ink:        #14161a;
+  --muted:      #646d7a;
+  --faint:      #8b939e;
+  --line:       #e3e7ec;
+  --line-soft:  #eef1f4;
+
+  /* One accent, for the thing to do next. Never for emphasis. */
+  --accent:     #2d5bd7;
+  --accent-ink: #ffffff;
+  --accent-soft: #eaf0ff;
+
+  /* Status. Separate from the accent on purpose: "this is interactive" and
+     "this went wrong" must never be the same colour. */
+  --ok:         #1a7f52;
+  --ok-soft:    #e6f4ed;
+  --warn:       #8a6100;
+  --warn-soft:  #fbf2dd;
+  --stop:       #b23b4a;
+  --stop-soft:  #fbe9eb;
+
+  --focus:      #2d5bd7;
+
+  --display: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --body:    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:    ui-mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  --radius:    4px;
+  --radius-lg: 6px;
+
+  --step-1: 0.82rem;
+  --step0:  1rem;
+  --step1:  1.15rem;
+  --step2:  1.4rem;
+  --step3:  1.75rem;
+  --step4:  2.25rem;
+}
+
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    --paper:      #0f1216;
+    --raised:     #161a20;
+    --sunken:     #0b0e12;
+    --ink:        #e8ebef;
+    --muted:      #9aa3b0;
+    --faint:      #6b7480;
+    --line:       #262c34;
+    --line-soft:  #1d2229;
+
+    --accent:     #7fa0f5;
+    --accent-ink: #0f1216;
+    --accent-soft:#1a2340;
+
+    --ok:         #4cc08a;
+    --ok-soft:    #12291f;
+    --warn:       #d6a53a;
+    --warn-soft:  #2a2214;
+    --stop:       #e0697a;
+    --stop-soft:  #2d1519;
+
+    --focus:      #7fa0f5;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:      #0f1216;
+  --raised:     #161a20;
+  --sunken:     #0b0e12;
+  --ink:        #e8ebef;
+  --muted:      #9aa3b0;
+  --faint:      #6b7480;
+  --line:       #262c34;
+  --line-soft:  #1d2229;
+
+  --accent:     #7fa0f5;
+  --accent-ink: #0f1216;
+  --accent-soft:#1a2340;
+
+  --ok:         #4cc08a;
+  --ok-soft:    #12291f;
+  --warn:       #d6a53a;
+  --warn-soft:  #2a2214;
+  --stop:       #e0697a;
+  --stop-soft:  #2d1519;
+
+  --focus:      #7fa0f5;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
