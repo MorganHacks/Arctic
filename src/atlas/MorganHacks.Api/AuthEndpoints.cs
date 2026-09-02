@@ -265,8 +265,29 @@ public static class AuthEndpoints
         return Results.Ok(new { signedOut = true });
     }
 
+    /// <summary>
+    /// Who is signed in, and what they may do.
+    /// </summary>
+    /// <remarks>
+    /// The permissions ride along because "what may I do" is a question about
+    /// yourself, and answering it must not require permission to read anybody.
+    /// The console used to work this out by fetching its own person record
+    /// from <c>/admin/people/{id}</c>, which needs <c>people.view</c> — so
+    /// somebody on the registration team, who holds <c>forms.manage</c> and
+    /// not <c>people.view</c>, got an empty list back and had every button
+    /// they were entitled to hidden from them.
+    /// <para>
+    /// Cosmetic either way. The gate refuses the request whether or not the
+    /// button was drawn, and that refusal is the actual boundary — this only
+    /// stops the console offering what it knows will be refused, and stops it
+    /// hiding what will not be.
+    /// </para>
+    /// </remarks>
     private static async Task<IResult> WhoAmI(
-        SessionService sessions, HttpContext http, CancellationToken ct)
+        SessionService sessions,
+        PermissionService permissions,
+        HttpContext http,
+        CancellationToken ct)
     {
         var token = http.Request.Cookies[SessionCookie];
         if (string.IsNullOrEmpty(token))
@@ -275,8 +296,17 @@ public static class AuthEndpoints
         }
 
         var result = await sessions.ValidateAsync(token, ct);
-        return result.Accepted
-            ? Results.Ok(new { personId = result.PersonId })
-            : Results.Unauthorized();
+        if (!result.Accepted)
+        {
+            return Results.Unauthorized();
+        }
+
+        var effective = await permissions.ForAsync(result.PersonId, ct);
+
+        return Results.Ok(new
+        {
+            personId = result.PersonId,
+            permissions = effective.Granted.Select(p => p.Value).OrderBy(p => p),
+        });
     }
 }

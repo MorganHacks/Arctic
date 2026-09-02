@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { apiFetch, currentPerson, currentPermissions, type Listed } from "@/lib/api";
+import { apiFetch, currentPerson, type Listed } from "@/lib/api";
 import { Shell } from "../shell";
 import { AddOrganizer } from "./add-organizer";
 import { PeopleTable } from "./people-table";
@@ -37,10 +37,6 @@ export default async function People() {
 
   const { people } = (await response.json()) as { people: Listed[] };
 
-  // Cosmetic. The API refuses the write whether or not this form rendered, so
-  // hiding it is a courtesy to someone who cannot use it rather than a control.
-  const mine = await currentPermissions(person.personId);
-
   return (
     <Shell personId={person.personId}>
       <h1>People</h1>
@@ -49,7 +45,10 @@ export default async function People() {
         link by email.
       </p>
 
-      {mine.has("people.manage_teams") ? <AddOrganizer /> : null}
+      {/* Cosmetic. The API refuses the write whether or not this form
+          rendered, so hiding it is a courtesy to someone who cannot use it
+          rather than a control. */}
+      {person.permissions.has("people.manage_teams") ? <AddOrganizer /> : null}
 
       {people.length === 0 ? (
         <div className="empty">Nobody yet.</div>

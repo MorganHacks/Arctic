@@ -1,14 +1,17 @@
 using System.Net;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using MorganHacks.Api;
+using MorganHacks.Applications.Data;
+using MorganHacks.Applications.Forms;
+using MorganHacks.Applications.Services;
 using MorganHacks.Audit;
 using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
 using MorganHacks.Api.Webhooks;
 using MorganHacks.Observability;
-using MorganHacks.Applications.Data;
-using MorganHacks.Applications.Services;
 using MorganHacks.Lark.Data.Data;
 using Npgsql;
 
@@ -78,6 +81,23 @@ builder.Services.AddAuditTrail();
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
+
+// Singletons, because both hold nothing but the data source — which is itself
+// a singleton owning the connection pool. Scoping them would build a new
+// wrapper per request around the same pool for no reason.
+builder.Services.AddSingleton<IFormStore, PostgresFormStore>();
+builder.Services.AddSingleton<IEventStore, PostgresEventStore>();
+
+// Enums cross the wire as names, matching how PostgresFormStore writes them
+// to the column. A form field's type would otherwise be a 6 in the JSON and a
+// "consent" in the database, so the builder would be reading and writing
+// numbers that mean nothing on screen and change meaning if the enum is ever
+// reordered.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+});
 
 // The applicant's own view of their application. Registered separately from
 // the organizers' store because it is a different surface with the opposite
@@ -154,6 +174,7 @@ app.MapAuth();
 app.MapPortal();
 app.MapPeopleAdmin();
 app.MapAuditTrail();
+app.MapFormsAdmin();
 app.MapSesWebhook();
 app.MapGoogle();
 

@@ -21,6 +21,7 @@ export function Shell({
             order to ask for it. */}
         <nav>
           <Link href="/people">People</Link>
+          <Link href="/forms">Forms</Link>
           <Link href="/audit">Audit</Link>
         </nav>
         {/* The person id rather than their address. Everything else in this

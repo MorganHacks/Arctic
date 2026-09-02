@@ -21,10 +21,21 @@ public sealed class ApplicationsDatabase : IAsyncLifetime
 
     public NpgsqlDataSource DataSource { get; private set; } = null!;
 
+    /// <summary>Exposed so the API can be pointed at this same database.</summary>
+    /// <remarks>
+    /// The form builder's tests need both halves at once: the gate reads
+    /// identity, and the form it is guarding lives in applications. This
+    /// fixture already runs every migration, so it has both — spinning the API
+    /// up against a second container would only mean a permission check that
+    /// cannot see the form it just refused.
+    /// </remarks>
+    public string ConnectionString { get; private set; } = null!;
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
         var connectionString = _container.GetConnectionString();
+        ConnectionString = connectionString;
 
         await using (var bootstrap = NpgsqlDataSource.Create(connectionString))
         await using (var cmd = bootstrap.CreateCommand(
@@ -72,6 +83,35 @@ public sealed class ApplicationsDatabase : IAsyncLifetime
             "INSERT INTO identity.people (kind, email) VALUES ('organizer', @e) RETURNING id");
         cmd.Parameters.AddWithValue("e", email);
         return (Guid)(await cmd.ExecuteScalarAsync())!;
+    }
+
+    /// <summary>Adds a person to one of the seeded teams.</summary>
+    /// <remarks>
+    /// Teams rather than direct grants wherever a test is about who may do
+    /// something, because the baselines are the thing that will actually be in
+    /// production. A test that grants <c>forms.manage</c> by hand passes
+    /// whether or not the migration that puts it on the registration team ever
+    /// ran.
+    /// </remarks>
+    public async Task AddToTeamAsync(Guid personId, string slug)
+    {
+        await using var cmd = DataSource.CreateCommand("""
+            INSERT INTO identity.team_members (person_id, team_id)
+            SELECT @personId, id FROM identity.teams WHERE slug = @slug
+            """);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("slug", slug);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>Grants one permission directly, for the cases about exactly one.</summary>
+    public async Task GrantAsync(Guid personId, string permission)
+    {
+        await using var cmd = DataSource.CreateCommand(
+            "INSERT INTO identity.grants (person_id, permission) VALUES (@p, @perm)");
+        cmd.Parameters.AddWithValue("p", personId);
+        cmd.Parameters.AddWithValue("perm", permission);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     /// <summary>Fills in the fields a submitted application is required to have.</summary>
