@@ -22,27 +22,99 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     };
 
     private const string Columns =
-        "id, event_id, version, status, fields, created_at, published_at";
+        "id, form_id, version, status, fields, created_at, published_at";
 
-    public async Task<FormVersion?> PublishedAsync(Guid eventId, CancellationToken ct = default)
+    private const string FormColumns = "id, event_id, code, name, kind, closes_at";
+
+    public async Task<Form> CreateAsync(
+        Guid eventId, string name, string kind, Guid? actorId, CancellationToken ct = default)
+    {
+        // Retried on collision rather than checked first. Seven characters from
+        // a thirty-two character alphabet is a collision every few million
+        // forms, so a loop that almost never runs beats a round trip that
+        // always does — and the unique index is what makes it correct either
+        // way.
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await using var cmd = dataSource.CreateCommand(
+                    $"INSERT INTO applications.forms (event_id, code, name, kind, created_by) "
+                    + $"VALUES (@eventId, @code, @name, @kind, @actorId) RETURNING {FormColumns}");
+                cmd.Parameters.AddWithValue("eventId", eventId);
+                cmd.Parameters.AddWithValue("code", FormCode.Next());
+                cmd.Parameters.AddWithValue("name", name);
+                cmd.Parameters.AddWithValue("kind", kind);
+                cmd.Parameters.AddWithValue("actorId", (object?)actorId ?? DBNull.Value);
+
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                await reader.ReadAsync(ct);
+                return ReadForm(reader);
+            }
+            catch (PostgresException e) when (e.SqlState == "23505" && attempt < 5
+                                              && e.ConstraintName?.Contains("code") == true)
+            {
+                // Only a code collision is worth retrying. One application form
+                // per event is a different unique index and a real error.
+            }
+        }
+    }
+
+    public async Task<Form?> ByCodeAsync(string code, CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand(
+            $"SELECT {FormColumns} FROM applications.forms WHERE code = @code");
+        cmd.Parameters.AddWithValue("code", code.Trim().ToLowerInvariant());
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? ReadForm(reader) : null;
+    }
+
+    public async Task<IReadOnlyList<Form>> ForEventAsync(
+        Guid eventId, CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand(
+            $"SELECT {FormColumns} FROM applications.forms "
+            + "WHERE event_id = @eventId ORDER BY kind, name");
+        cmd.Parameters.AddWithValue("eventId", eventId);
+
+        var forms = new List<Form>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            forms.Add(ReadForm(reader));
+        }
+
+        return forms;
+    }
+
+    private static Form ReadForm(NpgsqlDataReader reader) => new(
+        reader.GetGuid(0),
+        reader.GetGuid(1),
+        reader.GetString(2),
+        reader.GetString(3),
+        reader.GetString(4),
+        reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5));
+
+    public async Task<FormVersion?> PublishedAsync(Guid formId, CancellationToken ct = default)
     {
         await using var cmd = dataSource.CreateCommand(
             $"SELECT {Columns} FROM applications.form_versions "
-            + "WHERE event_id = @eventId AND status = 'published'");
-        cmd.Parameters.AddWithValue("eventId", eventId);
+            + "WHERE form_id = @formId AND status = 'published'");
+        cmd.Parameters.AddWithValue("formId", formId);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? Read(reader) : null;
     }
 
     public async Task<FormVersion> DraftAsync(
-        Guid eventId, Guid? actorId, CancellationToken ct = default)
+        Guid formId, Guid? actorId, CancellationToken ct = default)
     {
         await using (var cmd = dataSource.CreateCommand(
             $"SELECT {Columns} FROM applications.form_versions "
-            + "WHERE event_id = @eventId AND status = 'draft'"))
+            + "WHERE form_id = @formId AND status = 'draft'"))
         {
-            cmd.Parameters.AddWithValue("eventId", eventId);
+            cmd.Parameters.AddWithValue("formId", formId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
             {
@@ -50,22 +122,23 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
             }
         }
 
-        var published = await PublishedAsync(eventId, ct);
+        var published = await PublishedAsync(formId, ct);
         var seed = published?.Fields ?? MlhFields.All;
 
         const string insert = """
             INSERT INTO applications.form_versions
-                (event_id, version, status, fields, created_by)
+                (form_id, event_id, version, status, fields, created_by)
             VALUES (
-                @eventId,
+                @formId,
+                (SELECT event_id FROM applications.forms WHERE id = @formId),
                 coalesce((SELECT max(version) FROM applications.form_versions
-                           WHERE event_id = @eventId), 0) + 1,
+                           WHERE form_id = @formId), 0) + 1,
                 'draft', @fields::jsonb, @actorId)
-            RETURNING id, event_id, version, status, fields, created_at, published_at
+            RETURNING id, form_id, version, status, fields, created_at, published_at
             """;
 
         await using var create = dataSource.CreateCommand(insert);
-        create.Parameters.AddWithValue("eventId", eventId);
+        create.Parameters.AddWithValue("formId", formId);
         create.Parameters.AddWithValue("fields", JsonSerializer.Serialize(seed, Json));
         create.Parameters.AddWithValue("actorId", (object?)actorId ?? DBNull.Value);
 
@@ -75,22 +148,22 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     }
 
     public async Task SaveDraftAsync(
-        Guid eventId, IReadOnlyList<FormField> fields, CancellationToken ct = default)
+        Guid formId, IReadOnlyList<FormField> fields, CancellationToken ct = default)
     {
         // Only the draft. A published form is frozen by a trigger as well, so
         // this narrowing is convenience rather than the guarantee.
         await using var cmd = dataSource.CreateCommand(
             "UPDATE applications.form_versions SET fields = @fields::jsonb "
-            + "WHERE event_id = @eventId AND status = 'draft'");
-        cmd.Parameters.AddWithValue("eventId", eventId);
+            + "WHERE form_id = @formId AND status = 'draft'");
+        cmd.Parameters.AddWithValue("formId", formId);
         cmd.Parameters.AddWithValue("fields", JsonSerializer.Serialize(fields, Json));
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task<FormVersion> PublishAsync(
-        Guid eventId, Guid? actorId, CancellationToken ct = default)
+        Guid formId, Guid? actorId, CancellationToken ct = default)
     {
-        var draft = await DraftAsync(eventId, actorId, ct);
+        var draft = await DraftAsync(formId, actorId, ct);
 
         var problems = FormValidation.Check(draft.Fields);
         if (problems.Count > 0)
@@ -108,9 +181,9 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
         // swapping cleanly.
         await using (var cmd = new NpgsqlCommand(
             "UPDATE applications.form_versions SET status = 'retired' "
-            + "WHERE event_id = @eventId AND status = 'published'", connection, transaction))
+            + "WHERE form_id = @formId AND status = 'published'", connection, transaction))
         {
-            cmd.Parameters.AddWithValue("eventId", eventId);
+            cmd.Parameters.AddWithValue("formId", formId);
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
@@ -118,7 +191,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
             UPDATE applications.form_versions
                SET status = 'published', published_at = now(), published_by = @actorId
              WHERE id = @id
-            RETURNING id, event_id, version, status, fields, created_at, published_at
+            RETURNING id, form_id, version, status, fields, created_at, published_at
             """;
 
         FormVersion published;
@@ -136,12 +209,12 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     }
 
     public async Task<IReadOnlyList<FormVersion>> HistoryAsync(
-        Guid eventId, CancellationToken ct = default)
+        Guid formId, CancellationToken ct = default)
     {
         await using var cmd = dataSource.CreateCommand(
             $"SELECT {Columns} FROM applications.form_versions "
-            + "WHERE event_id = @eventId ORDER BY version DESC");
-        cmd.Parameters.AddWithValue("eventId", eventId);
+            + "WHERE form_id = @formId ORDER BY version DESC");
+        cmd.Parameters.AddWithValue("formId", formId);
 
         var versions = new List<FormVersion>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
