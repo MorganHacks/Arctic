@@ -70,6 +70,16 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
         return await reader.ReadAsync(ct) ? ReadForm(reader) : null;
     }
 
+    public async Task<Form?> ByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand(
+            $"SELECT {FormColumns} FROM applications.forms WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", id);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? ReadForm(reader) : null;
+    }
+
     public async Task<IReadOnlyList<Form>> ForEventAsync(
         Guid eventId, CancellationToken ct = default)
     {

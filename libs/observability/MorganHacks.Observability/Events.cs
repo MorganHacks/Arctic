@@ -58,4 +58,29 @@ public static class Events
 
     /// <summary>Somebody was taken off the allowlist and their sessions cut.</summary>
     public const string PersonRevoked = "access.person_revoked";
+
+    /// <summary>A form was made, and got the code that goes on a flyer.</summary>
+    public const string FormCreated = "form.created";
+
+    /// <summary>
+    /// A draft's questions were written.
+    /// </summary>
+    /// <remarks>
+    /// The builder autosaves, so this is chatty by design and is not worth
+    /// alerting on by itself. It is worth having: when somebody asks why the
+    /// form changed the evening before launch, this is the only record of who
+    /// was typing and when.
+    /// </remarks>
+    public const string FormDraftSaved = "form.draft_saved";
+
+    /// <summary>
+    /// A form went live in front of applicants.
+    /// </summary>
+    /// <remarks>
+    /// The one in this group worth watching. Every application records the
+    /// version it answered, so a publish is the moment two applicants stop
+    /// having been asked the same thing — and if one lands during registration
+    /// somebody should know without being told.
+    /// </remarks>
+    public const string FormPublished = "form.published";
 }
