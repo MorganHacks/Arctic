@@ -34,6 +34,52 @@ public static class AuthEndpoints
     public sealed record MagicLinkRequest(string Email);
 
     /// <summary>
+    /// Where the browser is, as opposed to where this service is.
+    /// </summary>
+    /// <remarks>
+    /// The portal origin, never harbor's. Everything a person clicks has to
+    /// stay on one hostname: the session cookie is host-only and SameSite=Lax,
+    /// so a link that lands on the API's own origin sets a cookie the portal
+    /// will never be sent.
+    /// <para>
+    /// The localhost default is for development, where the Next app runs on
+    /// 3000 and proxies the API. In a deployed environment this is
+    /// <c>PublicBaseUrl</c>, threaded through Bicep from the
+    /// <c>PUBLIC_BASE_URL</c> environment variable exactly as
+    /// <c>Google:RedirectUri</c> is — before that it silently defaulted here
+    /// and every emailed link pointed at a machine nobody was running.
+    /// </para>
+    /// </remarks>
+    private static string PublicBaseUrl(IConfiguration config) =>
+        (config["PublicBaseUrl"] ?? "http://localhost:3000").TrimEnd('/');
+
+    /// <summary>
+    /// The path the emailed link points at, on the portal's origin.
+    /// </summary>
+    /// <remarks>
+    /// Carries the <c>/api</c> prefix because that is the path the portal
+    /// proxies to harbor — atlas's own route is <c>/auth/consume</c>, and the
+    /// browser's is <c>/api/auth/consume</c>. Without the prefix the link
+    /// lands on a Next.js 404 and the account looks broken rather than the
+    /// URL.
+    /// </remarks>
+    private const string ConsumePath = "/api/auth/consume";
+
+    /// <summary>Where a consumed link puts them.</summary>
+    private const string PortalPath = "/portal";
+
+    /// <summary>
+    /// Where a link that did not work puts them.
+    /// </summary>
+    /// <remarks>
+    /// One destination for every rejection, matching the one message the
+    /// endpoint used to return: expired, already used and never existed are
+    /// not told apart, because telling them apart only helps somebody probing
+    /// tokens. The query flag says a link failed, never which way.
+    /// </remarks>
+    private const string SignInPath = "/portal/sign-in?link=expired";
+
+    /// <summary>
     /// Per-address request counter, checked before any database work.
     /// </summary>
     /// <remarks>
@@ -125,10 +171,9 @@ public static class AuthEndpoints
 
         if (issued is not null)
         {
-            var baseUrl = config["PublicBaseUrl"] ?? "http://localhost:3000";
             await email.SendMagicLinkAsync(
                 issued.PersonId, request.Email,
-                $"{baseUrl}/auth/consume?token={issued.Token}", ct);
+                $"{PublicBaseUrl(config)}{ConsumePath}?token={issued.Token}", ct);
         }
         else
         {
@@ -143,29 +188,44 @@ public static class AuthEndpoints
         });
     }
 
+    /// <summary>
+    /// Spends a link and puts the person on their portal.
+    /// </summary>
+    /// <remarks>
+    /// Redirects rather than answering JSON, because the only caller is a
+    /// browser following a link out of an email. A person clicking "Sign in to
+    /// MorganHacks" and landing on <c>{"signedIn":true}</c> has been shown the
+    /// implementation and given nothing to do next.
+    /// <para>
+    /// Absolute, built from the same <see cref="PublicBaseUrl"/> the emailed
+    /// link was, so the two cannot disagree about which host this environment
+    /// is. A relative Location would work through the proxy and break for
+    /// anyone reaching atlas directly.
+    /// </para>
+    /// </remarks>
     private static async Task<IResult> ConsumeMagicLink(
         string? token,
         MagicLinkService links,
         SessionService sessions,
         HttpContext http,
+        IConfiguration config,
         ILogger<MagicLinkRequest> log,
         CancellationToken ct)
     {
+        var baseUrl = PublicBaseUrl(config);
+
         if (string.IsNullOrWhiteSpace(token))
         {
-            return Results.BadRequest(new { error = "Missing token." });
+            return Results.Redirect($"{baseUrl}{SignInPath}");
         }
 
         var result = await links.ConsumeAsync(token, ct);
         if (!result.Accepted)
         {
-            // One message for every rejection. Telling the caller whether a
-            // token was expired, already used, or never existed only helps
+            // One destination for every rejection. Telling the caller whether
+            // a token was expired, already used, or never existed only helps
             // somebody probing them.
-            return Results.BadRequest(new
-            {
-                error = "That sign-in link is no longer valid. Request a new one.",
-            });
+            return Results.Redirect($"{baseUrl}{SignInPath}");
         }
 
         var sessionToken = await sessions.StartAsync(
@@ -189,7 +249,7 @@ public static class AuthEndpoints
         log.LogInformation(
             "Signed in from a link. {event}", Events.MagicLinkConsumed);
 
-        return Results.Ok(new { signedIn = true });
+        return Results.Redirect($"{baseUrl}{PortalPath}");
     }
 
     private static async Task<IResult> Logout(

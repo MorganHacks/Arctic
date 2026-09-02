@@ -65,4 +65,77 @@ public static class ApplicantView
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
         };
     }
+
+    /// <summary>
+    /// What the applicant should do next, or what they are waiting for.
+    /// </summary>
+    /// <remarks>
+    /// Next to <see cref="Describe"/> rather than in the portal, for the same
+    /// reason: this is applicant-facing copy the team has to be able to change
+    /// in one place, and a status line that says "Application received" beside
+    /// a paragraph written somewhere else is how the two come to disagree.
+    /// <para>
+    /// The announcement gate is repeated here rather than inferred. A sentence
+    /// telling somebody to watch for a decision, shown only to those already
+    /// decided, would leak the decision through its own helpfulness.
+    /// </para>
+    /// <para>
+    /// Every line here is a draft pending sign-off. Nothing in it promises a
+    /// date we have not published.
+    /// </para>
+    /// </remarks>
+    public static string NextStep(
+        ApplicationStatus status,
+        bool decisionsAnnounced = false,
+        DateTimeOffset? rsvpDeadline = null,
+        DateTimeOffset? eventStartsAt = null)
+    {
+        if (!decisionsAnnounced && status is ApplicationStatus.Accepted
+            or ApplicationStatus.Rejected or ApplicationStatus.Waitlisted)
+        {
+            return Waiting;
+        }
+
+        return status switch
+        {
+            ApplicationStatus.Incomplete =>
+                "Finish your application to be considered. You can come back to "
+                + "it as often as you like until you submit.",
+            ApplicationStatus.Submitted or ApplicationStatus.UnderReview => Waiting,
+            ApplicationStatus.Accepted => rsvpDeadline is { } by
+                ? $"You have a spot. Confirm it by {by:MMMM d} or it goes to "
+                  + "somebody on the waitlist."
+                : "You have a spot. We will email you how to confirm it.",
+            ApplicationStatus.Confirmed => eventStartsAt is { } on
+                ? $"Nothing to do. We will email you the details before {on:MMMM d}."
+                : "Nothing to do. We will email you the details closer to the event.",
+            ApplicationStatus.Waitlisted =>
+                "Keep an eye on your email. Spots open up as people drop out, "
+                + "and we work down the list in order.",
+            ApplicationStatus.Rejected =>
+                "We could not offer you a spot this year. Applying again next "
+                + "year does not count against you.",
+            ApplicationStatus.Expired =>
+                "The window to confirm has closed. Email us if you still want "
+                + "to come — we would rather hear from you than not.",
+            ApplicationStatus.Declined or ApplicationStatus.Withdrawn =>
+                "Your application is closed at your request. Email us if that "
+                + "was a mistake.",
+            ApplicationStatus.CheckedIn => "You are checked in. Enjoy the event.",
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
+        };
+    }
+
+    /// <summary>
+    /// Said to everybody whose application is in, decided or not.
+    /// </summary>
+    /// <remarks>
+    /// One constant rather than the same sentence written twice, because the
+    /// two cases it covers must stay word for word identical: an applicant
+    /// comparing screens with a friend is the threat model the whole mapping
+    /// exists for.
+    /// </remarks>
+    private const string Waiting =
+        "Nothing to do. We are reading applications and will email everybody "
+        + "on the same day.";
 }

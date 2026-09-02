@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { Inter, Instrument_Serif } from "next/font/google";
 import { siteConfig } from "@/site.config";
-import "./globals.css";
+
+// No stylesheet here on purpose. This app serves two things with nothing in
+// common but a hostname — the public page and the hacker portal — and each
+// route group brings its own. globals.css locks the body to one screen, which
+// is right for the recruitment page and would leave the portal unable to
+// scroll past the fold.
 
 const inter = Inter({
   subsets: ["latin"],

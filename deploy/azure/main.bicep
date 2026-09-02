@@ -55,6 +55,13 @@ param googleClientSecret string = ''
 @description('Where Google sends the browser back. The admin app origin, not harbor.')
 param googleRedirectUri string = ''
 
+@description('''
+Where applicants are, as opposed to where the API is: the portalweb origin.
+Emailed sign-in links are built from this, so an empty or wrong value sends
+every hacker to a link that goes nowhere.
+''')
+param publicBaseUrl string = ''
+
 @description('Postgres major version. Keep this the same as docker-compose and the tests.')
 param postgresVersion string = '18'
 
@@ -180,6 +187,7 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     googleClientId: googleClientId
     googleClientSecret: googleClientSecret
     googleRedirectUri: googleRedirectUri
+    publicBaseUrl: publicBaseUrl
     pullIdentityId: pullIdentity.outputs.id
     tags: commonTags
   }

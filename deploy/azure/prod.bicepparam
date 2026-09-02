@@ -22,5 +22,8 @@ param googleClientId = readEnvironmentVariable('GOOGLE_CLIENT_ID', '')
 param googleClientSecret = readEnvironmentVariable('GOOGLE_CLIENT_SECRET', '')
 param googleRedirectUri = readEnvironmentVariable('GOOGLE_REDIRECT_URI', '')
 
+// The portalweb origin. Emailed sign-in links are built from it.
+param publicBaseUrl = readEnvironmentVariable('PUBLIC_BASE_URL', '')
+
 param deployPlatform = bool(readEnvironmentVariable('DEPLOY_PLATFORM', 'true'))
 param deployApps = bool(readEnvironmentVariable('DEPLOY_APPS', 'true'))

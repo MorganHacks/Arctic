@@ -51,6 +51,17 @@ because the admin app proxies the API from its own origin.
 ''')
 param googleRedirectUri string = ''
 
+@description('''
+The origin applicants reach the portal on — portalweb, not harbor.
+
+Emailed sign-in links are built from this, and the link both sets the session
+cookie and lands the person on /portal, so it has to be the host they will
+actually be browsing: a cookie set on the API's own origin is one the portal is
+never sent. Empty falls back to http://localhost:3000 in atlas, which in a
+deployed environment means every link points at a machine nobody is running.
+''')
+param publicBaseUrl string = ''
+
 @description('Resource id of the identity that pulls images.')
 param pullIdentityId string
 
@@ -145,6 +156,14 @@ var googleEnv = hasGoogle ? [
   { name: 'Google__RedirectUri', value: googleRedirectUri }
 ] : []
 
+// Plain rather than absent-when-empty, unlike the secrets above: this is not a
+// secret, so it needs no Container Apps secret entry, and atlas has a working
+// localhost default for it. An empty value is a misconfiguration worth seeing
+// in the template rather than a deployment worth blocking.
+var portalEnv = empty(publicBaseUrl) ? [] : [
+  { name: 'PublicBaseUrl', value: publicBaseUrl }
+]
+
 var sentryEnv = hasSentry ? [
   { name: 'Sentry__Dsn', secretRef: 'sentry-dsn' }
   // The deployed commit, so a spike in errors ties to what shipped rather
@@ -192,7 +211,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
             // blip that restarts every replica turns a recoverable problem
             // into an outage.
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
-          ], sentryEnv, googleEnv)
+          ], sentryEnv, googleEnv, portalEnv)
           probes: [
             {
               type: 'Liveness'

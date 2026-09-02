@@ -30,8 +30,15 @@ public class AuthEndpointTests(IdentityDatabase db)
         return Task.CompletedTask;
     }
 
+    // AllowAutoRedirect off because /auth/consume now answers with one. Left
+    // on, the handler would chase the Location to the portal origin, which is
+    // not this test server and is not what is under test.
     private HttpClient Client() => _app.CreateClient(
-        new WebApplicationFactoryClientOptions { HandleCookies = false });
+        new WebApplicationFactoryClientOptions
+        {
+            HandleCookies = false,
+            AllowAutoRedirect = false,
+        });
 
     private static string Unique() => $"auth-{Guid.NewGuid():N}@example.com";
 
@@ -79,16 +86,19 @@ public class AuthEndpointTests(IdentityDatabase db)
     }
 
     [Fact]
-    public async Task Every_bad_token_gets_the_same_message()
+    public async Task Every_bad_token_lands_in_the_same_place()
     {
         // Distinguishing expired from already-used from never-existed only
-        // helps somebody probing tokens.
+        // helps somebody probing tokens. The endpoint redirects now rather
+        // than answering JSON, so "one message" has become "one destination"
+        // — the property is the same and so is the reason for it.
         var client = Client();
         var invented = await client.GetAsync("/auth/consume?token=not-a-real-token");
         var empty = await client.GetAsync("/auth/consume");
 
-        Assert.Equal(HttpStatusCode.BadRequest, invented.StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        Assert.Equal(HttpStatusCode.Found, invented.StatusCode);
+        Assert.Equal(HttpStatusCode.Found, empty.StatusCode);
+        Assert.Equal(invented.Headers.Location, empty.Headers.Location);
     }
 
     [Fact]
@@ -111,7 +121,11 @@ public class AuthEndpointTests(IdentityDatabase db)
         Assert.NotNull(token);
 
         var response = await Client().GetAsync($"/auth/consume?token={token}");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // A link clicked in an email is a browser navigation, so the answer is
+        // the portal rather than a JSON body the person cannot act on.
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.EndsWith("/portal", response.Headers.Location!.ToString(), StringComparison.Ordinal);
 
         var cookie = Assert.Single(
             response.Headers.GetValues("Set-Cookie"),
@@ -123,8 +137,11 @@ public class AuthEndpointTests(IdentityDatabase db)
         // Lax rather than Strict: Strict drops the cookie on the navigation a
         // magic link produces, so the user lands logged out.
         Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
-        // The raw token must never appear anywhere but the cookie itself.
+        // The raw token must never appear anywhere but the cookie itself —
+        // including the Location header, which lands in browser history and
+        // in every proxy log between here and them.
         Assert.DoesNotContain(token!, await response.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(token!, response.Headers.Location!.ToString());
 
         _ = personId;
     }
@@ -143,7 +160,10 @@ public class AuthEndpointTests(IdentityDatabase db)
         var first = await Client().GetAsync($"/auth/consume?token={token}");
         var second = await Client().GetAsync($"/auth/consume?token={token}");
 
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+        // Both redirect; where they redirect to is the difference. The second
+        // click lands on sign-in, which is what a link scanner having already
+        // opened the mail looks like from the person's side.
+        Assert.EndsWith("/portal", first.Headers.Location!.ToString(), StringComparison.Ordinal);
+        Assert.Contains("/portal/sign-in", second.Headers.Location!.ToString(), StringComparison.Ordinal);
     }
 }
