@@ -185,9 +185,21 @@ deploying.
 
 | Trigger | Goes to |
 |---|---|
-| push to `staging` | staging, no approval |
-| push to `main` | production, after a required review |
-| manual dispatch | either, and takes a tag — an older tag is a rollback |
+| merge to `main` | staging, automatically |
+| manual dispatch | staging, or production behind a required review |
+| manual dispatch with a tag | an older tag — this is a rollback |
+
+**Merging deploys staging, never production.** Staging mirrors main, which is
+what makes it a rehearsal of what production will become. Promoting to
+production is a decision somebody makes, not a side effect of merging a pull
+request.
+
+It watches `main` rather than the `staging` branch, and that is not an
+oversight. The `staging` branch is fast-forwarded by `mirror-staging.yml` using
+the default `GITHUB_TOKEN`, and GitHub deliberately does not fire `push`
+workflows for pushes made with that token — its guard against a workflow
+triggering itself forever. A deploy watching `staging` would therefore never
+run at all, which is exactly what happened.
 
 Running `deploy.sh` by hand still works and is the right tool when something is
 broken. It is not how a normal deploy should happen: a deploy that depends on

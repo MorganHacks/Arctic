@@ -5,9 +5,14 @@
 # having logged into the right account — and it leaves no record of what was
 # deployed or by whom.
 #
-#   staging     automatically, whenever the staging branch moves
-#   production  on merge to main, behind whatever approval the Production
-#               environment requires
+#   staging     automatically, on every merge to main
+#   production  only when somebody asks for it, behind the approval the
+#               Production environment requires
+#
+# Merging to main deploys staging, not production. Staging mirrors main —
+# that is what makes it a useful rehearsal of what production will become —
+# and promoting to production is a decision somebody makes, not a side effect
+# of merging a pull request.
 #
 # Authentication is OIDC. There is no Azure credential stored in GitHub: the
 # workflow proves which repository and environment it is running as, and Azure
@@ -17,7 +22,7 @@ name: Deploy to Azure
 
 on:
   push:
-    branches: [main, staging]
+    branches: [main]
     paths:
       - "src/atlas/**"
       - "src/harbor/**"
@@ -41,9 +46,7 @@ concurrency:
   # One deploy per environment at a time. Two overlapping deploys can run
   # migrations concurrently, and the second would be applying a schema change
   # against a database the first is still changing.
-  group: >-
-    deploy-azure-${{ inputs.environment != '' && inputs.environment
-                     || (github.ref_name == 'main' && 'production' || 'staging') }}
+  group: deploy-azure-${{ inputs.environment == 'production' && 'production' || 'staging' }}
   cancel-in-progress: false
 
 jobs:
@@ -60,10 +63,10 @@ jobs:
     # The manual input wins when present, so dispatching a staging deploy from
     # main goes to staging rather than to production — which the more obvious
     # spelling of this gets wrong.
+    # Only an explicit request reaches production. A push, whatever branch it
+    # is on, goes to staging.
     environment: >-
-      ${{ (inputs.environment != '' && inputs.environment
-           || (github.ref_name == 'main' && 'production' || 'staging'))
-          == 'production' && 'Production' || 'Staging' }}
+      ${{ inputs.environment == 'production' && 'Production' || 'Staging' }}
 
     permissions:
       # Required for OIDC. Without it there is no token to exchange.
@@ -85,9 +88,7 @@ jobs:
       - name: Work out what we are deploying
         id: target
         run: |
-          if [ -n "${{ inputs.environment }}" ]; then
-            ENV="${{ inputs.environment }}"
-          elif [ "${{ github.ref_name }}" = "main" ]; then
+          if [ "${{ inputs.environment }}" = "production" ]; then
             ENV="prod"
           else
             ENV="staging"
