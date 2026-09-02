@@ -24,6 +24,36 @@ public static class GoogleEndpoints
         return app;
     }
 
+    /// <summary>
+    /// The path the PKCE and state cookies are scoped to.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the redirect URI rather than hard-coded, because the path
+    /// the browser is on is not the path this service sees. The console serves
+    /// the API from its own origin under /api, so atlas's own route is
+    /// /auth/google while the browser's is /api/auth/google — and a cookie
+    /// scoped to the former is simply never sent to the latter. The callback
+    /// then finds no state and refuses a sign-in that was perfectly valid.
+    /// <para>
+    /// The redirect URI is by definition the address the browser lands on, so
+    /// its parent path is the one scope that is always right.
+    /// </para>
+    /// </remarks>
+    private static string CookiePath(IConfiguration config)
+    {
+        var redirect = RedirectUri(config);
+        if (!Uri.TryCreate(redirect, UriKind.Absolute, out var uri))
+        {
+            return "/";
+        }
+
+        var path = uri.AbsolutePath;
+        var lastSlash = path.LastIndexOf('/');
+
+        // "/api/auth/google/callback" -> "/api/auth/google"
+        return lastSlash > 0 ? path[..lastSlash] : "/";
+    }
+
     private static IResult Start(HttpContext http, IConfiguration config)
     {
         var clientId = config["Google:ClientId"];
@@ -41,7 +71,7 @@ public static class GoogleEndpoints
         // else's session cannot be redeemed.
         var state = Base64Url(RandomNumberGenerator.GetBytes(16));
 
-        var options = TransientCookie();
+        var options = TransientCookie(CookiePath(config));
         http.Response.Cookies.Append(StateCookie, state, options);
         http.Response.Cookies.Append(VerifierCookie, verifier, options);
 
@@ -79,8 +109,11 @@ public static class GoogleEndpoints
         var expectedState = http.Request.Cookies[StateCookie];
         var codeVerifier = http.Request.Cookies[VerifierCookie];
 
-        http.Response.Cookies.Delete(StateCookie);
-        http.Response.Cookies.Delete(VerifierCookie);
+        // Deleted with the same path they were set with — a Delete that does
+        // not match the path leaves the cookie sitting there until it expires.
+        var cookiePath = new CookieOptions { Path = CookiePath(config) };
+        http.Response.Cookies.Delete(StateCookie, cookiePath);
+        http.Response.Cookies.Delete(VerifierCookie, cookiePath);
 
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state)
             || string.IsNullOrEmpty(expectedState) || string.IsNullOrEmpty(codeVerifier))
@@ -172,13 +205,13 @@ public static class GoogleEndpoints
     /// Short-lived, and Lax rather than Strict: the callback is a top-level
     /// navigation from Google, and Strict would drop these on exactly that hop.
     /// </summary>
-    private static CookieOptions TransientCookie() => new()
+    private static CookieOptions TransientCookie(string path) => new()
     {
         HttpOnly = true,
         Secure = true,
         SameSite = SameSiteMode.Lax,
         MaxAge = TimeSpan.FromMinutes(10),
-        Path = "/auth/google",
+        Path = path,
     };
 
     private static string RedirectUri(IConfiguration config) =>
