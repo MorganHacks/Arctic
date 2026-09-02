@@ -68,6 +68,40 @@ public class GatewayTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Asking_who_is_signed_in_is_not_throttled_like_signing_in()
+    {
+        // The console calls /auth/me on every page it renders. Under the
+        // strict auth limiter that made the eleventh page in a quarter of an
+        // hour a sign-out — and the limiter partitions on IP, so on campus
+        // that is one building sharing ten page views between everybody.
+        //
+        // Atlas deliberately does not throttle this endpoint for exactly that
+        // reason. The gateway was quietly overruling it.
+        for (var i = 0; i < 20; i++)
+        {
+            var response = await Client().GetAsync("/api/auth/me");
+
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Asking_for_a_sign_in_link_is_still_throttled()
+    {
+        // The other half. Unlimited, this endpoint is a way to send mail from
+        // our domain to any address somebody names, which costs the sending
+        // reputation the domain spent weeks earning.
+        var last = HttpStatusCode.OK;
+
+        for (var i = 0; i < 20; i++)
+        {
+            last = (await Client().PostAsync("/api/auth/magic-link", content: null)).StatusCode;
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, last);
+    }
+
+    [Fact]
     public void Identity_headers_a_caller_may_not_supply_are_listed()
     {
         // The list is the security boundary. A header added to the forwarded

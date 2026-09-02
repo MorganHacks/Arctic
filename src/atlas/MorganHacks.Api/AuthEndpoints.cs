@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
 using MorganHacks.Observability;
-using MorganHacks.Identity.Domain;
 using MorganHacks.Identity.Services;
 
 namespace MorganHacks.Api;
@@ -29,36 +28,10 @@ public static class AuthEndpoints
         auth.MapPost("/logout", Logout);
         auth.MapGet("/me", WhoAmI);
 
-        // Under /admin because that is what harbor routes, and because the
-        // admin screens live there. At /people it was unreachable through the
-        // gateway — atlas answered it happily and nothing could ask.
-        app.MapGet("/admin/people", ListPeople)
-           .RequirePermission(Permission.PeopleView);
-
         return app;
     }
 
     public sealed record MagicLinkRequest(string Email);
-
-    /// <summary>Requires <c>people.view</c>.</summary>
-    private static async Task<IResult> ListPeople(
-        HttpContext http, IIdentityStore store, CancellationToken ct)
-    {
-        var people = await store.ListPeopleAsync(ct);
-
-        return Results.Ok(new
-        {
-            requestedBy = http.PersonId(),
-            people = people.Select(p => new
-            {
-                id = p.Id,
-                kind = p.Kind,
-                email = p.Email,
-                revoked = p.Revoked,
-                teams = p.Teams,
-            }),
-        });
-    }
 
     /// <summary>
     /// Per-address request counter, checked before any database work.

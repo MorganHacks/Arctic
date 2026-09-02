@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 /**
@@ -21,6 +22,20 @@ const apiOrigin =
   process.env.API_ORIGIN ?? "http://localhost:5080";
 
 const nextConfig: NextConfig = {
+  /**
+   * The bundler's filesystem root is the repository, not this app.
+   *
+   * Both portals import their palette from libs/ui/tokens.css, which lives
+   * above this directory. Without this the bundler refuses to resolve anything
+   * outside src/portaladmin, and the two apps end up with a copy of the
+   * palette each — which is how a colour comes to mean two different things.
+   *
+   * Deploying this app therefore needs libs/ present, not just src/portaladmin.
+   */
+  turbopack: {
+    root: path.join(import.meta.dirname, "..", ".."),
+  },
+
   async rewrites() {
     return [
       {

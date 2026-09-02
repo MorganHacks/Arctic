@@ -139,6 +139,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 
 app.MapAuth();
+app.MapPeopleAdmin();
 app.MapSesWebhook();
 app.MapGoogle();
 

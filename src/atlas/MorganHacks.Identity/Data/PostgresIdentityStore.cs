@@ -223,12 +223,30 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
     public async Task RevokeAllSessionsForPersonAsync(
         Guid personId, DateTimeOffset now, CancellationToken ct)
     {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await RevokeSessionsAsync(conn, transaction: null, personId, now, ct);
+    }
+
+    /// <summary>
+    /// The one definition of "end every session this person holds".
+    /// </summary>
+    /// <remarks>
+    /// Takes a connection so that revoking a person can run it inside the same
+    /// transaction as setting <c>revoked_at</c>. Two copies of this UPDATE —
+    /// one for the standalone call, one for the transactional one — is how the
+    /// two drift, and the copy that drifts is the one that leaves a revoked
+    /// organizer with a working laptop.
+    /// </remarks>
+    private static async Task RevokeSessionsAsync(
+        NpgsqlConnection conn, NpgsqlTransaction? transaction,
+        Guid personId, DateTimeOffset now, CancellationToken ct)
+    {
         const string sql = """
             UPDATE identity.sessions SET revoked_at = @now
             WHERE person_id = @personId AND revoked_at IS NULL
             """;
 
-        await using var cmd = dataSource.CreateCommand(sql);
+        await using var cmd = new NpgsqlCommand(sql, conn, transaction);
         cmd.Parameters.AddWithValue("personId", personId);
         cmd.Parameters.AddWithValue("now", now);
         await cmd.ExecuteNonQueryAsync(ct);
@@ -388,5 +406,243 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
                 ? OrganizerResult.Accept(bound)
                 : OrganizerResult.Reject(OrganizerRejection.BoundToAnotherAccount);
         }
+    }
+
+    // ------------------------------------------------------- administration ---
+
+    public async Task<PersonDetail?> FindPersonAsync(Guid personId, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT kind, email, revoked_at FROM identity.people WHERE id = @id
+            """;
+
+        string kind;
+        string email;
+        DateTimeOffset? revokedAt;
+
+        await using (var cmd = dataSource.CreateCommand(sql))
+        {
+            cmd.Parameters.AddWithValue("id", personId);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                return null;
+            }
+
+            kind = reader.GetString(0);
+            email = reader.GetString(1);
+            revokedAt = await reader.IsDBNullAsync(2, ct)
+                ? null
+                : reader.GetFieldValue<DateTimeOffset>(2);
+        }
+
+        // Reuses the permission-context query rather than repeating its two
+        // SELECTs here. It fetches every team's baseline as well, which this
+        // caller throws away — sixty rows of a table nobody writes to, against
+        // two copies of a membership query that would have to be kept in step.
+        var (memberships, grants, _) = await GetPermissionContextAsync(personId, ct);
+
+        return new PersonDetail(personId, kind, email, revokedAt, memberships, grants);
+    }
+
+    public async Task<IReadOnlyList<TeamSummary>> ListTeamsAsync(CancellationToken ct)
+    {
+        // LEFT JOIN so a team with no baseline still appears. One that grants
+        // nothing is either a mistake somebody needs to see or a team being
+        // set up, and neither is served by hiding it.
+        const string sql = """
+            SELECT t.slug, t.name, p.permission
+              FROM identity.teams t
+              LEFT JOIN identity.team_permissions p ON p.team_id = t.id
+             ORDER BY t.name
+            """;
+
+        var order = new List<string>();
+        var names = new Dictionary<string, string>();
+        var permissions = new Dictionary<string, HashSet<Permission>>();
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var slug = reader.GetString(0);
+            if (!names.ContainsKey(slug))
+            {
+                order.Add(slug);
+                names[slug] = reader.GetString(1);
+                permissions[slug] = [];
+            }
+
+            // Same gate as everywhere else: a row naming a permission the code
+            // has since dropped is ignored rather than displayed as real.
+            if (!await reader.IsDBNullAsync(2, ct)
+                && Permission.TryParse(reader.GetString(2), out var permission))
+            {
+                permissions[slug].Add(permission);
+            }
+        }
+
+        return order
+            .Select(slug => new TeamSummary(slug, names[slug], permissions[slug]))
+            .ToList();
+    }
+
+    public async Task<AddOrganizerResult> AddOrganizerAsync(string email, CancellationToken ct)
+    {
+        // Insert first and ask questions afterwards. Checking whether the
+        // address is taken and then inserting leaves a window two admins can
+        // both pass through; the unique index on lower(email) is the only
+        // thing that actually decides, so let it decide.
+        const string insert = """
+            INSERT INTO identity.people (kind, email) VALUES ('organizer', @email)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """;
+
+        await using (var cmd = dataSource.CreateCommand(insert))
+        {
+            cmd.Parameters.AddWithValue("email", email.Trim());
+            if (await cmd.ExecuteScalarAsync(ct) is Guid created)
+            {
+                return AddOrganizerResult.Accept(created);
+            }
+        }
+
+        // Something already holds the address. Which kind of account it is
+        // changes what the admin should do about it, so it is worth the second
+        // query — this is a message for a person, not a security decision.
+        const string existing = """
+            SELECT kind FROM identity.people WHERE lower(email) = lower(@email)
+            """;
+
+        await using var lookup = dataSource.CreateCommand(existing);
+        lookup.Parameters.AddWithValue("email", email.Trim());
+        var kind = await lookup.ExecuteScalarAsync(ct) as string;
+
+        // A null kind means the row was deleted between the two statements,
+        // which nothing in this system does. Reporting the conflict we already
+        // proved is better than inventing a third outcome for it.
+        return kind == "hacker"
+            ? AddOrganizerResult.Reject(AddOrganizerRejection.AddressIsAHackerAccount)
+            : AddOrganizerResult.Reject(AddOrganizerRejection.AlreadyAnOrganizer);
+    }
+
+    public async Task<bool> AddToTeamAsync(
+        Guid personId, string teamSlug, DateTimeOffset? expiresAt, CancellationToken ct)
+    {
+        // Selecting the two ids rather than passing them in means an unknown
+        // person or an unknown team inserts nothing and returns nothing,
+        // instead of raising a foreign-key error the caller has to decode.
+        const string sql = """
+            INSERT INTO identity.team_members (person_id, team_id, expires_at)
+            SELECT p.id, t.id, @expiresAt
+              FROM identity.people p, identity.teams t
+             WHERE p.id = @personId AND t.slug = @slug
+            ON CONFLICT (person_id, team_id) DO UPDATE SET expires_at = EXCLUDED.expires_at
+            RETURNING person_id
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("slug", teamSlug);
+        cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
+        return await cmd.ExecuteScalarAsync(ct) is Guid;
+    }
+
+    public async Task<bool> RemoveFromTeamAsync(
+        Guid personId, string teamSlug, CancellationToken ct)
+    {
+        const string sql = """
+            DELETE FROM identity.team_members m
+             USING identity.teams t
+             WHERE t.id = m.team_id
+               AND m.person_id = @personId
+               AND t.slug = @slug
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("slug", teamSlug);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    public async Task<bool> GrantAsync(
+        Guid personId, Permission permission, DateTimeOffset? expiresAt,
+        Guid grantedBy, CancellationToken ct)
+    {
+        // granted_at is bumped on the update so the record answers "when was
+        // this last decided", not "when was it first decided" — the second
+        // being the one that misleads, by making a grant somebody renewed
+        // yesterday look like it has been sitting there since September.
+        const string sql = """
+            INSERT INTO identity.grants (person_id, permission, expires_at, granted_by)
+            SELECT p.id, @permission, @expiresAt, @grantedBy
+              FROM identity.people p WHERE p.id = @personId
+            ON CONFLICT (person_id, permission) DO UPDATE
+                SET expires_at = EXCLUDED.expires_at,
+                    granted_by = EXCLUDED.granted_by,
+                    granted_at = now()
+            RETURNING person_id
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("permission", permission.Value);
+        cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("grantedBy", grantedBy);
+        return await cmd.ExecuteScalarAsync(ct) is Guid;
+    }
+
+    public async Task<bool> RevokeGrantAsync(
+        Guid personId, Permission permission, CancellationToken ct)
+    {
+        // Deleted rather than expired-in-place. An admin removing a grant
+        // means it should stop counting now, and a row with expires_at set to
+        // the present moment is the same thing said less clearly.
+        const string sql = """
+            DELETE FROM identity.grants
+             WHERE person_id = @personId AND permission = @permission
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("permission", permission.Value);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    public async Task<bool> RevokePersonAsync(
+        Guid personId, DateTimeOffset now, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        // coalesce keeps the first revocation's timestamp. Re-revoking someone
+        // is how an admin finishes a job that half-failed, and it should not
+        // quietly rewrite when their access actually ended.
+        const string revoke = """
+            UPDATE identity.people
+               SET revoked_at = coalesce(revoked_at, @now), updated_at = now()
+             WHERE id = @id
+            RETURNING id
+            """;
+
+        await using (var cmd = new NpgsqlCommand(revoke, conn, tx))
+        {
+            cmd.Parameters.AddWithValue("id", personId);
+            cmd.Parameters.AddWithValue("now", now);
+            if (await cmd.ExecuteScalarAsync(ct) is not Guid)
+            {
+                await tx.RollbackAsync(ct);
+                return false;
+            }
+        }
+
+        // Unconditional, not skipped when the person was already revoked. The
+        // failure this guards against is the first attempt having written the
+        // flag and died before it cut the sessions.
+        await RevokeSessionsAsync(conn, tx, personId, now, ct);
+
+        await tx.CommitAsync(ct);
+        return true;
     }
 }
