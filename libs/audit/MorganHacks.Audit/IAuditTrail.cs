@@ -7,7 +7,7 @@ namespace MorganHacks.Audit;
 /// <para>
 /// <b>There is no write method here, and that is deliberate.</b> If you came
 /// looking for one, the trail is written by database triggers —
-/// <c>0009_audit.sql</c> — inside whatever transaction made the change. An
+/// <c>0010_audit.sql</c> — inside whatever transaction made the change. An
 /// <c>InsertAsync</c> on this interface would be a second way to write the
 /// table that could be forgotten, could disagree with what actually happened,
 /// and could be called without the change it claims to describe. The only

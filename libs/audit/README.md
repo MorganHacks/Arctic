@@ -3,7 +3,7 @@
 Audit logging. **A library, deliberately not a service** — a network hop would mean audit writes could fail independently of the action they record.
 
 The trail lives in `audit.entries` and is written by triggers, not by this
-code. See `src/atlas/MorganHacks.Migrations/Scripts/0009_audit.sql`.
+code. See `src/atlas/MorganHacks.Migrations/Scripts/0010_audit.sql`.
 
 ## What this library is for
 

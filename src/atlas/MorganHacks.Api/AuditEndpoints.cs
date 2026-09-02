@@ -10,7 +10,7 @@ namespace MorganHacks.Api;
 /// <remarks>
 /// Read-only, and there is no companion file with the writes in it. Entries
 /// are written by database triggers inside the transaction that changed
-/// somebody's access — see <c>0009_audit.sql</c> — so there is no endpoint
+/// somebody's access — see <c>0010_audit.sql</c> — so there is no endpoint
 /// that appends to the trail, none that edits it, and none that deletes from
 /// it. The database refuses the last two outright.
 /// <para>
