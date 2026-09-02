@@ -72,6 +72,21 @@ public class GoogleFlowTests(IdentityDatabase db)
     }
 
     [Fact]
+    public async Task The_state_cookies_are_scoped_where_the_browser_will_be()
+    {
+        // Not to this service's own route. The console serves the API from its
+        // own origin under /api, so the browser lands on /api/auth/google/...
+        // and a cookie scoped to /auth/google is never sent there — the
+        // callback then finds no state and refuses a sign-in that was fine.
+        var start = await Client().GetAsync("/auth/google/");
+
+        var cookies = start.Headers.GetValues("Set-Cookie").ToList();
+
+        // The test host configures the redirect as https://example.test/auth/google/callback.
+        Assert.All(cookies, c => Assert.Contains("path=/auth/google", c, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task A_callback_with_no_state_cookie_is_refused()
     {
         // A code delivered to a browser that never started the flow.
