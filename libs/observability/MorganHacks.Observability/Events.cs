@@ -38,6 +38,30 @@ public static class Events
     /// </remarks>
     public const string ApplicationSubmitted = "application.submitted";
 
+    /// <summary>
+    /// A resume was accepted and written to the object store.
+    /// </summary>
+    /// <remarks>
+    /// Watched against <see cref="ApplicationSubmitted"/> rather than on its
+    /// own. Uploads that keep arriving while submissions stop is somebody's
+    /// resume failing to attach, which looks like nothing at all from the
+    /// outside — every request succeeded and the applications simply have no
+    /// resume on them.
+    /// <para>
+    /// Carries the form code, the upload id and the size. Never the filename:
+    /// people name these after themselves.
+    /// </para>
+    /// </remarks>
+    public const string ResumeStored = "resume.stored";
+
+    /// <summary>A resume was handed to an organizer as a signed link.</summary>
+    /// <remarks>
+    /// The permission model treats a resume as more sensitive than the rest of
+    /// an application, which is only true if reading one leaves a mark. This
+    /// is that mark: who asked, for which application, and when.
+    /// </remarks>
+    public const string ResumeRead = "resume.read";
+
     /// <summary>An address was added to the suppression list.</summary>
     public const string AddressSuppressed = "address.suppressed";
 

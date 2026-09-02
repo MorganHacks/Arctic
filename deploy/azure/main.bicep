@@ -165,6 +165,7 @@ module platform 'modules/platform.bicep' = if (deployPlatform) {
     postgresVersion: postgresVersion
     superAdminEmail: superAdminEmail
     pullIdentityId: pullIdentity.outputs.id
+    pullIdentityPrincipalId: pullIdentity.outputs.principalId
     tags: commonTags
   }
   dependsOn: [registry, registryAccess]
@@ -189,6 +190,7 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     googleRedirectUri: googleRedirectUri
     publicBaseUrl: publicBaseUrl
     pullIdentityId: pullIdentity.outputs.id
+    pullIdentityClientId: pullIdentity.outputs.clientId
     tags: commonTags
   }
   dependsOn: [platform, registryAccess]

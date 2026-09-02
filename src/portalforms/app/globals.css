@@ -218,6 +218,92 @@ textarea.wrong {
   font-weight: 400;
 }
 
+/* The resume ----------------------------------------------------------- */
+
+/*
+ * The one control that does something before the form is submitted, so it is
+ * also the only one with states of its own: picking, uploading, attached,
+ * refused. Each one has to be readable at a glance on a phone held at arm's
+ * length, which is why the attached state is a sentence rather than a tick.
+ */
+.upload .help {
+  margin: 0.5rem 0 0;
+}
+
+.progress {
+  margin-top: 0.75rem;
+}
+
+.progress-track {
+  height: 0.4rem;
+  border-radius: var(--radius);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+/*
+ * The accent, because an upload in progress is the thing to wait for and the
+ * accent is what this page uses for the thing to do next. Nothing else on the
+ * form is coloured while it is working, so a moving bar in that colour is
+ * unambiguous.
+ */
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
+.progress .footnote {
+  text-align: left;
+  margin-top: 0.35rem;
+}
+
+/*
+ * Deliberately not coloured green. Colour on this page means something went
+ * wrong or something needs doing, and a file that uploaded is neither — it is
+ * simply the state of things, and saying so in words survives being read by
+ * somebody who cannot tell the two greens apart.
+ */
+.upload-done {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.9375rem;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.upload-done strong {
+  font-weight: 600;
+
+  /* A filename is somebody else's text and can be any length at all. It wraps
+     rather than pushing the Remove button off a narrow screen. */
+  overflow-wrap: anywhere;
+}
+
+button.quiet {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: 0.25rem 0;
+  min-height: 2.75rem;
+}
+
+button.quiet:hover {
+  color: var(--ink);
+  border-bottom-color: var(--muted);
+}
+
 /* Messages ------------------------------------------------------------- */
 
 .wrong-note {

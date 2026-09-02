@@ -22,8 +22,6 @@ namespace MorganHacks.Applications.Forms;
 /// </remarks>
 public static class SubmissionValidation
 {
-    internal const int MaxFilenameLength = 255;
-
     /// <summary>
     /// Every problem, not just the first.
     /// </summary>
@@ -170,20 +168,17 @@ public static class SubmissionValidation
                 break;
 
             case FieldType.File:
-                var filename = Filename(value);
-                if (filename is null)
-                {
-                    problems.Add(new FormProblem(
-                        $"\"{Shorten(field.Label)}\" needs a file.", field.Key));
-                }
-                else if (filename.Length > MaxFilenameLength)
-                {
-                    // resume_filename is a plain text column with nothing
-                    // bounding it, and this endpoint takes no authentication.
-                    problems.Add(new FormProblem(
-                        "That file's name is too long. Rename it and try again.", field.Key));
-                }
-
+                // Nothing left to check. An answer here is the id of an upload
+                // that already happened and nothing else — no name, no size,
+                // no key, because those are things this side measured while it
+                // held the bytes, and a copy of them arriving with the answers
+                // would be the caller describing a file we are looking at.
+                //
+                // Whether the id is one we issued is settled at submit, in the
+                // transaction that spends it, because it is a question only the
+                // database can answer. Getting this far means an id arrived and
+                // is shaped like one, which is the whole of what is knowable
+                // here.
                 break;
         }
     }
@@ -252,7 +247,12 @@ public static class SubmissionValidation
                 ? bool.TryParse(text, out var ticked) && ticked
                 : !string.IsNullOrWhiteSpace(text)),
         JsonValueKind.Array => value.GetArrayLength() > 0,
-        JsonValueKind.Object => Filename(value) is not null,
+
+        // The one object-shaped answer is a file, and it is only an answer once
+        // its bytes are somewhere. A picked file whose upload failed is not a
+        // file — reading it as one is how a required resume question passes
+        // with nothing behind it.
+        JsonValueKind.Object => Upload(value) is not null,
         _ => false,
     };
 
@@ -280,19 +280,22 @@ public static class SubmissionValidation
             Text(value), NumberStyles.Number, CultureInfo.InvariantCulture, out number);
     }
 
-    /// <summary>The name of the file an applicant picked, if they picked one.</summary>
-    internal static string? Filename(JsonElement value)
-    {
-        if (value.ValueKind != JsonValueKind.Object
-            || !value.TryGetProperty("name", out var name)
-            || name.ValueKind != JsonValueKind.String)
-        {
-            return null;
-        }
-
-        var trimmed = name.GetString()?.Trim();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
-    }
+    /// <summary>
+    /// The upload an answer points at, if it points at one.
+    /// </summary>
+    /// <remarks>
+    /// Parsed rather than passed through as text. This value ends up in a
+    /// parameterised lookup either way, but a uuid that is a uuid cannot be
+    /// anything else by the time it gets there, and the parse is what makes
+    /// "an id arrived" a fact rather than a hope.
+    /// </remarks>
+    internal static Guid? Upload(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Object
+        && value.TryGetProperty("upload", out var upload)
+        && upload.ValueKind == JsonValueKind.String
+        && Guid.TryParse(upload.GetString(), out var id)
+            ? id
+            : null;
 
     /// <summary>
     /// Trims a label for a message.

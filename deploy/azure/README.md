@@ -51,7 +51,7 @@ a change to how production is provisioned should arrive as a diff.
 main.bicep              the front door — resource groups, then the modules
 naming.md               naming convention and what every tag is for
 modules/registry.bicep  the container registry, shared across environments
-modules/platform.bicep  Postgres, the apps environment, the migration job
+modules/platform.bicep  Postgres, resume storage, the apps environment, migrations
 modules/apps.bicep      harbor, atlas, lark
 staging.bicepparam      per-environment values
 prod.bicepparam
@@ -122,6 +122,26 @@ to a running service.
 On a first deploy the role assignment occasionally has not propagated by the
 time the apps start, and they fail to pull. Re-running `deploy.sh` fixes it —
 the templates are idempotent and the grant is already there by then.
+
+## Resumes
+
+A storage account per environment, one private container, and a Storage Blob
+Data Contributor grant on it for the same identity that pulls the images. Atlas
+gets the account name and that identity's client id in configuration and
+nothing else: **there is no access key anywhere**, because the account has
+`allowSharedKeyAccess: false` and one does not work even if somebody finds it.
+
+The build plan recommends Cloudflare R2. This is Azure Blob instead, and the
+reasoning is short: we own this subscription, so the container is declared in
+the same deployment as everything else with no second account, no second bill
+and no credential to rotate. The portability the plan is protecting is that
+`resume_key` holds a key rather than a URL, and that is bought in the code by
+`IResumeStore` — moving to R2 later is a new implementation of one interface
+and a copy of the objects, with no column to rewrite.
+
+Nothing is ever public. Reads are user-delegation SAS links signed for five
+minutes, with the content type and disposition inside the signature so a file a
+stranger uploaded arrives as a PDF and nothing else.
 
 ## Not in the templates
 
@@ -219,8 +239,18 @@ What the deploy identity may do:
 | Grant | Scope | Why |
 |---|---|---|
 | Contributor | subscription | creates the resource groups and everything in them |
-| User Access Administrator | `rg-mh-shared` only | grants AcrPull to each environment's pull identity |
+| User Access Administrator | `rg-mh-shared` | grants AcrPull to each environment's pull identity |
+| User Access Administrator | `rg-mh-staging`, `rg-mh-prod` | grants blob access on the resumes account |
 | AcrPush | the registry | pushes images; Contributor does not cover data-plane push |
+
+**The environment-scoped User Access Administrator grants are new and have to
+be made by hand once per environment.** `platform.bicep` now assigns Storage
+Blob Data Contributor on the resumes account, and Contributor cannot create
+role assignments — so without this the platform pass fails with
+`AuthorizationFailed` on the assignment and nothing else. The grant is narrowed
+to the environment's own group for the same reason the registry one is narrowed
+to `rg-mh-shared`: the ability to hand out access is the one permission worth
+being stingy with.
 
 ### Configuration
 

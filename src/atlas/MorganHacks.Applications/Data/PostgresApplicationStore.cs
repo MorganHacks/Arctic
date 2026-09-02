@@ -165,4 +165,33 @@ public sealed class PostgresApplicationStore(NpgsqlDataSource dataSource) : IApp
         return history;
     }
 
+    /// <inheritdoc />
+    public async Task<StoredResume?> ResumeOfAsync(
+        Guid applicationId, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT resume_key, resume_filename, resume_size
+              FROM applications.applications
+             WHERE id = @id AND resume_key IS NOT NULL
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("id", applicationId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return null;
+        }
+
+        return new StoredResume(
+            reader.GetString(0),
+
+            // Rows written before there was anywhere to put the bytes have a
+            // name and no key, so they never reach here. A key with no name is
+            // not a shape that has existed, and falling back beats a null
+            // reference on a screen a reviewer is trying to work through.
+            await reader.IsDBNullAsync(1, ct) ? "resume.pdf" : reader.GetString(1),
+            await reader.IsDBNullAsync(2, ct) ? null : reader.GetInt32(2));
+    }
 }

@@ -25,9 +25,40 @@ public sealed class DuplicateApplicationException()
 public sealed class FormCannotCreateApplicantsException()
     : InvalidOperationException("This form does not ask for an email address.");
 
+/// <summary>
+/// Thrown when the upload a submission points at cannot be spent.
+/// </summary>
+/// <remarks>
+/// Covers an id nobody was issued, one issued for a different form, and one
+/// already attached to an application. All three are the same answer on
+/// purpose: only the last is something an ordinary applicant produces — by
+/// submitting twice — and telling the other two apart would say which ids are
+/// real.
+/// </remarks>
+public sealed class ResumeUploadNotClaimableException()
+    : InvalidOperationException("That upload cannot be attached to an application.");
+
 /// <summary>Where a completed form ends up.</summary>
 public interface ISubmissionStore
 {
+    /// <summary>
+    /// Records that bytes were stored, and answers with the id the page hands
+    /// back at submit.
+    /// </summary>
+    /// <remarks>
+    /// The upload happens before the application exists — somebody picks a file
+    /// part-way down a long form — so something has to carry the key across
+    /// that gap, and it is deliberately not the browser. An id of a row we
+    /// wrote can be checked; a key the page sent back is a caller naming a blob,
+    /// which is how one applicant ends up attached to another's resume.
+    /// </remarks>
+    Task<Guid> RecordResumeAsync(
+        Guid formId,
+        string storageKey,
+        string filename,
+        int size,
+        CancellationToken ct = default);
+
     /// <summary>
     /// Turns a set of answers into a submitted application.
     /// </summary>

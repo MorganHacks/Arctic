@@ -14,6 +14,7 @@ being an alphabetical pile.
 | Postgres | `psql-mh-<env>` | `psql-mh-staging` |
 | Container app | `ca-<service>-<env>` | `ca-harbor-staging` |
 | Container Apps job | `caj-<name>-<env>` | `caj-migrations-staging` |
+| Storage account | `stmh<env><hash>` | resumes; globally unique, no hyphens allowed |
 
 The environment is in every name on purpose. The worst version of this mistake
 is running a command against production while believing it is staging, and a

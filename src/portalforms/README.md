@@ -50,6 +50,28 @@ will not submit.
 into the routes manifest during `next build`, so setting it only when starting
 the server does nothing — the build's value is already baked in.
 
+## The resume goes up before the form is submitted
+
+A file uploads the moment it is picked, to `POST /api/forms/<code>/resume`,
+rather than riding along with the answers. Somebody on a phone then spends the
+upload while they are still answering questions instead of watching a progress
+bar after pressing Submit, and on campus wifi that is the difference between a
+submission that lands and one somebody gives up on. The Submit button is
+disabled while a file is still going up, and says so.
+
+**What comes back is an id, never a location.** The page is told
+`{ upload: "<uuid>" }` and repeats exactly that at submit. It never learns the
+storage key, because a key the browser could repeat would be a caller naming a
+blob — the same shape of mistake as a field list that arrives with the answers.
+The id names a row the API wrote, so the API can check it: issued for this
+form, and not already spent on somebody else's application.
+
+The page checks the size and that the file looks like a PDF before uploading.
+Both are courtesies — they save pushing five megabytes up a slow connection to
+be refused. The API reads the first bytes of the file and refuses anything that
+does not really start `%PDF-`, which is the check that decides anything: a
+`.pdf` on the end of a filename is a claim, and costs nothing to write.
+
 ## Nothing is cached
 
 `loadForm` is `no-store`. A form closes at a moment somebody chose, and a new
@@ -69,12 +91,15 @@ API_ORIGIN=http://localhost:5080 npm run dev
 reached by its code, so open `http://localhost:3000/<code>` for a form that
 exists.
 
+Uploading a resume needs Azurite, which `docker compose up` starts. Without it
+the API answers 503 and says so; the rest of the form still works.
+
 ## What is not here yet
 
-- **File uploads.** The resume question renders and the filename and size are
-  recorded, but there is no object store, so `resume_key` stays null and the
-  bytes are not kept. A row with a filename and no key is the accurate record
-  of that.
+- **Cleaning up abandoned uploads.** Closing the tab half way through leaves a
+  stored file no application points at. `applications.resume_uploads` has the
+  index a sweeper will read; until somebody writes one, those are a storage
+  bill rather than a correctness problem.
 - **Surveys.** `kind = 'survey'` forms render, but submitting one is refused
   with a 501: there is no table for a survey answer to go in yet, and accepting
   the answers to drop them would leave somebody believing they had replied.

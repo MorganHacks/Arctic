@@ -7,6 +7,7 @@ using MorganHacks.Api;
 using MorganHacks.Applications.Forms;
 using MorganHacks.Applications.Data;
 using MorganHacks.Applications.Services;
+using MorganHacks.Applications.Storage;
 using MorganHacks.Audit;
 using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
@@ -94,6 +95,37 @@ builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
 builder.Services.AddSingleton<IFormStore, PostgresFormStore>();
 builder.Services.AddSingleton<IEventStore, PostgresEventStore>();
 
+// The organizers' side of an application. Registered here rather than only in
+// the portal's scope because the resume endpoint reads it.
+builder.Services.AddSingleton<IApplicationStore, PostgresApplicationStore>();
+
+// Resumes.
+//
+// Azure Blob rather than the R2 the plan suggests. We own the subscription
+// this deploys into, so the container is declared in the same Bicep as
+// everything else — no second account, no second set of credentials, and atlas
+// reaches it with the managed identity it already holds to pull its own image.
+// The portability the plan is protecting is that the database stores a key
+// rather than a URL, and that lives in IResumeStore rather than in the choice
+// of vendor.
+//
+// Registered whether or not it is configured, like Google sign-in above: with
+// nothing set the upload endpoint answers 503 and the rest of the API works,
+// rather than the service refusing to start on a laptop with no storage.
+builder.Services.AddSingleton<IResumeStore>(_ => new AzureResumeStore(
+    new ResumeStorageOptions
+    {
+        AccountName = builder.Configuration["Resumes:AccountName"],
+        ConnectionString = builder.Configuration["Resumes:ConnectionString"],
+        Container = builder.Configuration["Resumes:Container"] ?? "resumes",
+
+        // Atlas holds a user-assigned identity. With more than one identity
+        // available the credential chain picks the system-assigned one, which
+        // has no role on the storage account, and every upload fails with an
+        // authorization error that reads like a missing role assignment.
+        ManagedIdentityClientId = builder.Configuration["Resumes:ClientId"],
+    }));
+
 // Enums cross the wire as names, matching how PostgresFormStore writes them
 // to the column. A form field's type would otherwise be a 6 in the JSON and a
 // "consent" in the database, so the builder would be reading and writing
@@ -170,6 +202,24 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 
+    // Uploading a resume. Same partition and the same generosity as the
+    // submit, and for the same reason: the partition is an IP, and on campus
+    // that is a whole building behind one NAT.
+    //
+    // What keeps this from being a way to fill a storage account is not the
+    // request count — it is that every request is capped at five megabytes and
+    // refused unless it is really a PDF. Tightening the count instead would
+    // stop a launch meeting and would not stop a script.
+    options.AddPolicy("resume-upload", http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0,
+            }));
+
     options.AddPolicy("magic-link", http =>
     {
         var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -202,6 +252,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuth();
 app.MapForms();
 app.MapPortal();
+app.MapResumes();
 app.MapPeopleAdmin();
 app.MapAuditTrail();
 app.MapFormsAdmin();

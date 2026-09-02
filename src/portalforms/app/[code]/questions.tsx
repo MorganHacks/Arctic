@@ -3,9 +3,10 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Field } from "@/lib/api";
+import { ResumeField, type Resume } from "./resume";
 
 /** What one question's answer looks like while it is being filled in. */
-type Answer = string | string[] | boolean | { name: string; size: number };
+type Answer = string | string[] | boolean | Resume;
 
 type Answers = Record<string, Answer | undefined>;
 type Problems = Record<string, string>;
@@ -28,6 +29,27 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
   const [problems, setProblems] = useState<Problems>({});
   const [banner, setBanner] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+
+  /*
+   * Which questions are still uploading something.
+   *
+   * A set rather than a boolean because a form is allowed one file question
+   * today and this should not have to change on the day it is allowed two.
+   * Submitting while a file is in flight would send an application with no
+   * resume on it and no sign that anything was lost.
+   */
+  const [uploading, setUploading] = useState<string[]>([]);
+  const busy = uploading.length > 0;
+
+  function setBusy(key: string, isBusy: boolean) {
+    setUploading((current) =>
+      isBusy
+        ? current.includes(key)
+          ? current
+          : [...current, key]
+        : current.filter((k) => k !== key),
+    );
+  }
 
   function set(key: string, value: Answer | undefined) {
     setAnswers((current) => ({ ...current, [key]: value }));
@@ -59,7 +81,7 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (sending) {
+    if (sending || busy) {
       return;
     }
 
@@ -145,18 +167,24 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
       {fields.map((field) => (
         <Question
           key={field.key}
+          code={code}
           field={field}
           answer={answers[field.key]}
           problem={problems[field.key]}
           onChange={set}
+          onBusy={setBusy}
         />
       ))}
 
       <div className="submit">
-        <button type="submit" disabled={sending}>
-          {sending ? "Sending…" : "Submit"}
+        <button type="submit" disabled={sending || busy}>
+          {busy ? "Waiting for your file…" : sending ? "Sending…" : "Submit"}
         </button>
-        <p className="footnote">You can only submit this once.</p>
+        <p className="footnote">
+          {busy
+            ? "Your file is still uploading. Submitting now would leave it behind."
+            : "You can only submit this once."}
+        </p>
       </div>
     </form>
   );
@@ -171,15 +199,19 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
  * applicant cannot answer is worse than a plain one.
  */
 function Question({
+  code,
   field,
   answer,
   problem,
   onChange,
+  onBusy,
 }: {
+  code: string;
   field: Field;
   answer: Answer | undefined;
   problem: string | undefined;
   onChange: (key: string, value: Answer | undefined) => void;
+  onBusy: (key: string, busy: boolean) => void;
 }) {
   const id = `q-${field.key}`;
   const helpId = field.help ? `${id}-help` : undefined;
@@ -200,12 +232,14 @@ function Question({
       ) : null}
 
       <Control
+        code={code}
         field={field}
         id={id}
         answer={answer}
         describedBy={describedBy}
         wrong={Boolean(problem)}
         onChange={onChange}
+        onBusy={onBusy}
       />
 
       {problem ? (
@@ -257,19 +291,23 @@ function Requiredness({ field }: { field: Field }) {
 }
 
 function Control({
+  code,
   field,
   id,
   answer,
   describedBy,
   wrong,
   onChange,
+  onBusy,
 }: {
+  code: string;
   field: Field;
   id: string;
   answer: Answer | undefined;
   describedBy: string | undefined;
   wrong: boolean;
   onChange: (key: string, value: Answer | undefined) => void;
+  onBusy: (key: string, busy: boolean) => void;
 }) {
   const shared = {
     id,
@@ -425,17 +463,22 @@ function Control({
       );
 
     case "file":
+      // The one control that talks to the API before the form is submitted,
+      // so it owns its own state rather than being another branch here.
       return (
-        <input
-          {...shared}
-          type="file"
-          onChange={(e) => {
-            const picked = e.target.files?.[0];
-            onChange(
-              field.key,
-              picked ? { name: picked.name, size: picked.size } : undefined,
-            );
-          }}
+        <ResumeField
+          field={field}
+          id={id}
+          code={code}
+          describedBy={describedBy}
+          wrong={wrong}
+          value={
+            typeof answer === "object" && !Array.isArray(answer)
+              ? answer
+              : undefined
+          }
+          onChange={onChange}
+          onBusy={onBusy}
         />
       );
 
@@ -466,8 +509,11 @@ function answered(field: Field, answer: Answer | undefined): boolean {
     return answer.length > 0;
   }
 
+  // A file is only an answer once its bytes are somewhere. A picked file whose
+  // upload failed is not one — reading it as an answer is how a required
+  // resume question passes with nothing behind it.
   if (typeof answer === "object") {
-    return answer.name.length > 0;
+    return answer.upload.length > 0;
   }
 
   return String(answer).trim().length > 0;
@@ -542,8 +588,20 @@ function payload(fields: Field[], answers: Answers): Record<string, unknown> {
 
   for (const field of fields) {
     const answer = answers[field.key];
-    if (answered(field, answer)) {
-      body[field.key] = typeof answer === "string" ? answer.trim() : answer;
+    if (!answered(field, answer)) {
+      continue;
+    }
+
+    if (typeof answer === "string") {
+      body[field.key] = answer.trim();
+    } else if (typeof answer === "object" && !Array.isArray(answer)) {
+      // The upload id and nothing else. The name and the size are held here
+      // to draw the row that says what is attached; the API took both from
+      // the file while it had it, and sending our copies back would be us
+      // describing a file it is already looking at.
+      body[field.key] = { upload: answer.upload };
+    } else {
+      body[field.key] = answer;
     }
   }
 
