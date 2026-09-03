@@ -69,6 +69,32 @@ wait_for() {
 
 port_busy() { lsof -ti tcp:"$1" >/dev/null 2>&1; }
 
+# ------------------------------------------------------------- where to ---
+# Local by default. Staging is allowed, for driving a real environment's data
+# through a local console. Production is not a target and does not become one:
+# this script seeds super admins and mints sessions, and neither is a thing to
+# do to the environment applicants are using. The refusal lives here rather
+# than in a comment, because a comment stops nobody at half past one.
+TARGET="${ARCTIC_TARGET:-local}"
+
+case "$TARGET" in
+  local)
+    API="http://localhost:5050"
+    ;;
+  staging|stg)
+    API="https://ca-harbor-staging.kindmeadow-f4a89b60.centralus.azurecontainerapps.io"
+    ;;
+  prod|production)
+    printf '\n\033[31mNo.\033[0m This seeds super admins and mints sessions.\n'
+    printf 'Neither is something to do to the environment applicants use.\n\n'
+    exit 1
+    ;;
+  *)
+    printf '\nUnknown target "%s". Use local or staging.\n\n' "$TARGET"
+    exit 1
+    ;;
+esac
+
 # ---------------------------------------------------------------- checks ---
 say "Checking what is needed"
 
@@ -117,6 +143,16 @@ fi
 # -------------------------------------------------------------- services ---
 say "Starting services"
 
+if [ "$TARGET" != "local" ]; then
+  cat <<EOF
+
+  Pointing at ${TARGET}. atlas and harbor are not started locally, and the
+  development sign-in door does not exist there — sign in with Google as
+  normal.
+
+EOF
+fi
+
 step "atlas  :5080"
 (cd src/atlas && dotnet run --project MorganHacks.Api --urls http://localhost:5080) \
   >"$LOGS/atlas.log" 2>&1 &
@@ -137,20 +173,16 @@ for app in portaladmin:3001 portalforms:3002; do
     (cd "src/$name" && npm install --silent) >"$LOGS/$name-install.log" 2>&1 \
       || { fail "npm install failed"; tail -6 "$LOGS/$name-install.log"; exit 1; }
   fi
-  (cd "src/$name" && PORT="$port" API_ORIGIN=http://localhost:5050 npm run dev) \
+  (cd "src/$name" && PORT="$port" API_ORIGIN="$API" npm run dev) \
     >"$LOGS/$name.log" 2>&1 &
   PIDS+=($!)
   wait_for "http://localhost:$port/" "$name" && ok || exit 1
 done
 
 # ---------------------------------------------------------------- signin ---
-COOKIE=""
-if [ -n "$EMAIL" ]; then
-  say "Signing you in"
-  step "session for $EMAIL"
-  COOKIE=$("$ROOT/deploy/local/sign-in.sh" "$EMAIL" 2>/dev/null \
-    | grep -oE 'mh_session=[A-Za-z0-9_-]+' || true)
-  [ -n "$COOKIE" ] && ok || fail "could not mint one"
+SIGNIN=""
+if [ -n "$EMAIL" ] && [ "$TARGET" = "local" ]; then
+  SIGNIN="http://localhost:3001/api/dev/sign-in?email=${EMAIL}&next=/forms"
 fi
 
 # ----------------------------------------------------------------- ready ---
@@ -158,24 +190,22 @@ cat <<EOF
 
   Organizer console   http://localhost:3001
   Public form         http://localhost:3002/<code>
-  API (through YARP)  http://localhost:5050/api
+  API                 ${API}
   Mail                http://localhost:8025
 
 EOF
 
-if [ -n "$COOKIE" ]; then
+if [ -n "$SIGNIN" ]; then
+  echo "  Opening the console, signed in as ${EMAIL}."
+  echo
+  # The door mints a real session through the same service the Google callback
+  # uses and sets the same cookie, so everything after this is authenticated
+  # exactly as it would be in a deployed environment. It exists only when the
+  # environment is Development, which no deployed container ever is.
+  ( sleep 2; open "$SIGNIN" >/dev/null 2>&1 || true ) &
+elif [ "$TARGET" = "local" ]; then
   cat <<EOF
-  Organizer sign-in is Google only, so to get in locally open the console on
-  http://localhost:3001, and paste this into the browser console:
-
-    document.cookie = "${COOKIE}; path=/"
-
-  Then reload. Good for 7 days.
-
-EOF
-else
-  cat <<EOF
-  No email given, so nobody was signed in. To sign in:
+  Nobody was signed in, because no address was given. Try:
 
     deploy/local/dev.sh you@morgan.edu
 
