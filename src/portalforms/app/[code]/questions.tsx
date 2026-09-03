@@ -133,6 +133,17 @@ export function Questions({
   const [at, setAt] = useState(0);
 
   /*
+   * Which way the last move went, so the next step can arrive from the side it
+   * came from: forward from the right, Back from the left.
+   *
+   * Null until somebody moves, because the first step is not an arrival from
+   * anywhere — a page that begins by sliding in from the right is a page
+   * claiming a step happened before it loaded. The stylesheet reads this off a
+   * data attribute; nothing else does anything with it.
+   */
+  const [from, setFrom] = useState<"forward" | "back" | null>(null);
+
+  /*
    * Which questions are still uploading something.
    *
    * A set rather than a boolean because a form is allowed one file question
@@ -326,6 +337,7 @@ export function Questions({
       return;
     }
 
+    setFrom("forward");
     setAt((n) => n + 1);
     land("step");
   }
@@ -339,6 +351,7 @@ export function Questions({
    */
   function back() {
     setBanner(null);
+    setFrom("back");
     setAt((n) => Math.max(0, n - 1));
     land("step");
   }
@@ -376,6 +389,11 @@ export function Questions({
 
       const earliest = stepWith(Object.keys(found));
       if (earliest !== -1) {
+        // Sent backwards through the form, so it arrives from the side going
+        // backwards arrives from. The direction has to describe the movement
+        // and not the button that caused it, or a step that appears from the
+        // right after Submit reads as having gone on to the next one.
+        setFrom(earliest < at ? "back" : "forward");
         setAt(earliest);
       }
 
@@ -439,6 +457,7 @@ export function Questions({
       // pressed is.
       const earliest = stepWith(Object.keys(returned));
       if (earliest !== -1) {
+        setFrom(earliest < at ? "back" : "forward");
         setAt(earliest);
       }
 
@@ -521,8 +540,13 @@ export function Questions({
        * Nothing else re-keys it: typing an answer, raising a problem and
        * clearing one all leave `at` alone, so the questions do not flicker
        * every time somebody presses a key.
+       *
+       * `data-from` is which way the move went, and the stylesheet turns it
+       * into which side the questions come in from. It is an attribute rather
+       * than a class because it has exactly one value at a time and reads as
+       * one fact rather than as a set of them.
        */}
-      <div className="step-body" key={at}>
+      <div className="step-body" data-from={from ?? undefined} key={at}>
         {step.fields.map((field) => (
           <Question
             key={field.key}

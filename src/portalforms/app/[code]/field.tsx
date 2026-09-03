@@ -325,21 +325,35 @@ function Control({
       );
 
     case "select":
+      /*
+       * A real `<select>`, with everything the browser drew over it taken off
+       * in the stylesheet and the arrow drawn back on by the wrapper — a
+       * select cannot carry a pseudo-element of its own, and the wrapper is
+       * the whole reason it is here.
+       *
+       * The element underneath is deliberately not a listbox rebuilt out of
+       * divs. Keeping it keeps type-ahead, Home and End, the arrow keys,
+       * Escape, every screen reader's idea of what a dropdown is, and the
+       * platform's own wheel picker on a phone. The full argument is above the
+       * `select` rules in globals.css.
+       */
       return (
-        <select
-          {...shared}
-          value={text}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        >
-          {/* Empty and first, so an untouched dropdown does not silently
-              answer with whichever option happened to be listed first. */}
-          <option value="">Choose one…</option>
-          {field.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <span className="select">
+          <select
+            {...shared}
+            value={text}
+            onChange={(e) => onChange(field.key, e.target.value)}
+          >
+            {/* Empty and first, so an untouched dropdown does not silently
+                answer with whichever option happened to be listed first. */}
+            <option value="">Choose one…</option>
+            {field.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </span>
       );
 
     case "radio":
@@ -403,8 +417,9 @@ function Control({
             aria-invalid={wrong || undefined}
             onChange={(e) => onChange(field.key, e.target.checked)}
           />
-          {/* The wording is MLH's and is not ours to shorten. It sits beside
-              the tick rather than above it so the two read as one act. */}
+          {/* The wording is somebody else's legal text and is not ours to
+              shorten. It sits beside the tick rather than above it so the two
+              read as one act. */}
           <span>{field.label}</span>
         </label>
       );

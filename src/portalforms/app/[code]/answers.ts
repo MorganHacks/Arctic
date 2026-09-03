@@ -198,9 +198,9 @@ export function payload(
 /**
  * A question's wording, trimmed to fit in a list of problems.
  *
- * The same length the API trims to, and for the same reason: MLH's
- * data-sharing agreement is sixty words, and quoted whole it buries the
- * complaint it is attached to.
+ * The same length the API trims to, and for the same reason: a consent
+ * question is sixty words of somebody's legal text, and quoted whole it buries
+ * the complaint it is attached to.
  */
 export function shorten(label: string): string {
   return label.length <= 48 ? label : `${label.slice(0, 45).trimEnd()}…`;
