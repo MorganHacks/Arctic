@@ -21,10 +21,10 @@ namespace MorganHacks.Api.Tests;
 /// looks exactly like a filter that is on all six.
 /// </para>
 /// <para>
-/// The second is that the locking rule survives a client that ignores it. The
-/// builder disables the controls on MLH's questions, but a disabled input is a
-/// suggestion — every test below that sends a hostile array is asking whether
-/// the server would have caught a stale tab or a curl command.
+/// The second is what a draft round trip does and does not change. A question
+/// is the author's to reword, reorder or remove, and the tests below check that
+/// what was sent is what comes back — the key excepted, which is the one part
+/// of a draft the server still refuses to accept in the wrong shape.
 /// </para>
 /// </remarks>
 public class FormBuilderTests(ApplicationsDatabase db)
@@ -132,66 +132,65 @@ public class FormBuilderTests(ApplicationsDatabase db)
         }
     }
 
-    // --------------------------------------------------------- locked fields ---
+    // ----------------------------------------------- the questions it starts with ---
 
     [Fact]
-    public async Task MLHs_questions_cannot_be_dropped_by_a_client_that_omits_them()
+    public async Task A_new_application_form_starts_with_the_usual_questions()
     {
-        // The rule the whole affiliation rests on, tested the way it will
-        // actually be broken: not by somebody clicking a delete button that
-        // does not exist, but by a request that simply does not mention the
-        // question. Refused rather than silently repaired, because a client
-        // asking for this is either tampering or broken and both are worth
-        // knowing about.
+        // The one thing the starting set still guarantees. An author opening a
+        // new application form finds the ordinary questions already written
+        // rather than an empty page.
+        var (cookie, form, _) = await OpenBuilderAsync();
+
+        var keys = await KeysOfDraft(cookie, form);
+        Assert.Contains("email", keys);
+        Assert.Contains("mlh_coc_agreed_at", keys);
+    }
+
+    [Fact]
+    public async Task A_starting_question_can_be_taken_off_the_form()
+    {
+        // It used to be refused outright. The author decides now, and a save
+        // that omits a question means the author took it off.
         var (cookie, form, fields) = await OpenBuilderAsync();
         Remove(fields, "mlh_coc_agreed_at");
-
-        var response = await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
-            new { fields });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("mlh_coc_agreed_at", await KeysOfProblems(response));
-
-        // And the draft on disk is untouched, so a refused save cannot be a
-        // way to lose the question by half.
-        Assert.Contains("mlh_coc_agreed_at", await KeysOfDraft(cookie, form));
-    }
-
-    [Fact]
-    public async Task Rewording_MLHs_agreement_does_not_take()
-    {
-        // Normalised rather than refused. An honest client never sends this,
-        // so refusing would only turn a harmless round-trip difference into a
-        // failed autosave in the middle of somebody's sentence — while the
-        // wording that goes in front of an applicant stays MLH's either way.
-        var (cookie, form, fields) = await OpenBuilderAsync();
-        Field(fields, "mlh_coc_agreed_at")!["label"] = "Do whatever you like with my data.";
-        Field(fields, "mlh_coc_agreed_at")!["required"] = false;
-
-        var response = await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
-            new { fields });
-        response.EnsureSuccessStatusCode();
-
-        var saved = Field(await DraftFieldsAsync(cookie, form), "mlh_coc_agreed_at")!;
-        Assert.Equal(MlhFieldsLabel, saved["label"]!.GetValue<string>());
-        Assert.True(saved["required"]!.GetValue<bool>());
-        Assert.True(saved["locked"]!.GetValue<bool>());
-    }
-
-    [Fact]
-    public async Task A_client_cannot_mint_a_question_nobody_can_delete()
-    {
-        // Locked is not a flag a client gets to set. Left alone, an author
-        // could mark their own question undeletable and then nobody —
-        // including them — could take it off again.
-        var (cookie, form, fields) = await OpenBuilderAsync();
-        fields.Add(Question("favourite_language", label: "Favourite language", locked: true));
 
         await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields }))
             .EnsureSuccess();
 
-        var saved = Field(await DraftFieldsAsync(cookie, form), "favourite_language")!;
-        Assert.False(saved["locked"]!.GetValue<bool>());
+        Assert.DoesNotContain("mlh_coc_agreed_at", await KeysOfDraft(cookie, form));
+    }
+
+    [Fact]
+    public async Task Rewording_a_starting_question_takes()
+    {
+        // The wording used to be put straight back from the server, which made
+        // the label box on those questions a control that did nothing.
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        Field(fields, "mlh_coc_agreed_at")!["label"] = "I agree to the code of conduct.";
+        Field(fields, "mlh_coc_agreed_at")!["required"] = false;
+
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields }))
+            .EnsureSuccess();
+
+        var saved = Field(await DraftFieldsAsync(cookie, form), "mlh_coc_agreed_at")!;
+        Assert.Equal("I agree to the code of conduct.", saved["label"]!.GetValue<string>());
+        Assert.False(saved["required"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task A_form_that_keeps_none_of_the_starting_questions_can_be_published()
+    {
+        // The end of the rule, seen from the far side: publishing no longer
+        // checks that any particular question is on the form.
+        var (cookie, form, _) = await OpenBuilderAsync();
+        JsonArray fields = [Question("why_apply", "paragraph", "Why do you want to come?")];
+
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields }))
+            .EnsureSuccess();
+
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie))
+            .EnsureSuccess();
     }
 
     // ------------------------------------------------------------------ keys ---
@@ -250,10 +249,10 @@ public class FormBuilderTests(ApplicationsDatabase db)
     }
 
     [Fact]
-    public async Task Reordering_questions_is_allowed_even_across_a_locked_one()
+    public async Task Reordering_questions_keeps_the_order_it_was_sent_in()
     {
-        // Where a question sits on the page is a presentation choice and none
-        // of MLH's business. Only the wording is theirs.
+        // Where a question sits on the page is the author's decision, and the
+        // order is taken from the submission rather than reimposed.
         var (cookie, form, fields) = await OpenBuilderAsync();
         var moved = Field(fields, "mlh_coc_agreed_at")!.DeepClone();
         Remove(fields, "mlh_coc_agreed_at");
@@ -422,10 +421,6 @@ public class FormBuilderTests(ApplicationsDatabase db)
 
     // --------------------------------------------------------------- helpers ---
 
-    /// <summary>MLH's required wording, which is not ours to reword.</summary>
-    private const string MlhFieldsLabel =
-        "I have read and agree to the MLH Code of Conduct.";
-
     /// <summary>A form on a fresh event, opened for editing.</summary>
     /// <remarks>
     /// A new event per test rather than one shared. These tests publish and
@@ -464,8 +459,7 @@ public class FormBuilderTests(ApplicationsDatabase db)
         string type = "shortText",
         string label = "A question",
         bool required = false,
-        object[]? options = null,
-        bool locked = false) =>
+        object[]? options = null) =>
         JsonSerializer.SerializeToNode(new
         {
             key,
@@ -474,7 +468,6 @@ public class FormBuilderTests(ApplicationsDatabase db)
             required,
             options = options ?? [],
             storage = "responses",
-            locked,
         })!;
 
     private static JsonNode? Field(JsonArray fields, string key) =>

@@ -146,8 +146,8 @@ export type FieldOption = { value: string; label: string };
  *
  * Sent back whole on every save, including the properties the builder never
  * shows — `storage`, `column`, the length bounds. Dropping what this screen
- * does not edit would mean the first autosave quietly rewriting how MLH's
- * answers are filed.
+ * does not edit would mean the first autosave quietly rewriting where a
+ * question's answers are filed.
  *
  * On a `section`, `label` is the page's heading and `help` is its description.
  * `required` and `options` are not ignored there but refused: the API will not
@@ -163,7 +163,6 @@ export type FormField = {
   options: FieldOption[];
   storage: "column" | "responses";
   column?: string | null;
-  locked: boolean;
   minLength?: number | null;
   maxLength?: number | null;
   min?: number | null;
@@ -226,15 +225,6 @@ export type DraftView = {
   form: FormSummary;
   draft: { id: string; version: number; fields: FormField[] };
   published: { version: number; publishedAt: string | null } | null;
-
-  /**
-   * The keys the server will refuse to let go of.
-   *
-   * Its own list rather than read off the `locked` flag on each field. The
-   * flag says what this draft happens to record; this says what the API will
-   * actually enforce, and those are the same only when nothing has gone wrong.
-   */
-  locked: string[];
 
   /**
    * Every application status an audience can be built from, in lifecycle

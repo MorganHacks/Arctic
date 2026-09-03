@@ -357,7 +357,7 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
     public void A_required_answer_that_was_left_out_is_refused()
     {
         var problems = SubmissionValidation.Check(
-            MlhFields.All, Answers(Unique("missing"), ("phone", null)));
+            StartingQuestions.All, Answers(Unique("missing"), ("phone", null)));
 
         Assert.Contains(problems, p => p.FieldKey == "phone");
     }
@@ -369,7 +369,7 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
         // absence of one. Reading it as "present" is how an application gets
         // submitted without the agreement MLH affiliation depends on.
         var problems = SubmissionValidation.Check(
-            MlhFields.All, Answers(Unique("unticked"), ("mlh_coc_agreed_at", false)));
+            StartingQuestions.All, Answers(Unique("unticked"), ("mlh_coc_agreed_at", false)));
 
         Assert.Contains(problems, p => p.FieldKey == "mlh_coc_agreed_at");
     }
@@ -381,7 +381,7 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
         // does not fail loudly — it turns up months on as a category on a
         // report nobody put there.
         var problems = SubmissionValidation.Check(
-            MlhFields.All, Answers(Unique("option"), ("level_of_study", "wizard")));
+            StartingQuestions.All, Answers(Unique("option"), ("level_of_study", "wizard")));
 
         Assert.Contains(problems, p => p.FieldKey == "level_of_study");
     }
@@ -389,8 +389,8 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
     [Fact]
     public void A_number_outside_the_range_the_form_set_is_refused()
     {
-        var age = MlhFields.All.Single(f => f.Key == "age") with { Min = 18, Max = 100 };
-        var fields = MlhFields.All.Select(f => f.Key == "age" ? age : f).ToList();
+        var age = StartingQuestions.All.Single(f => f.Key == "age") with { Min = 18, Max = 100 };
+        var fields = StartingQuestions.All.Select(f => f.Key == "age" ? age : f).ToList();
 
         var problems = SubmissionValidation.Check(
             fields, Answers(Unique("range"), ("age", 4)));
@@ -405,7 +405,7 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
         // under an age they did not give, and failing at the INSERT would show
         // them a 500 for a typo.
         var problems = SubmissionValidation.Check(
-            MlhFields.All, Answers(Unique("half"), ("age", 20.5)));
+            StartingQuestions.All, Answers(Unique("half"), ("age", 20.5)));
 
         Assert.Contains(problems, p => p.FieldKey == "age");
     }
@@ -416,7 +416,7 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
         // This is the only way we can reach them. Getting it wrong is not
         // caught later by anything.
         var problems = SubmissionValidation.Check(
-            MlhFields.All, Answers("ada at morgan dot edu"));
+            StartingQuestions.All, Answers("ada at morgan dot edu"));
 
         Assert.Contains(problems, p => p.FieldKey == "email");
     }
@@ -427,7 +427,7 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
         // No authentication on this endpoint, and responses is a jsonb with
         // nothing bounding it. A cap has to exist even when the form sets none.
         var problems = SubmissionValidation.Check(
-            MlhFields.All, Answers(Unique("long"), ("first_name", new string('a', 5_000))));
+            StartingQuestions.All, Answers(Unique("long"), ("first_name", new string('a', 5_000))));
 
         Assert.Contains(problems, p => p.FieldKey == "first_name");
     }
@@ -438,7 +438,7 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
         // This is a phone form somebody is filling in on a bus. One complaint
         // at a time turns a single pass into six round trips.
         var problems = SubmissionValidation.Check(
-            MlhFields.All,
+            StartingQuestions.All,
             Answers(Unique("several"), ("phone", null), ("school", null), ("age", "old")));
 
         Assert.Equal(3, problems.Count);
@@ -460,7 +460,7 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
         // to work: the rule is that a section is not answerable, not that it is
         // answerable whenever the flag happens to be false.
         List<FormField> fields =
-            [.. MlhFields.All, PageBreak("section_about") with { Required = true }];
+            [.. StartingQuestions.All, PageBreak("section_about") with { Required = true }];
 
         Assert.Empty(SubmissionValidation.Check(fields, Answers(Unique("paged"))));
     }

@@ -12,7 +12,7 @@ namespace MorganHacks.Api.Tests;
 /// </remarks>
 public class FormValidationTests
 {
-    private static List<FormField> ValidForm() => [.. MlhFields.All];
+    private static List<FormField> ValidForm() => [.. StartingQuestions.All];
 
     private static FormField Question(string key, string label = "A question") => new()
     {
@@ -31,22 +31,35 @@ public class FormValidationTests
     [Fact]
     public void The_starting_form_is_publishable()
     {
-        // Every form begins with MLH's questions, so a team that changes
+        // An application form begins with these, so a team that changes
         // nothing still has something they are allowed to publish.
         Assert.True(FormValidation.CanPublish(ValidForm()));
     }
 
     [Fact]
-    public void A_form_missing_an_MLH_question_cannot_be_published()
+    public void A_starting_question_may_be_taken_off_the_form()
     {
-        // The failure this exists for: somebody tidies the form the week before
-        // launch and removes an obligation. It surfaces at the export, when
-        // several hundred people can no longer be asked again.
+        // The questions a new form starts with are a starting point rather
+        // than an obligation. Whether a phone number is worth asking for is
+        // the registration team's decision, and publishing without it is
+        // allowed.
         var fields = ValidForm();
         fields.RemoveAll(f => f.Key == "phone");
 
-        Assert.Contains(FormValidation.Check(fields), p => p.FieldKey == "phone");
-        Assert.False(FormValidation.CanPublish(fields));
+        Assert.Empty(FormValidation.Check(fields));
+        Assert.True(FormValidation.CanPublish(fields));
+    }
+
+    [Fact]
+    public void A_starting_question_may_be_reworded()
+    {
+        // The agreements included, whose wording used to be put back under the
+        // author on every save.
+        var fields = ValidForm();
+        var at = fields.FindIndex(f => f.Key == "mlh_coc_agreed_at");
+        fields[at] = fields[at] with { Label = "I agree to the code of conduct." };
+
+        Assert.True(FormValidation.CanPublish(fields));
     }
 
     [Fact]
@@ -62,13 +75,12 @@ public class FormValidationTests
     }
 
     [Fact]
-    public void A_survey_does_not_have_to_carry_the_MLH_questions()
+    public void A_form_of_one_question_is_publishable_whatever_kind_it_is()
     {
-        // They are questions about people coming to the event. A mentor
-        // sign-up or a feedback survey is not that, and demanding a code of
-        // conduct agreement on one made the builder useless for anything but
-        // the application form.
-        List<FormField> survey =
+        // A mentor sign-up, a feedback survey and an application form are all
+        // just forms now. Nothing is demanded of one that is not demanded of
+        // the others.
+        List<FormField> one =
         [
             new()
             {
@@ -79,37 +91,17 @@ public class FormValidationTests
             },
         ];
 
-        Assert.Empty(FormValidation.Check(survey, requiresMlh: false));
-        Assert.True(FormValidation.CanPublish(survey, requiresMlh: false));
+        Assert.Empty(FormValidation.Check(one));
+        Assert.True(FormValidation.CanPublish(one));
     }
 
     [Fact]
-    public void An_application_still_has_to()
+    public void The_starting_questions_do_not_collide_with_each_other()
     {
-        // The other half. Loosening this for surveys must not loosen it where
-        // the obligation is real.
-        List<FormField> application =
-        [
-            new()
-            {
-                Key = "why_apply",
-                Type = FieldType.Paragraph,
-                Label = "Why do you want to come?",
-                Required = true,
-            },
-        ];
-
-        Assert.NotEmpty(FormValidation.Check(application));
-        Assert.False(FormValidation.CanPublish(application));
-    }
-
-    [Fact]
-    public void The_MLH_questions_do_not_collide_with_each_other()
-    {
-        // Several MLH fields store in columns, and this check would be
-        // worthless if the required set tripped it. It also caught a mistake in
-        // the test below, which reached for 'email' without noticing MLH had
-        // already claimed it.
+        // Several of them store in columns, and the collision check would be
+        // worthless if the set a form starts with tripped it. It also caught a
+        // mistake in the test below, which reached for 'email' without noticing
+        // the starting set had already claimed it.
         Assert.DoesNotContain(
             FormValidation.Check(ValidForm()),
             p => p.Message.Contains("stores in the column"));
@@ -236,17 +228,13 @@ public class FormValidationTests
         // One at a time turns fixing a form into a guessing game where each fix
         // reveals the next complaint.
         var fields = ValidForm();
-        fields.RemoveAll(f => f.Key is "phone" or "age");
+
+        // A choice question with no wording and nothing to choose from, twice
+        // over and under one key: four complaints from two questions.
+        fields.Add(new FormField { Key = "x", Type = FieldType.Select, Label = "" });
         fields.Add(new FormField { Key = "x", Type = FieldType.Select, Label = "" });
 
         Assert.True(FormValidation.Check(fields).Count >= 3);
-    }
-
-    [Fact]
-    public void MLHs_own_questions_are_locked()
-    {
-        // The builder reads this to decide what it will let somebody delete.
-        Assert.All(MlhFields.All, f => Assert.True(f.Locked));
     }
 
     [Fact]
@@ -256,7 +244,7 @@ public class FormValidationTests
         // form version 3", and this is a legal agreement we may have to show.
         foreach (var key in new[] { "mlh_coc_agreed_at", "mlh_data_sharing_at" })
         {
-            var field = MlhFields.All.Single(f => f.Key == key);
+            var field = StartingQuestions.All.Single(f => f.Key == key);
             Assert.True(field.Required);
             Assert.Equal(AnswerStorage.Column, field.Storage);
             Assert.EndsWith("_at", field.Column);
@@ -266,8 +254,9 @@ public class FormValidationTests
     [Fact]
     public void Marketing_consent_is_optional()
     {
-        // MLH requires it be offered, not that anybody accepts it.
-        Assert.False(MlhFields.All.Single(f => f.Key == "mlh_marketing_opt_in").Required);
+        // Offered rather than demanded, which is how a new form starts out.
+        Assert.False(
+            StartingQuestions.All.Single(f => f.Key == "mlh_marketing_opt_in").Required);
     }
 
 
@@ -355,9 +344,9 @@ public class FormValidationTests
         List<FormField> headings = [PageBreak("section_one"), PageBreak("section_two", "Page three")];
 
         Assert.Contains(
-            FormValidation.Check(headings, requiresMlh: false),
+            FormValidation.Check(headings),
             p => p.Message.Contains("does not ask anything"));
-        Assert.False(FormValidation.CanPublish(headings, requiresMlh: false));
+        Assert.False(FormValidation.CanPublish(headings));
     }
 
     [Fact]
@@ -365,6 +354,6 @@ public class FormValidationTests
     {
         // The same rule from the other side. A survey with nothing on it is a
         // link that collects nothing.
-        Assert.False(FormValidation.CanPublish([], requiresMlh: false));
+        Assert.False(FormValidation.CanPublish([]));
     }
 }

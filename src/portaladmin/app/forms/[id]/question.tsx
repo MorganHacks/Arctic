@@ -2,14 +2,12 @@
 
 import type { FieldOption, FormField } from "@/lib/api";
 import styles from "./builder.module.css";
-import { CHOICE_TYPES, TYPES, TYPE_NAMES, nextOptionValue } from "./fields";
+import { CHOICE_TYPES, TYPES, nextOptionValue } from "./fields";
 import {
   ArrowDown,
   ArrowUp,
   Cross,
   Duplicate,
-  Info,
-  Lock,
   PageBreakIcon,
   Plus,
   Trash,
@@ -19,9 +17,10 @@ import {
 /**
  * One question, open for editing.
  *
- * A locked question renders through the same component rather than a separate
- * read-only one. Two components would drift, and the drift would be a locked
- * question that had quietly become editable on a screen nobody was looking at.
+ * Every question on the form goes through here, including the ones an
+ * application form started out with. They used to render read-only; the
+ * registration team decides what an application asks now, so there is one
+ * treatment and no question the screen refuses to edit.
  */
 export function Question({
   field,
@@ -30,7 +29,6 @@ export function Question({
   count,
   problems,
   disabled,
-  settling,
   onChange,
   onMove,
   onDuplicate,
@@ -52,18 +50,11 @@ export function Question({
   problems: string[];
   disabled: boolean;
 
-  /** True for the moment after this card was moved, and no longer. */
-  settling: boolean;
-
   onChange: (changes: Partial<FormField>) => void;
   onMove: (delta: number) => void;
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
-  // Locked is what MLH's affiliation requires; disabled is not holding
-  // forms.manage. They look the same to a hand on a keyboard and read very
-  // differently, so only one of them gets an explanation.
-  const frozen = field.locked || disabled;
   const choices = CHOICE_TYPES.has(field.type);
 
   // A page break is a divider, not something to answer, and the editor has to
@@ -80,7 +71,6 @@ export function Question({
         count={count}
         problems={problems}
         disabled={disabled}
-        settling={settling}
         onChange={onChange}
         onMove={onMove}
         onRemove={onRemove}
@@ -111,16 +101,13 @@ export function Question({
   };
 
   return (
-    <li className={cardClass(styles.card, problems.length > 0, settling)}>
+    <li className={cardClass(styles.card, problems.length > 0)} data-key={field.key}>
       <div className={styles.cardHead}>
         <span className={styles.ordinal}>{ordinal}</span>
 
-        {/* No echo of the wording here. On an editable question the label
-            field is the line directly below this one and on a locked one the
-            full text is, so a heading would be the same string printed twice a
-            centimetre apart — which reads as a bug rather than as a title, and
-            on MLH's sixty-word agreement it would be sixty words truncated to
-            four. */}
+        {/* No echo of the wording here. The label field is the line directly
+            below this one, so a heading would be the same string printed twice
+            a centimetre apart, which reads as a bug rather than as a title. */}
         {field.required ? (
           <span className={styles.req} aria-hidden="true">
             *
@@ -129,46 +116,32 @@ export function Question({
 
         <span className={styles.spacer} />
 
-        {/* What an answer is filed under. Shown because it is the column
-            header in an export and the property name in the stored answer, and
-            somebody will eventually have to match one to the other. Never
-            editable, and never hidden behind a hover — this is the string
-            somebody is squinting at when a spreadsheet does not line up, and a
-            keyboard cannot hover. */}
-        <code className={styles.key} title="Answers are stored under this key">
-          {field.key}
-        </code>
-
-        {field.locked ? (
-          <span className="pill lapsed">{TYPE_NAMES.get(field.type)}</span>
-        ) : (
-          <select
-            aria-label="Question type"
-            className={styles.type}
-            value={field.type}
-            disabled={disabled}
-            onChange={(event) =>
-              onChange({
-                type: event.target.value as FormField["type"],
-                // Options are dropped when a question stops being a choice,
-                // because leaving them would mean a paragraph question that
-                // still refuses to publish over a duplicate option nobody can
-                // see any more.
-                options: CHOICE_TYPES.has(event.target.value as FormField["type"])
-                  ? field.options.length > 0
-                    ? field.options
-                    : [{ value: "option_1", label: "Option 1" }]
-                  : [],
-              })
-            }
-          >
-            {TYPES.map((type) => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
-            ))}
-          </select>
-        )}
+        <select
+          aria-label="Question type"
+          className={styles.type}
+          value={field.type}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange({
+              type: event.target.value as FormField["type"],
+              // Options are dropped when a question stops being a choice,
+              // because leaving them would mean a paragraph question that
+              // still refuses to publish over a duplicate option nobody can
+              // see any more.
+              options: CHOICE_TYPES.has(event.target.value as FormField["type"])
+                ? field.options.length > 0
+                  ? field.options
+                  : [{ value: "option_1", label: "Option 1" }]
+                : [],
+            })
+          }
+        >
+          {TYPES.map((type) => (
+            <option key={type.value} value={type.value}>
+              {type.label}
+            </option>
+          ))}
+        </select>
 
         <div className={styles.tools}>
           {/* Up and down rather than dragging. Dragging needs a library, and
@@ -194,81 +167,58 @@ export function Question({
             <ArrowDown />
           </button>
 
-          {/* Not offered on a locked question. A copy of one is not one — it
-              carries MLH's wording without MLH's guarantee that the wording
-              stays, and a form with two of the same agreement on it is a form
-              somebody answers twice. */}
-          {field.locked ? (
-            <span
-              className={`pill sensitive ${styles.lockPill}`}
-              title="Required by MLH affiliation"
-            >
-              <Lock /> Locked
-            </span>
-          ) : (
-            <>
-              <button
-                type="button"
-                className={styles.iconBtn}
-                aria-label="Duplicate"
-                disabled={disabled}
-                onClick={onDuplicate}
-              >
-                <Duplicate />
-              </button>
-              <button
-                type="button"
-                className={`${styles.iconBtn} ${styles.iconDanger}`}
-                aria-label="Delete question"
-                disabled={disabled}
-                onClick={onRemove}
-              >
-                <Trash />
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            className={styles.iconBtn}
+            aria-label="Duplicate"
+            disabled={disabled}
+            onClick={onDuplicate}
+          >
+            <Duplicate />
+          </button>
+          <button
+            type="button"
+            className={`${styles.iconBtn} ${styles.iconDanger}`}
+            aria-label="Delete question"
+            disabled={disabled}
+            onClick={onRemove}
+          >
+            <Trash />
+          </button>
         </div>
       </div>
 
-      {field.locked ? (
-        <>
-          {/* One short line rather than the whole reason. Ten locked questions
-              sit together at the top of every application form, and the full
-              explanation repeated ten times is a wall somebody scrolls past.
-              It is stated once, above the list. */}
-          <p className={styles.lockNote}>
-            <Info />
-            MLH&rsquo;s wording, and not ours to change.
-          </p>
-          <p className={styles.lockedLabel}>{field.label}</p>
-        </>
-      ) : (
-        <div className={styles.fields}>
-          <div className={styles.field}>
-            <label htmlFor={`${field.key}-label`}>Question</label>
-            <input
-              id={`${field.key}-label`}
-              value={field.label}
-              disabled={disabled}
-              placeholder="What are you asking?"
-              onChange={(event) => onChange({ label: event.target.value })}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor={`${field.key}-help`}>Help text</label>
-            <input
-              id={`${field.key}-help`}
-              value={field.help ?? ""}
-              disabled={disabled}
-              placeholder="Optional. For the thing people always ask."
-              onChange={(event) =>
-                onChange({ help: event.target.value === "" ? null : event.target.value })
-              }
-            />
-          </div>
+      <div className={styles.fields}>
+        <div className={styles.field}>
+          <label htmlFor={`${field.key}-label`}>Question</label>
+          {/* A textarea rather than a single-line box. Several of the
+              questions an application form starts with are agreements sixty
+              words long, and an agreement that cannot be read in the box it
+              is edited in is one nobody checks before publishing it. */}
+          <textarea
+            id={`${field.key}-label`}
+            rows={2}
+            className={styles.label}
+            value={field.label}
+            disabled={disabled}
+            placeholder="What are you asking?"
+            onChange={(event) => onChange({ label: event.target.value })}
+          />
         </div>
-      )}
+
+        <div className={styles.field}>
+          <label htmlFor={`${field.key}-help`}>Help text</label>
+          <input
+            id={`${field.key}-help`}
+            value={field.help ?? ""}
+            disabled={disabled}
+            placeholder="Optional. For the thing people always ask."
+            onChange={(event) =>
+              onChange({ help: event.target.value === "" ? null : event.target.value })
+            }
+          />
+        </div>
+      </div>
 
       {choices ? (
         <div className={styles.options}>
@@ -306,7 +256,7 @@ export function Question({
                   aria-label={`Option ${at + 1}`}
                   className={styles.optionLabel}
                   value={option.label}
-                  disabled={frozen}
+                  disabled={disabled}
                   onChange={(event) => setOption(at, { label: event.target.value })}
                 />
                 <code className={styles.optionValue}>{option.value}</code>
@@ -315,7 +265,7 @@ export function Question({
                   type="button"
                   className={styles.iconBtn}
                   aria-label={`Move option ${at + 1} up`}
-                  disabled={frozen || at === 0}
+                  disabled={disabled || at === 0}
                   onClick={() => moveOption(at, -1)}
                 >
                   <ArrowUp />
@@ -324,7 +274,7 @@ export function Question({
                   type="button"
                   className={styles.iconBtn}
                   aria-label={`Move option ${at + 1} down`}
-                  disabled={frozen || at === field.options.length - 1}
+                  disabled={disabled || at === field.options.length - 1}
                   onClick={() => moveOption(at, 1)}
                 >
                   <ArrowDown />
@@ -333,7 +283,7 @@ export function Question({
                   type="button"
                   className={`${styles.iconBtn} ${styles.iconDanger}`}
                   aria-label={`Remove option ${at + 1}`}
-                  disabled={frozen || field.options.length === 1}
+                  disabled={disabled || field.options.length === 1}
                   onClick={() =>
                     onChange({ options: field.options.filter((_, i) => i !== at) })
                   }
@@ -344,7 +294,7 @@ export function Question({
             ))}
           </div>
 
-          {frozen ? null : (
+          {disabled ? null : (
             <button
               type="button"
               className={styles.addOption}
@@ -372,7 +322,7 @@ export function Question({
           <input
             type="checkbox"
             checked={field.required}
-            disabled={frozen}
+            disabled={disabled}
             onChange={(event) => onChange({ required: event.target.checked })}
           />
           Required
@@ -403,7 +353,6 @@ function PageBreak({
   count,
   problems,
   disabled,
-  settling,
   onChange,
   onMove,
   onRemove,
@@ -413,13 +362,12 @@ function PageBreak({
   count: number;
   problems: string[];
   disabled: boolean;
-  settling: boolean;
   onChange: (changes: Partial<FormField>) => void;
   onMove: (delta: number) => void;
   onRemove: () => void;
 }) {
   return (
-    <li className={cardClass(styles.break, problems.length > 0, settling)}>
+    <li className={cardClass(styles.break, problems.length > 0)} data-key={field.key}>
       <div className={styles.cardHead}>
         <span className={styles.breakIcon}>
           <PageBreakIcon />
@@ -521,8 +469,6 @@ function Problems({ problems }: { problems: string[] }) {
 }
 
 /** The card, plus whatever is currently true of it. */
-function cardClass(base: string, flagged: boolean, settling: boolean): string {
-  return [base, flagged ? styles.flagged : null, settling ? styles.settling : null]
-    .filter(Boolean)
-    .join(" ");
+function cardClass(base: string, flagged: boolean): string {
+  return flagged ? `${base} ${styles.flagged}` : base;
 }

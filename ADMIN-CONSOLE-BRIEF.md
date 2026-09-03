@@ -262,18 +262,26 @@ types an editable, reorderable option list.
 up/down buttons. Drag-only reordering is inaccessible and this screen is used
 for hours.
 
-Also present: **duplicate** a question, delete, and a stable question **key**
-shown on hover (answers are filed under the key, so it never changes when the
-wording does).
+Also present: **duplicate** a question and delete. Each question has a stable
+**key** that answers are filed under, so it never changes when the wording does;
+it is not shown on the question card, because it would be part of a row that
+moves. The responses screens show it, which is where matching an export column
+to a question actually happens.
 
 **Page breaks** cut a long form into steps. Fields before the first break are
 page one. A form with no breaks is a single page. Each break carries a heading
 and an optional description, and the preview should show where the page divides.
 
-**Locked MLH questions.** The application form carries questions required by MLH
-affiliation, in MLH's exact wording. They render as read-only with a **Locked**
-badge and cannot be deleted, reworded or duplicated. The API refuses, not just
-the screen. **Surveys do not carry them** — a mentor sign-up has none.
+**The questions a form starts with.** A new application form is created with a
+standard set of questions already on it, so nobody types the ordinary ten by
+hand. They are a starting point and nothing more: every one of them can be
+reworded, retyped, reordered, duplicated or deleted, and neither the screen nor
+the API argues. **Surveys start empty** — a mentor sign-up carries none.
+
+**Reordering** moves. A question pressed up or down travels to its new place
+rather than appearing in it, in under 200ms, and the two questions that swapped
+both move because both of them did. Under `prefers-reduced-motion` it arrives
+with no travel. The buttons keep focus, so a second press works immediately.
 
 **Saving** is debounced with a persistent status showing `Saved` /
 `Unsaved changes` / `Saving…` / `Not saved`, plus an explicit **Save now**. The

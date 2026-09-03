@@ -50,8 +50,9 @@ public interface IFormStore
     /// <remarks>
     /// A new draft starts from whatever is published, so editing a live form
     /// means changing it rather than rebuilding it. An application form with
-    /// nothing published starts from MLH's questions, because an empty one
-    /// means somebody copying an obligation out of a PDF by hand.
+    /// nothing published starts from <see cref="StartingQuestions"/> instead of
+    /// from an empty page. Those are a starting point and not a rule: every one
+    /// of them can be reworded or taken off from the first edit onwards.
     /// </remarks>
     Task<FormVersion> DraftAsync(Guid formId, Guid? actorId, CancellationToken ct = default);
 

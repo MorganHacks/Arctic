@@ -77,7 +77,6 @@ export function blankField(type: FieldType): FormField {
     options: CHOICE_TYPES.has(type) ? [{ value: "option_1", label: "Option 1" }] : [],
     storage: "responses",
     column: null,
-    locked: false,
   };
 }
 
@@ -100,7 +99,6 @@ export function blankSection(): FormField {
     options: [],
     storage: "responses",
     column: null,
-    locked: false,
   };
 }
 
@@ -111,16 +109,15 @@ export function blankSection(): FormField {
  * questions sharing one make their answers indistinguishable afterwards —
  * which is why the API refuses to publish a form that has them.
  *
- * The copy is never locked and never keeps a column. MLH's questions own the
- * columns they write to, and a second question pointed at the same one would
- * overwrite the first's answer. Options are copied rather than shared, so
- * editing one question's list does not reword the other's.
+ * The copy never keeps a column. A question that stores its answer in one owns
+ * that column, and a second question pointed at the same one would overwrite
+ * the first's answer. Options are copied rather than shared, so editing one
+ * question's list does not reword the other's.
  */
 export function copyOf(field: FormField): FormField {
   return {
     ...field,
     key: newKey(),
-    locked: false,
     storage: "responses",
     column: null,
     options: field.options.map((option) => ({ ...option })),
