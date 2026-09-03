@@ -192,6 +192,39 @@ git checkout main && git merge staging && git push origin main
 
 ---
 
+## Whether a front end rebuilds
+
+Each app carries a `vercel.json` with one line:
+
+```json
+{ "ignoreCommand": "git diff HEAD^ HEAD --quiet . ../../libs" }
+```
+
+It is in the repository rather than the dashboard because the dashboard
+version was wrong for weeks and nothing showed it. The Ignored Build Step read
+
+```
+test ! -d src/portalforms && exit 0 || exit 1
+```
+
+and Vercel runs that from the project's root directory, which is already
+`src/portalforms`. So it looked for `src/portalforms/src/portalforms`, never
+found it, and exited 0 — which Vercel reads as "skip". Every deployment of
+portalforms was `Cancelled` and `forms.morganhacks.com` served nothing, while
+the dashboard showed a healthy project with a correctly attached domain.
+
+`git diff --quiet` already has the exit codes Vercel wants: 0 when nothing
+changed, so skip; 1 when something did, so build. `libs` is in the path list
+because every app imports its palette from there, and a change that does not
+rebuild them is a colour that means two things in two places.
+
+`vercel.json` is validated against a fixed schema and rejects keys it does not
+know, including a `"//"` used as a comment. That is why this explanation is
+here and not in the file.
+
+On a shallow clone `HEAD^` may not resolve, which errors non-zero and therefore
+builds. Failing towards a build is the right way round.
+
 ## Project settings that are not in code
 
 Two settings live on the Vercel project, because they have to:
