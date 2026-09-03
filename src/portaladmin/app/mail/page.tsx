@@ -24,7 +24,8 @@ export default async function Mail() {
   // Neither needs the other's answer. The forms are only for the segment
   // picker, and awaiting them in turn would make the screen twice as slow to
   // arrive for nothing.
-  const [campaigns, forms] = await Promise.all([readCampaigns(), readForms()]);
+  const [campaigns, choices] = await Promise.all([readCampaigns(), readForms()]);
+  const { forms, events } = choices;
 
   if (!campaigns.ok) {
     return (
@@ -65,7 +66,7 @@ export default async function Mail() {
         </p>
       ) : null}
 
-      {canSend ? <NewCampaign forms={forms} create={newCampaign} /> : null}
+      {canSend ? <NewCampaign forms={forms} events={events} create={newCampaign} /> : null}
 
       {campaigns.items.length === 0 ? (
         <NoCampaigns />

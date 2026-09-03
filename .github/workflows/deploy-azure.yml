@@ -130,6 +130,7 @@ jobs:
           GOOGLE_REDIRECT_URI: ${{ vars.GOOGLE_REDIRECT_URI }}
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
           WARM_REPLICAS: ${{ vars.WARM_REPLICAS || '0' }}
+          PROXY_SHARED_SECRET: ${{ secrets.PROXY_SHARED_SECRET }}
         run: ./deploy/azure/deploy.sh ${{ steps.target.outputs.env }}
 
       - name: Deploy
@@ -145,6 +146,7 @@ jobs:
           GOOGLE_REDIRECT_URI: ${{ vars.GOOGLE_REDIRECT_URI }}
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
           WARM_REPLICAS: ${{ vars.WARM_REPLICAS || '0' }}
+          PROXY_SHARED_SECRET: ${{ secrets.PROXY_SHARED_SECRET }}
           SKIP_PUSH: ${{ steps.target.outputs.skip_push }}
         run: ./deploy/azure/deploy.sh ${{ steps.target.outputs.env }} --apply ${{ steps.target.outputs.tag }}
 

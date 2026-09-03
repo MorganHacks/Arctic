@@ -66,18 +66,24 @@ builder.Services.AddReverseProxy()
 // double. Accept the imprecision: a shared counter means Redis, and Redis
 // means another thing to run, pay for, and have fall over at 2am during
 // registration week. Set it at half what you want.
+// Proof that a request came through one of our front ends rather than from
+// somebody typing at harbor's public hostname. Only then are the forwarded
+// address headers believed. Empty means never believe them, which is a worse
+// rate limit rather than an absent one -- see ClientAddress.
+var proxySecret = builder.Configuration["Network:ProxySecret"];
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    options.AddPolicy("auth-strict", Limiter(permits: 10, perMinutes: 15));
+    options.AddPolicy("auth-strict", Limiter(proxySecret, permits: 10, perMinutes: 15));
 
     // Deliberately generous. SNS delivers bounce notifications in bulk after a
     // blast, and throttling them loses the record of who bounced — which is
     // the one thing the webhook exists to capture. The endpoint verifies every
     // signature, so volume alone buys an unauthenticated caller nothing.
-    options.AddPolicy("webhook", Limiter(permits: 600, perMinutes: 1));
-    options.AddPolicy("standard", Limiter(permits: 300, perMinutes: 1));
+    options.AddPolicy("webhook", Limiter(proxySecret, permits: 600, perMinutes: 1));
+    options.AddPolicy("standard", Limiter(proxySecret, permits: 300, perMinutes: 1));
 });
 
 var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
@@ -124,13 +130,14 @@ app.MapReverseProxy();
 
 app.Run();
 
-static Func<HttpContext, RateLimitPartition<string>> Limiter(int permits, int perMinutes) =>
+static Func<HttpContext, RateLimitPartition<string>> Limiter(
+    string? proxySecret, int permits, int perMinutes) =>
     http => RateLimitPartition.GetFixedWindowLimiter(
         // Not RemoteIpAddress. Both front ends call this from their own server
         // rather than from the browser, so that address is Vercel's and every
         // applicant in the world shares one bucket — ten sign-ins a quarter of
         // an hour for everybody. Measured against staging, not assumed.
-        ClientAddress.ForRateLimit(http),
+        ClientAddress.ForRateLimit(http, proxySecret),
         _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = permits,

@@ -60,8 +60,8 @@ export default async function Campaign({
   // person can read. Its id otherwise, which is less useful and still true.
   const segment = campaign.segment;
   const formName =
-    segment?.kind === "form"
-      ? (forms.find((form) => form.id === segment.formId)?.name ?? null)
+    segment?.type === "formRespondents"
+      ? (forms.forms.find((form) => form.id === segment.formId)?.name ?? null)
       : null;
 
   return (

@@ -1,12 +1,5 @@
 import { apiFetch, type FormsView } from "@/lib/api";
-import type {
-  Campaign,
-  CampaignRow,
-  CampaignStatus,
-  FormChoice,
-  Preview,
-  Segment,
-} from "@/components/mail/types";
+import type { Campaign, CampaignRow, CampaignStatus, EventChoice, FormChoice, Preview, Segment } from "@/components/mail/types";
 
 /**
  * Talking to the campaigns API.
@@ -246,17 +239,29 @@ async function change(id: string, verb: "send" | "cancel"): Promise<Changed> {
  * form segment offers nothing, and the other two still work — which is less
  * useful than the whole screen and better than none of it.
  */
-export async function readForms(): Promise<FormChoice[]> {
+export async function readForms(): Promise<{
+  forms: FormChoice[];
+  events: EventChoice[];
+}> {
   try {
     const response = await apiFetch("/admin/forms");
     if (!response.ok) {
-      return [];
+      return { forms: [], events: [] };
     }
 
-    const { forms } = (await response.json()) as FormsView;
-    return forms.map((form) => ({ id: form.id, name: form.name }));
+    // The events ride along with the forms rather than being fetched
+    // separately, because that endpoint already returns them and an
+    // applicantStatus segment cannot be built without one.
+    const { forms, events } = (await response.json()) as FormsView & {
+      events?: EventChoice[];
+    };
+
+    return {
+      forms: forms.map((form) => ({ id: form.id, name: form.name })),
+      events: (events ?? []).map((event) => ({ id: event.id, name: event.name })),
+    };
   } catch {
-    return [];
+    return { forms: [], events: [] };
   }
 }
 
@@ -316,7 +321,11 @@ function seed(): void {
       createdAt: exampleStamp(90),
       sentAt: null,
       templateKey: "example_template",
-      segment: { kind: "applicants", status: "accepted" } as Segment,
+      segment: {
+        type: "applicationStatus",
+        eventId: "00000000-0000-0000-0000-000000000000",
+        statuses: ["accepted"],
+      } as Segment,
     },
     {
       id: "example-queued",
@@ -326,7 +335,11 @@ function seed(): void {
       createdAt: exampleStamp(240),
       sentAt: null,
       templateKey: "example_template",
-      segment: { kind: "applicants", status: "submitted" } as Segment,
+      segment: {
+        type: "applicationStatus",
+        eventId: "00000000-0000-0000-0000-000000000000",
+        statuses: ["submitted"],
+      } as Segment,
     },
     {
       id: "example-sent",
@@ -336,7 +349,10 @@ function seed(): void {
       createdAt: exampleStamp(4_320),
       sentAt: exampleStamp(4_280),
       templateKey: "example_template",
-      segment: { kind: "addresses", addresses: exampleAddresses(118) } as Segment,
+      segment: {
+        type: "explicitList",
+        emails: exampleAddresses(118),
+      } as Segment,
     },
   ]) {
     examples.set(campaign.id, campaign);
@@ -401,11 +417,11 @@ function examplePreview(id: string): Preview | null {
 
   const segment = campaign.segment;
   const recipientCount =
-    segment.kind === "addresses"
-      ? segment.addresses.length
-      : segment.kind === "form"
+    segment.type === "explicitList"
+      ? segment.emails.length
+      : segment.type === "formRespondents"
         ? 47
-        : 20 + segment.status.length * 17;
+        : 20 + segment.statuses.join().length * 17;
 
   return {
     recipientCount,

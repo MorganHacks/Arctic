@@ -39,6 +39,24 @@ public static class Events
     public const string ApplicationSubmitted = "application.submitted";
 
     /// <summary>
+    /// An organizer moved an application to a new status.
+    /// </summary>
+    /// <remarks>
+    /// The record of the decision is <c>applications.status_history</c>, which
+    /// a trigger writes inside the same transaction and which outlives any log
+    /// retention window. This line is for the job a table cannot do: an alert
+    /// fires on a line arriving, and four hundred of these in an evening is
+    /// either the day decisions went out or somebody working through the queue
+    /// with a script.
+    /// <para>
+    /// Carries both person ids and the two statuses. Never the reason, which is
+    /// a sentence somebody wrote about an applicant — that lives on the history
+    /// row, behind a permission, where a log line is not.
+    /// </para>
+    /// </remarks>
+    public const string ApplicationStatusChanged = "application.status_changed";
+
+    /// <summary>
     /// A resume was accepted and written to the object store.
     /// </summary>
     /// <remarks>
@@ -80,6 +98,25 @@ public static class Events
 
     /// <summary>An address was added to the suppression list.</summary>
     public const string AddressSuppressed = "address.suppressed";
+
+    /// <summary>A broadcast was drafted. Nobody has been mailed.</summary>
+    public const string CampaignCreated = "campaign.created";
+
+    /// <summary>
+    /// A broadcast was approved and its recipient list frozen.
+    /// </summary>
+    /// <remarks>
+    /// The one line in this file worth waking somebody for. Everything else
+    /// here is watched for absence; this is watched because it happened —
+    /// several hundred emails have just entered the queue and cannot be
+    /// recalled once lark starts draining them. It carries who drafted it, who
+    /// approved it, and how many people it reached, which is the whole of what
+    /// an after-the-fact question needs.
+    /// </remarks>
+    public const string CampaignQueued = "campaign.queued";
+
+    /// <summary>A broadcast was stopped, and how much of it had already gone.</summary>
+    public const string CampaignCancelled = "campaign.cancelled";
 
     /// <summary>
     /// Somebody changed somebody else's access.

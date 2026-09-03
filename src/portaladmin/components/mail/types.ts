@@ -45,10 +45,13 @@ export type CampaignRow = {
  * Stored on the campaign rather than resolved and forgotten, which is what
  * makes "who exactly did we email" answerable a month later.
  */
+/** An event, for the segment that has to name one. */
+export type EventChoice = { id: string; name: string };
+
 export type Segment =
-  | { kind: "applicants"; status: string }
-  | { kind: "form"; formId: string }
-  | { kind: "addresses"; addresses: string[] };
+  | { type: "applicationStatus"; eventId: string; statuses: string[] }
+  | { type: "formRespondents"; formId: string }
+  | { type: "explicitList"; emails: string[] };
 
 /** One campaign, with the two fields the list does not carry. */
 export type Campaign = CampaignRow & {
@@ -110,15 +113,15 @@ export function describeSegment(
     return "No segment";
   }
 
-  if (segment.kind === "applicants") {
-    return `Applicants · ${statusLabel(segment.status)}`;
+  if (segment.type === "applicationStatus") {
+    return `Applicants · ${segment.statuses.map(statusLabel).join(", ")}`;
   }
 
-  if (segment.kind === "form") {
+  if (segment.type === "formRespondents") {
     return `Form respondents · ${formName ?? segment.formId}`;
   }
 
-  return `Address list · ${segment.addresses.length}`;
+  return `Address list · ${segment.emails.length}`;
 }
 
 /**

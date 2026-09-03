@@ -3,7 +3,11 @@
 import { useActionState, useState } from "react";
 import type { FormState } from "@/app/mail/actions";
 import styles from "./mail.module.css";
-import { APPLICANT_STATUSES, type FormChoice } from "./types";
+import {
+  APPLICANT_STATUSES,
+  type EventChoice,
+  type FormChoice,
+} from "./types";
 
 type Action = (state: FormState, form: FormData) => Promise<FormState>;
 
@@ -21,9 +25,11 @@ type Action = (state: FormState, form: FormData) => Promise<FormState>;
  */
 export function NewCampaign({
   forms,
+  events,
   create,
 }: {
   forms: FormChoice[];
+  events: EventChoice[];
   create: Action;
 }) {
   const [state, action, pending] = useActionState(create, {});
@@ -74,6 +80,23 @@ export function NewCampaign({
       </div>
 
       <div className={styles.segment}>
+        {kind === "applicants" ? (
+          <p className="field">
+            <label htmlFor="eventId">Event</label>
+            {events.length === 0 ? (
+              <span className="meta">There is no event yet.</span>
+            ) : (
+              <select id="eventId" name="eventId" defaultValue={events[0]?.id ?? ""}>
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </p>
+        ) : null}
+
         {kind === "applicants" ? (
           <div>
             <label htmlFor="status">Status</label>

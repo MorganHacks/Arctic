@@ -67,14 +67,29 @@ function addressList(raw: string): string[] {
 function readSegment(form: FormData): Segment | string {
   const kind = text(form, "segmentKind");
 
+  // These names are the API's, not this screen's. The first version of this
+  // file invented its own and nothing caught it, because a segment is jsonb on
+  // the way in and only fails when somebody tries to send.
   if (kind === "applicants") {
     const status = text(form, "status");
-    return status === "" ? "Pick a status." : { kind, status };
+    const eventId = text(form, "eventId");
+
+    if (status === "") {
+      return "Pick a status.";
+    }
+
+    if (eventId === "") {
+      return "Pick an event.";
+    }
+
+    return { type: "applicationStatus", eventId, statuses: [status] };
   }
 
   if (kind === "form") {
     const formId = text(form, "formId");
-    return formId === "" ? "Pick a form." : { kind, formId };
+    return formId === ""
+      ? "Pick a form."
+      : { type: "formRespondents", formId };
   }
 
   if (kind === "addresses") {
@@ -88,7 +103,7 @@ function readSegment(form: FormData): Segment | string {
       return "Every line must be an email address.";
     }
 
-    return { kind, addresses };
+    return { type: "explicitList", emails: addresses };
   }
 
   return "Pick who this goes to.";
