@@ -62,6 +62,22 @@ public static class Events
     /// </remarks>
     public const string ResumeRead = "resume.read";
 
+    /// <summary>
+    /// Somebody took a copy of the answers out of the system.
+    /// </summary>
+    /// <remarks>
+    /// <c>applications.export</c> is on the sensitive list because a
+    /// spreadsheet on a laptop is PII we no longer control, and that is only
+    /// meaningful if taking one leaves a record. This is that record: who,
+    /// which form, and how many rows. Never what was in them.
+    /// <para>
+    /// Worth alerting on by volume rather than by absence, unlike most of this
+    /// list. Exports are rare and deliberate, so several in an evening is
+    /// either a launch week or something to ask about.
+    /// </para>
+    /// </remarks>
+    public const string ResponsesExported = "responses.exported";
+
     /// <summary>An address was added to the suppression list.</summary>
     public const string AddressSuppressed = "address.suppressed";
 
