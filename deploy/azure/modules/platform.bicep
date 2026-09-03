@@ -73,6 +73,17 @@ resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   properties: {
     sku: { name: 'PerGB2018' }
     retentionInDays: 30
+
+    // Ingestion is charged per gigabyte and is the one line here that can run
+    // away on its own: a service that starts logging every request, or a retry
+    // loop that logs its own failure, bills for it. The cap sits a little over
+    // ordinary volume, so a normal month is free and a fault is bounded rather
+    // than open-ended.
+    //
+    // Hitting it stops ingestion until the next day, which loses telemetry and
+    // not data. That is the right way round — and if it is ever hit, the thing
+    // to fix is whatever started shouting, not this number.
+    workspaceCapping: { dailyQuotaGb: json('0.5') }
   }
 }
 

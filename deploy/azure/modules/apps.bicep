@@ -74,6 +74,25 @@ missing.
 ''')
 param pullIdentityClientId string
 
+@description('''
+How many replicas of the web-facing services to keep warm.
+
+Zero is the normal setting and the reason this environment is affordable: a
+request wakes a sleeping replica, and outside registration nobody is waiting
+on the few seconds that takes. The first request after an idle spell is slow,
+every one after it is not.
+
+Raise it to 1 for the weeks registration is open and for the event weekend,
+when a cold start lands on an applicant rather than on an organizer. That is a
+parameter change and a redeploy, not a code change.
+
+This does not apply to lark, which polls a queue on a timer and therefore has
+nothing to wake it. It stays at one replica and is most of the idle cost.
+''')
+@minValue(0)
+@maxValue(3)
+param warmReplicas int = 0
+
 param tags object = {}
 
 var suffix = 'mh-${environmentName}'
@@ -247,7 +266,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
           ]
         }
       ]
-      scale: { minReplicas: 1, maxReplicas: 3 }
+      scale: { minReplicas: warmReplicas, maxReplicas: 3 }
     }
   }
 }
@@ -333,7 +352,7 @@ resource harbor 'Microsoft.App/containerApps@2024-03-01' = {
           ]
         }
       ]
-      scale: { minReplicas: 1, maxReplicas: 3 }
+      scale: { minReplicas: warmReplicas, maxReplicas: 3 }
     }
   }
 }

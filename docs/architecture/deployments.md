@@ -294,6 +294,43 @@ change. Pull them at deploy time rather than pasting them here and forgetting.
 the ingress's, means the header is not being trusted and every limiter is
 sharing one bucket.
 
+## Cost: the services sleep
+
+The web-facing services run at **zero replicas** by default. A request wakes
+one, which takes a few seconds; every request after that is normal. This is
+most of the reason an environment costs about $38/month rather than $185 — an
+always-on replica is billed for all 730 hours of a month whether or not anybody
+visits.
+
+`lark` is the exception and stays at one replica. It polls the mail queue on a
+timer, so nothing would ever wake it, and a mail worker scaled to zero is a
+queue that silently never sends. It is most of the idle cost of the
+environment, and the way to remove it is a KEDA scaler on queue depth rather
+than a lower replica count.
+
+### Turning it off for registration
+
+A cold start is fine for an organizer opening the admin console. It is not fine
+for an applicant on a deadline. So for the weeks registration is open, and for
+the event weekend:
+
+Set `WARM_REPLICAS` to `1` on the GitHub environment and redeploy. Unset it
+afterwards. Unset and empty both mean zero.
+
+That is roughly $30/month more while it is set, which is the right thing to
+spend it on.
+
+### The logging cap
+
+The Log Analytics workspace is capped at **0.5 GB of ingestion a day**.
+Ingestion is charged per gigabyte and is the one line that can run away without
+anybody doing anything wrong — a retry loop that logs its own failure will
+happily bill for it.
+
+Hitting the cap stops ingestion until the next day. That loses telemetry, not
+data. If it is ever hit, fix whatever started shouting rather than raising the
+number.
+
 ## Environment variables
 
 Never committed. Vercel holds the values; the repo documents the contract in

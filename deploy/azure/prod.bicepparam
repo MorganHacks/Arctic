@@ -25,5 +25,15 @@ param googleRedirectUri = readEnvironmentVariable('GOOGLE_REDIRECT_URI', '')
 // The portalweb origin. Emailed sign-in links are built from it.
 param publicBaseUrl = readEnvironmentVariable('PUBLIC_BASE_URL', '')
 
+// Web-facing replicas kept warm. Zero lets them sleep, which is most of the
+// reason this environment is cheap; set WARM_REPLICAS=1 on the GitHub
+// environment for the weeks registration is open, and unset it afterwards.
+// Unset and empty have to mean the same thing here: a GitHub variable that
+// does not exist arrives as an empty string, and int('') fails the whole
+// deployment rather than the parameter.
+param warmReplicas = int(empty(readEnvironmentVariable('WARM_REPLICAS', '0'))
+  ? '0'
+  : readEnvironmentVariable('WARM_REPLICAS', '0'))
+
 param deployPlatform = bool(readEnvironmentVariable('DEPLOY_PLATFORM', 'true'))
 param deployApps = bool(readEnvironmentVariable('DEPLOY_APPS', 'true'))
