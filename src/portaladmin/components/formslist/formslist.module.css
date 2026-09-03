@@ -1,0 +1,183 @@
+/*
+ * The forms list, and the share code wherever it appears.
+ *
+ * A module rather than more rules in app/globals.css. The console's shared
+ * stylesheet is edited by everybody, and a class named `.code` or `.chip` in it
+ * is a collision waiting for whoever writes the next screen.
+ *
+ * Every colour is a token from libs/ui/tokens.css and every size is on the
+ * --step-* scale. Not one hex. The only coloured thing on this screen is a
+ * form's status, because that is the only thing here that changes what somebody
+ * does next.
+ */
+
+/* The share code ------------------------------------------------------- */
+
+/*
+ * Seven characters somebody reads off a slide and types into a phone.
+ *
+ * Monospace so `rn` cannot pass for `m`, letter-spaced so the characters can be
+ * read out one at a time, and lowercase because the alphabet already excludes
+ * the look-alikes that upper case would put back. Never wrapped: a code broken
+ * across two lines grows a hyphen in the reader's head, and a hyphen typed into
+ * the URL bar is a form nobody can reach.
+ */
+.code {
+  font-family: var(--mono);
+  font-size: var(--step0);
+  letter-spacing: 0.2em;
+  color: var(--ink);
+  white-space: nowrap;
+  /* The trailing letter-space would otherwise sit between the code and
+     whatever follows it, which reads as an eighth character. */
+  padding-right: 0.2em;
+}
+
+/* The link on a row ----------------------------------------------------- */
+
+.linkCell {
+  vertical-align: top;
+}
+
+.copyRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+.copyButton {
+  padding: 0.25rem 0.6rem;
+  font-size: var(--step-1);
+}
+
+.address {
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.copyState {
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+/* The link on the builder ----------------------------------------------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.15rem 0.2rem 0.15rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+
+.chipLink {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The same on every form, so it is scenery. The code beside it is the part
+   anybody has to get right. */
+.chipHost {
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.chipCopy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  line-height: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.chipCopy:hover {
+  color: var(--ink);
+  background: var(--raised);
+  border-color: var(--line);
+}
+
+/* Rows ------------------------------------------------------------------ */
+
+.cell {
+  vertical-align: top;
+}
+
+.name {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.name:hover {
+  text-decoration: underline;
+}
+
+/*
+ * What kind of form this is, said quietly.
+ *
+ * Uncoloured on purpose, and beside the name rather than in a column of its
+ * own. Whether a form is an application or a survey is a fact about it rather
+ * than a state of it — it never changes what to do next, and the pill in the
+ * next column that says Live or Closed does.
+ */
+.kind {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+/* A count, aligned so a column of them can be compared without reading each
+   one. A form nobody has written a question on yet shows a dash rather than a
+   nought, because those are different things. */
+.count {
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Making one --------------------------------------------------------- */
+
+.newForm {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.newFormHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+
+.newFormHead h2 {
+  margin: 0;
+}
+
+.newFormNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--step-1);
+}

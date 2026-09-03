@@ -1,9 +1,14 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { NoResponses } from "@/components/responses/no-responses";
 import { Responses } from "@/components/responses/responses";
-import { apiFetch, currentPerson, type DraftView } from "@/lib/api";
+import {
+  apiFetch,
+  currentPerson,
+  type DraftView,
+  type FormSummary,
+} from "@/lib/api";
 import { Shell } from "../../../shell";
+import { FormHeader } from "../form-header";
 import { readPage } from "./api";
 import { loadResponses, openResponse } from "./actions";
 
@@ -59,7 +64,7 @@ export default async function FormResponses({
 
   if (!first.ok) {
     return (
-      <Denied personId={person.personId} name={form.name} formId={id}>
+      <Denied personId={person.personId} form={form} published={published}>
         {first.error}
       </Denied>
     );
@@ -73,17 +78,7 @@ export default async function FormResponses({
 
   return (
     <Shell personId={person.personId}>
-      <Header name={form.name} formId={id}>
-        {form.kind}
-        {" · "}
-        <code>{form.code}</code>
-        {" · "}
-        {published ? (
-          <span className="pill active">Live · v{published.version}</span>
-        ) : (
-          <span className="pill lapsed">Never published</span>
-        )}
-      </Header>
+      <FormHeader form={form} published={published} tab="responses" />
 
       {/* Scaffolding, and says so. Goes with the fixtures in api.ts the moment
           the endpoints land. */}
@@ -118,62 +113,28 @@ export default async function FormResponses({
   );
 }
 
-/** The form's name, and the way back to its questions. */
-function Header({
-  name,
-  formId,
-  children,
-}: {
-  name: string;
-  formId: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <>
-      <Link href="/forms" className="back">
-        ← Forms
-      </Link>
-
-      <div className="form-head">
-        <div>
-          <h1>{name}</h1>
-          {children ? (
-            <p className="lede" style={{ margin: 0 }}>
-              {children}
-            </p>
-          ) : null}
-        </div>
-
-        {/* The only route between the two halves of a form that this screen
-            can build. A form is built once and read for weeks, and having to
-            go back to the list in between is a tax on the weeks. */}
-        <div className="tabs">
-          <Link href={`/forms/${formId}`} className="tab">
-            Questions
-          </Link>
-          <span className="tab on">Responses</span>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/** Why there is nothing here, said plainly. */
+/**
+ * Why there is nothing here, said plainly.
+ *
+ * With the header when the form itself loaded and only the answers did not,
+ * because the way out of this screen is the tab beside it — an error page with
+ * no navigation on it leaves somebody with the back button and a guess.
+ */
 function Denied({
   personId,
-  name,
-  formId,
+  form,
+  published,
   children,
 }: {
   personId: string;
-  name?: string;
-  formId?: string;
+  form?: FormSummary;
+  published?: { version: number; publishedAt: string | null } | null;
   children: React.ReactNode;
 }) {
   return (
     <Shell personId={personId}>
-      {name && formId ? (
-        <Header name={name} formId={formId} />
+      {form ? (
+        <FormHeader form={form} published={published ?? null} tab="responses" />
       ) : (
         <h1>Responses</h1>
       )}

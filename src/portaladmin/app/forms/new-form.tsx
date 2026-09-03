@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import styles from "@/components/formslist/formslist.module.css";
 import { createForm } from "./actions";
 
 /**
@@ -16,12 +17,17 @@ export function NewForm({ eventId }: { eventId: string }) {
   const [state, action, pending] = useActionState(createForm, {});
 
   return (
-    <form action={action} className="panel">
-      <h2>New form</h2>
-      <p className="meta" style={{ marginBottom: "0.75rem" }}>
-        An application form starts with MLH&rsquo;s required questions already
-        on it, and there can only be one per event.
-      </p>
+    <form action={action} className={styles.newForm}>
+      {/* The caveat beside the heading rather than under it. It is the one
+          thing worth knowing before pressing Create, and a line of small print
+          on its own row is a line that gets scrolled past. */}
+      <div className={styles.newFormHead}>
+        <h2>New form</h2>
+        <p className={styles.newFormNote}>
+          An application form starts with MLH&rsquo;s required questions already
+          on it, and there can only be one per event.
+        </p>
+      </div>
 
       <div className="row">
         <input type="hidden" name="eventId" value={eventId} />

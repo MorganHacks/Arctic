@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import type { FormState } from "@/app/mail/actions";
+import type { TemplateRow } from "@/components/templates/types";
 import styles from "./mail.module.css";
 import {
   APPLICANT_STATUSES,
@@ -26,10 +28,16 @@ type Action = (state: FormState, form: FormData) => Promise<FormState>;
 export function NewCampaign({
   forms,
   events,
+  templates,
+  templatesError,
   create,
 }: {
   forms: FormChoice[];
   events: EventChoice[];
+  /** Broadcast templates only. A campaign cannot send anything else. */
+  templates: TemplateRow[];
+  /** Why the templates could not be read, where they could not be. */
+  templatesError: string | null;
   create: Action;
 }) {
   const [state, action, pending] = useActionState(create, {});
@@ -53,15 +61,31 @@ export function NewCampaign({
 
         <div>
           {/* The key, not the wording. A template's subject and body are edited
-              where templates live; this screen only chooses which one goes. */}
-          <label htmlFor="templateKey">Template key</label>
-          <input
-            id="templateKey"
-            name="templateKey"
-            required
-            autoComplete="off"
-            spellCheck={false}
-          />
+              where templates live; this screen only chooses which one goes.
+
+              Only the broadcast ones are here. A transactional template is
+              refused at the send with a message about lanes and subdomains
+              that reads like a fault in the system rather than a choice
+              somebody made on this screen, so it is not offered at all. */}
+          <label htmlFor="templateKey">Template</label>
+          {templatesError !== null ? (
+            <p className="meta">{templatesError}</p>
+          ) : templates.length === 0 ? (
+            <p className="meta">
+              No broadcast templates. <Link href="/templates/new">Write one</Link>
+            </p>
+          ) : (
+            <select id="templateKey" name="templateKey" required defaultValue="">
+              <option value="" disabled>
+                Pick a template
+              </option>
+              {templates.map((template) => (
+                <option key={template.key} value={template.key}>
+                  {template.key}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div>
@@ -148,6 +172,15 @@ export function NewCampaign({
         <button type="submit" className="button primary" disabled={pending}>
           {pending ? "Creating…" : "Create draft"}
         </button>
+
+        {/* For the case the dropdown cannot cover: none of the templates is
+            the email somebody has in mind. Writing one is a screen away
+            rather than a request to whoever has database access. */}
+        {templates.length > 0 ? (
+          <Link href="/templates/new" className="meta">
+            Write a new template
+          </Link>
+        ) : null}
       </div>
 
       {state.error ? (

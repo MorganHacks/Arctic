@@ -1,0 +1,935 @@
+/*
+ * The form builder.
+ *
+ * A module rather than more rules in app/globals.css. Nothing on this screen is
+ * reused anywhere else, and the console's shared stylesheet is edited by
+ * everybody — a class called `.card` or `.option` in it collides with the next
+ * person's screen and neither author finds out until something looks wrong on
+ * a page they were not touching.
+ *
+ * Every colour is a token from libs/ui/tokens.css and every size on the type
+ * scale is a --step-*. Not one hex, and almost no colour at all: the palette's
+ * rule is that colour carries meaning or it is absent. On this screen the only
+ * things allowed to be coloured are a question the API has complained about, a
+ * required marker, and the one button that makes a version live. An author
+ * sits here for an hour; anything tinted for decoration spends that hour
+ * teaching them to ignore the tints that mean something.
+ */
+
+/* The form's identity ------------------------------------------------- */
+
+.head {
+  margin-bottom: 0.9rem;
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tags {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.3rem;
+}
+
+/*
+ * What kind of form this is, said quietly.
+ *
+ * Uncoloured on purpose. Whether a form is an application or a survey never
+ * changes what to do next — it is a fact about the form, not a state of it —
+ * and the pill beside it that says Live or Closed is the one worth a colour.
+ */
+.kind {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+.editing {
+  color: var(--faint);
+  font-size: var(--step-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The link, on the screen it is copied from ----------------------------- */
+
+/* Tabs ----------------------------------------------------------------- */
+
+/*
+ * Underlined rather than boxed, and its own rule rather than the shared one.
+ *
+ * The two halves of a form are one thing seen two ways, not two destinations,
+ * and an underline reads as a place in a document where a boxed button reads as
+ * somewhere else to go.
+ */
+.tabs {
+  display: flex;
+  gap: 1.25rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 1rem;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.1rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: var(--step-1);
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tabOn {
+  composes: tab;
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+/* The bar that says whether the work is safe --------------------------- */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0;
+  margin-bottom: 1rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: var(--step-1);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Only the failure is coloured.
+ *
+ * "Saved" is the state somebody is in for fifty-nine minutes of the hour.
+ * Colouring it green would spend the reader's attention on the answer they
+ * already assumed, and leave nothing for the one minute the answer is no.
+ */
+.saveFailed {
+  composes: save;
+  color: var(--stop);
+}
+
+/*
+ * A dot, because the words change and the shape does not.
+ *
+ * Somebody who has been on this screen for an hour reads the indicator
+ * peripherally, and a line of text that is sometimes "Saved" and sometimes
+ * "Unsaved changes" has no constant thing to glance at.
+ */
+.dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+  transition: background-color 200ms ease;
+}
+
+.dotClean,
+.dotSaved {
+  background: var(--ok);
+}
+
+.dotDirty {
+  background: var(--warn);
+}
+
+/*
+ * The only moving thing in the status.
+ *
+ * A slow breath rather than a blink: it has to be readable as "still working"
+ * out of the corner of an eye without pulling the eye back to it. It runs only
+ * while a write is in flight, which is a few hundred milliseconds — a pulse
+ * that lived on "Saved" would be a light flashing in the corner all afternoon.
+ */
+.dotSaving {
+  background: var(--accent);
+  animation: breathe 1.4s ease-in-out infinite alternate;
+}
+
+.dotFailed {
+  background: var(--stop);
+}
+
+@keyframes breathe {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+/*
+ * The two buttons in the bar, each with its icon beside its word.
+ *
+ * Written as `button.…` rather than as a bare class on purpose. The shared
+ * stylesheet lays `.button` out as an inline-block, this element carries both
+ * classes, and two rules of equal weight are settled by whichever stylesheet
+ * the bundler happened to emit second — which is not a thing to leave to
+ * chance. The element in the selector settles it here instead.
+ */
+button.toolbarButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Two panes ------------------------------------------------------------ */
+
+.pane {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1.35fr) minmax(20rem, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 62rem) {
+  .pane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/*
+ * The preview stays put while the questions scroll past it.
+ *
+ * The whole point of a second pane is answering "what will this look like"
+ * without leaving the question being typed. A preview that scrolls away is a
+ * preview somebody scrolls back to, which is the trip the pane existed to save.
+ */
+.side {
+  position: sticky;
+  top: 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+@media (max-width: 62rem) {
+  .side {
+    position: static;
+  }
+}
+
+.lockNotice {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+.list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* One question --------------------------------------------------------- */
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 0.75rem 0.9rem 0.65rem;
+  transition: border-color 150ms ease;
+}
+
+.card:focus-within {
+  border-color: var(--accent);
+}
+
+/* A question the API has complained about. The left edge rather than a fill, so
+   a form with six problems still reads as a form. */
+.flagged {
+  border-left: 2px solid var(--stop);
+}
+
+/*
+ * A card that has just been moved.
+ *
+ * Reordering by button gives no sense of travel: the list simply differs from
+ * the one that was there a frame ago, and on a form of twenty questions it is
+ * genuinely hard to see which one went where. The card lands rather than
+ * teleports — one short settle, and then it is furniture again.
+ */
+.settling {
+  animation: settle 240ms ease-out;
+}
+
+@keyframes settle {
+  from {
+    transform: translateY(-3px);
+    border-color: var(--accent);
+  }
+  to {
+    transform: translateY(0);
+    border-color: var(--line);
+  }
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ordinal {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--step-2);
+  min-width: 1.15rem;
+}
+
+/* The one place a required marker earns colour: it changes whether somebody
+   can submit. */
+.req {
+  color: var(--stop);
+}
+
+/*
+ * Tick boxes and radios in the browser's colour, corrected to ours.
+ *
+ * Left alone they come out in the operating system's accent — which on a
+ * console whose entire palette is one deliberate blue means the one thing on
+ * the screen nobody chose, and it changes per reader. The preview is the worse
+ * half of that: it claims to show what an applicant will see, and it would be
+ * showing them somebody else's accent.
+ */
+.card input,
+.break input,
+.preview input {
+  accent-color: var(--accent);
+}
+
+.type {
+  font-size: var(--step-1);
+  padding: 0.15rem 0.4rem;
+  max-width: 9rem;
+}
+
+/*
+ * What an answer is filed under.
+ *
+ * Shown because it is the column header in an export and the property name in
+ * the stored answer, and somebody will eventually have to match one to the
+ * other. Quiet but never hidden — a key revealed only on hover is a key a
+ * keyboard cannot find, and this is the string somebody is squinting at when
+ * a spreadsheet does not line up.
+ */
+.key {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--step-2);
+}
+
+/* The shared pill is an inline-block, which drops a padlock a pixel below the
+   word beside it. Laid out rather than left to the baseline — and with the
+   element in the selector, so this beats the shared rule whichever order the
+   two stylesheets come out in. */
+span.lockPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding-left: 0.45rem;
+  border-left: 1px solid var(--line);
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  line-height: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.iconBtn:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--sunken);
+  border-color: var(--line);
+}
+
+/* Still legible. A control that cannot be pressed is not a control that has
+   gone: the top question's Move up has to be visibly the same button as the
+   one below it, or the row reads as having lost a control rather than as being
+   at the top of the list. */
+.iconBtn:disabled {
+  color: var(--faint);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.iconDanger:hover:not(:disabled) {
+  color: var(--stop);
+  border-color: var(--stop);
+  background: transparent;
+}
+
+/* Locked ---------------------------------------------------------------- */
+
+/*
+ * Why the controls are missing, beside the question they are missing from.
+ *
+ * Boxed rather than set as a caption, because a locked question is not a
+ * broken one and the difference has to be legible without reading: the notice
+ * is the frame around a thing that is deliberately inert.
+ */
+.lockNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+.lockNote svg {
+  flex: none;
+  margin-top: 0.15rem;
+  color: var(--warn);
+}
+
+/* MLH's wording, shown as text because it is not ours to edit. Set at reading
+   size rather than in a disabled input: a sixty-word agreement squeezed into a
+   one-line box is unreadable, and being unable to read it is how it stops
+   being checked. */
+.lockedLabel {
+  margin: 0.55rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+
+/* The editable half ----------------------------------------------------- */
+
+.fields {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin-top: 0.7rem;
+}
+
+.field label {
+  margin-bottom: 0.2rem;
+}
+
+.field input {
+  width: 100%;
+}
+
+.options {
+  margin-top: 0.75rem;
+}
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.3rem 0 0.4rem;
+}
+
+/*
+ * An option, drawn as the row it will become.
+ *
+ * The marker on the left is the radio or tick box the applicant will actually
+ * see. It is inert here, and it is the fastest way to tell a Choice question
+ * from a Checkboxes one without reading the type control at the top.
+ */
+.option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+
+.optionMark {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1px solid var(--faint);
+  background: var(--raised);
+}
+
+.optionMarkRound {
+  composes: optionMark;
+  border-radius: 50%;
+}
+
+/* Borderless inside its own row: the row is already the box, and a second
+   border inside the first is a box in a box. */
+.optionLabel {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.2rem 0.3rem;
+}
+
+.optionLabel:hover:not(:disabled) {
+  border-color: var(--line);
+}
+
+/* What the answer is actually stored as, beside the label people see. The two
+   are separate so rewording an option later does not silently change what past
+   applicants appear to have answered — and that only helps if it is visible. */
+.optionValue {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  min-width: 4.5rem;
+  text-align: right;
+}
+
+.addOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: var(--step-1);
+}
+
+.addOption:hover {
+  text-decoration: underline;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.7rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--step-1);
+}
+
+.check input {
+  margin: 0;
+}
+
+.problems {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+}
+
+.problems li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  color: var(--stop);
+  font-size: var(--step-1);
+  padding: 0.1rem 0;
+}
+
+.problems svg {
+  flex: none;
+  margin-top: 0.2rem;
+}
+
+/* Sits on the shared panel, whose `border` shorthand would otherwise wipe this
+   out depending on stylesheet order. */
+div.problemsPanel {
+  border-left: 2px solid var(--stop);
+}
+
+/* A page break ---------------------------------------------------------- */
+
+/*
+ * Dashed and sunken, because it is a divider and not a card.
+ *
+ * The thing an author scans this list for is where their pages start. A
+ * divider that looks like a question is one they have to read to find, and on
+ * a four-page form that is four things read to answer a question that should
+ * have been answerable at a glance.
+ */
+.break {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--sunken);
+  padding: 0.75rem 0.9rem 0.65rem;
+  transition: border-color 150ms ease;
+}
+
+.break:focus-within {
+  border-color: var(--accent);
+}
+
+.breakIcon {
+  color: var(--muted);
+  line-height: 0;
+}
+
+.breakNote {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/* The type picker ------------------------------------------------------- */
+
+.picker {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 0.85rem 0.9rem;
+}
+
+.pickerHead {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+.pickerGrid {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+}
+
+/*
+ * Eleven buttons rather than a menu and an Add button.
+ *
+ * The types are the vocabulary of this screen and they fit on it, so a list
+ * that has to be opened to be read is a list nobody reads — somebody reaches
+ * for Short text over and over and never discovers Date is there. Two presses
+ * become one at the same time, which is the smaller of the two wins.
+ */
+.pickerBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--ink);
+  font-size: var(--step-1);
+  text-align: left;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.pickerBtn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pickerBtn svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.pickerBtn:hover svg {
+  color: var(--accent);
+}
+
+/* Its own button rather than a twelfth entry in the grid above. A page break
+   is not a kind of question, and putting it in that list is how question nine
+   becomes a divider by aiming badly — with the answers already given to it
+   still filed under its key. */
+.pickerBreak {
+  composes: pickerBtn;
+  background: var(--raised);
+  border: 1px dashed var(--line);
+  margin-top: 0.5rem;
+  width: auto;
+}
+
+/* The preview ----------------------------------------------------------- */
+
+/*
+ * Drawn as the applicant's page, not as a panel in a console.
+ *
+ * The failure this pane exists to catch is the one the editor cannot show: a
+ * question that reads fine as a row in a form builder and makes no sense as a
+ * question. Sixty words of agreement text look like a label on the left and
+ * like a wall on the right — which only works if the right-hand side is
+ * actually laid out the way the applicant will meet it.
+ */
+.previewHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  color: var(--muted);
+  font-size: var(--step-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.preview {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The applicant site's one stripe of colour, so the preview is recognisably
+   the same surface rather than a white box that happens to hold the same
+   questions. */
+.previewRule {
+  height: 3px;
+  background: var(--accent);
+}
+
+.previewTop {
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.previewTitle {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--step1);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.previewBody {
+  /* A fieldset, for the one thing a fieldset does that nothing else does:
+     `disabled` on it makes every control inside inert. None of the border,
+     margin or minimum width it comes with is wanted. */
+  border: 0;
+  margin: 0;
+  min-inline-size: 0;
+  padding: 0.4rem 1.1rem 1.1rem;
+}
+
+.asked {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  animation: arrive 180ms ease-out;
+}
+
+.asked:last-child {
+  border-bottom: none;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.askedLabel {
+  margin: 0 0 0.35rem;
+  font-size: var(--step-1);
+  font-weight: 600;
+}
+
+.help {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+.preview input,
+.preview select,
+.preview textarea {
+  width: 100%;
+  font: inherit;
+  font-size: var(--step-1);
+  background: var(--sunken);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.55rem;
+}
+
+/*
+ * Left as the browser draws them, in our accent.
+ *
+ * The rule above dresses text inputs as the sunken boxes an applicant will
+ * meet; applied to a radio it fills the circle in, which is the browser's way
+ * of saying "chosen". A preview that shows every option already picked is
+ * worse than no preview.
+ */
+.preview input[type="checkbox"],
+.preview input[type="radio"] {
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/*
+ * An option as the applicant meets it: a row to press, not a tick in a
+ * paragraph. The whole row being the target is most of the difference between
+ * a choice question on a phone that works and one that does not.
+ */
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-size: var(--step-1);
+}
+
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--step-1);
+}
+
+.consent input {
+  margin-top: 0.2rem;
+}
+
+/* Where one page of the form ends and the next begins. A rule, because that is
+   what a page break is — the preview shows the whole form at once, and without
+   something to see, the pages are invisible in the one view meant to show
+   them. */
+.pageBreak {
+  border-top: 2px solid var(--line);
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+}
+
+.pageMark {
+  margin: 0 0 0.2rem;
+  color: var(--faint);
+  font-size: var(--step-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pageHeading {
+  margin: 0 0 0.2rem;
+  font-weight: 600;
+}
+
+.blank {
+  color: var(--faint);
+  font-style: italic;
+}
+
+/* History --------------------------------------------------------------- */
+
+.history {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 0.85rem 1rem;
+}
+
+.history h2 {
+  font-size: var(--step-1);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.5rem;
+}
+
+.history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: var(--step-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.history li:last-child {
+  border-bottom: none;
+}

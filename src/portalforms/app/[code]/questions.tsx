@@ -474,19 +474,27 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
        * they are in `answers`, one object for the whole form — so unmounting a
        * step costs nothing and remounting it puts every box back exactly as it
        * was left, including on a step somebody has not reached yet.
+       *
+       * The key is the step number, so React replaces this subtree when the
+       * step changes and the arrival animation in the stylesheet plays again.
+       * Nothing else re-keys it: typing an answer, raising a problem and
+       * clearing one all leave `at` alone, so the questions do not flicker
+       * every time somebody presses a key.
        */}
-      {step.fields.map((field) => (
-        <Question
-          key={field.key}
-          code={code}
-          field={field}
-          index={ordinals[field.key]}
-          answer={answers[field.key]}
-          problem={problems[field.key]}
-          onChange={set}
-          onBusy={setBusy}
-        />
-      ))}
+      <div className="step-body" key={at}>
+        {step.fields.map((field) => (
+          <Question
+            key={field.key}
+            code={code}
+            field={field}
+            index={ordinals[field.key]}
+            answer={answers[field.key]}
+            problem={problems[field.key]}
+            onChange={set}
+            onBusy={setBusy}
+          />
+        ))}
+      </div>
 
       <div className="submit">
         {at > 0 ? (
@@ -565,8 +573,19 @@ function Step({
 }) {
   return (
     <div className="step">
-      <div className="tally-track" aria-hidden="true">
-        <div className="tally-bar" style={{ width: `${((at + 1) / total) * 100}%` }} />
+      {/*
+       * One segment per step, not a bar filled to a fraction.
+       *
+       * A form in steps has a small whole number of them, and the question
+       * somebody standing on a pavement is asking is "how many more screens is
+       * this" — which is answered by counting segments and not by judging a
+       * proportion. Hidden from a screen reader because the heading below says
+       * the same thing in words, and says it better.
+       */}
+      <div className="step-track" aria-hidden="true">
+        {Array.from({ length: total }, (_, n) => (
+          <span key={n} className={n <= at ? "on" : undefined} />
+        ))}
       </div>
 
       <h2 className="step-title" ref={heading} tabIndex={-1}>

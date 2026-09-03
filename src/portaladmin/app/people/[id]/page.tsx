@@ -7,7 +7,9 @@ import {
   type PersonDetail,
 } from "@/lib/api";
 import { Shell } from "../../shell";
+import styles from "../people.module.css";
 import { Grants, Revoke, Teams, type GrantRow, type TeamRow } from "./controls";
+import { Effective, type EffectiveRow, type Source } from "./provenance";
 
 /**
  * One person, and the controls for changing what they can do.
@@ -17,6 +19,27 @@ import { Grants, Revoke, Teams, type GrantRow, type TeamRow } from "./controls";
  * because the answer is almost never in one of them alone — "they lost export
  * when their judge membership lapsed" is only readable if the lapsed
  * membership is still on the page.
+ *
+ * ## Where provenance comes from
+ *
+ * The API does not send it. `/admin/people/{id}` sends the memberships and the
+ * grants, each with its expiry, and a flat list of effective permission
+ * strings; `/admin/teams` sends each team's baseline. Provenance is the join of
+ * those three, and it is exact rather than a guess, because the rule being
+ * inverted is the whole of the rule: effective permissions are the union of
+ * every live team baseline and every live grant, additively, with no deny and
+ * no precedence. There is nothing else that could have granted a permission,
+ * so attributing one to the sources that hold it cannot be wrong.
+ *
+ * It is done here, on the server, against the same two responses the page
+ * already fetches. That matters for the expiries: the browser's clock is wrong
+ * by whatever the reader's machine is wrong by, and a row that renders live on
+ * the server and lapsed on the client is a hydration mismatch as well as a lie.
+ *
+ * What the API does *not* send, and what this screen therefore does not claim:
+ * who made a grant, when they made it, and any note attached to it. The audit
+ * trail records all three — the `/audit` screen reads them — but nothing on
+ * this endpoint carries them, so nothing here shows them.
  */
 export default async function PersonPage({
   params,
@@ -72,6 +95,9 @@ export default async function PersonPage({
     expiresAt !== null && new Date(expiresAt).getTime() <= now;
 
   const names = new Map(catalogue.teams.map((team) => [team.slug, team.name]));
+  const baselines = new Map(
+    catalogue.teams.map((team) => [team.slug, team.permissions]),
+  );
   const sensitive = new Set(
     catalogue.permissions.filter((p) => p.sensitive).map((p) => p.value),
   );
@@ -82,6 +108,9 @@ export default async function PersonPage({
       name: names.get(team.slug) ?? team.slug,
       expiresAt: team.expiresAt,
       expired: lapsed(team.expiresAt),
+      // The baseline the membership confers, shown under it. It is what makes
+      // removing somebody from a team a decision rather than a click.
+      permissions: [...(baselines.get(team.slug) ?? [])].sort(),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -94,6 +123,64 @@ export default async function PersonPage({
     }))
     .sort((a, b) => a.permission.localeCompare(b.permission));
 
+  /*
+   * Only what is still granting something.
+   *
+   * A lapsed membership is kept on the page — it is the explanation for a
+   * permission that is gone — but it is not a source of one that is present,
+   * and listing it as though it were would be the page contradicting the gate.
+   */
+  const liveTeams = teams.filter((team) => !team.expired);
+  const liveGrants = grants.filter((row) => !row.expired);
+
+  const effective: EffectiveRow[] = person.effective.map((permission) => {
+    const sources: Source[] = [
+      ...liveTeams
+        .filter((team) => team.permissions.includes(permission))
+        .map((team) => ({
+          kind: "team" as const,
+          label: team.name,
+          expiresAt: team.expiresAt,
+        })),
+      ...liveGrants
+        .filter((row) => row.permission === permission)
+        .map((row) => ({
+          kind: "grant" as const,
+          label: null,
+          expiresAt: row.expiresAt,
+        })),
+    ];
+
+    /*
+     * When it runs out, which is the latest of its sources and not the
+     * earliest.
+     *
+     * The union is over sources, so a permission survives as long as any one
+     * route to it survives. Somebody on Comms until March who also holds a
+     * direct grant until February keeps it until March, and a page that showed
+     * February would have an admin re-granting something that was never going
+     * to lapse. One permanent source makes the whole row permanent.
+     */
+    const until = sources.some((source) => source.expiresAt === null)
+      ? null
+      : sources
+          .map((source) => source.expiresAt)
+          .filter((at): at is string => at !== null)
+          .sort()
+          .at(-1) ?? null;
+
+    return {
+      permission,
+      sources,
+      until,
+      // Never expiring and no source at all are different facts. The second is
+      // only reachable if a team's baseline changed between the two requests
+      // that built this page, and it is shown rather than smoothed over.
+      permanent: sources.length > 0 && until === null,
+      sensitive: sensitive.has(permission),
+    };
+  });
+
   const onTeams = new Set(person.teams.map((team) => team.slug));
   const held = new Set(person.grants.map((row) => row.permission));
 
@@ -103,8 +190,8 @@ export default async function PersonPage({
         ← People
       </Link>
 
-      <h1>{person.email}</h1>
-      <p className="lede">
+      <h1 className={styles.address}>{person.email}</h1>
+      <p className={styles.identity}>
         {person.kind}
         {" · "}
         <span className={person.revoked ? "pill revoked" : "pill active"}>
@@ -115,25 +202,7 @@ export default async function PersonPage({
         ) : null}
       </p>
 
-      <section className="panel">
-        <h2>Effective permissions</h2>
-        <p className="meta" style={{ marginBottom: "0.75rem" }}>
-          The union of every team baseline they still hold and every grant that
-          has not expired. This is exactly what the API checks.
-        </p>
-
-        {person.effective.length === 0 ? (
-          <p className="meta">
-            Nothing. They can sign in and see no screen in this console.
-          </p>
-        ) : (
-          <div className="permissions">
-            {person.effective.map((permission) => (
-              <span key={permission}>{permission}</span>
-            ))}
-          </div>
-        )}
-      </section>
+      <Effective rows={effective} />
 
       <div className="columns">
         <Teams

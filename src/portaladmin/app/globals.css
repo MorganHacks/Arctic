@@ -11,9 +11,72 @@
  * console is no longer dark-only: an organizer reviewing at 2pm in a bright
  * room was reading white-on-black because of a decision nobody made on
  * purpose.
+ *
+ * This file is the layer every screen sits on: the frame, the tables, the
+ * pills, the panels, the buttons and the refusal banner. Screens that need
+ * more than this reach for a CSS module of their own, but nothing that repeats
+ * on more than one screen belongs there — the whole point of a console is that
+ * the second screen behaves like the first.
  */
 
 @import "../../../libs/ui/tokens.css";
+
+/*
+ * The measurements the rest of the console is built from.
+ *
+ * Here rather than in the shared tokens because they are this app's layout,
+ * not the palette both apps agree on. Screen stylesheets should reach for
+ * these rather than repeating the numbers: a table that hard-codes its own row
+ * padding is a table that stops matching the one on the next screen the first
+ * time either is touched.
+ */
+:root {
+  /* The bar is sticky, so anything else that sticks has to start below it. */
+  --topbar-h: 3rem;
+  --content-max: 80rem;
+  --gutter: 1.25rem;
+
+  /* Table density. Eight pixels of vertical padding is what keeps twenty rows
+     above the fold on a laptop, which is the difference between scanning a
+     queue and paging through it. */
+  --cell-y: 0.5rem;
+  --cell-x: 0.75rem;
+
+  /*
+   * Motion.
+   *
+   * Three durations and one curve, so movement is a property of the console
+   * rather than of whoever wrote the component. Nothing on the path between a
+   * person and what they came to read is allowed past --dur-slow: this is a
+   * tool somebody is in for eight hours, and an animation they have to wait
+   * out is one they will resent by the fiftieth time.
+   */
+  --dur-fast: 90ms;
+  --dur: 140ms;
+  --dur-slow: 190ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Reduced motion, continued from the tokens.
+ *
+ * The shared rule collapses every duration to almost nothing, which settles
+ * transitions correctly but leaves a looping animation looping — a shimmer at
+ * 0.01ms is a strobe, not a stillness. So the two things here that are motion
+ * rather than a change of state are switched off by name and left in their
+ * resting appearance.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--sunken);
+  }
+
+  .slide-in,
+  .toast {
+    transform: none;
+  }
+}
 
 * {
   box-sizing: border-box;
@@ -25,8 +88,25 @@ body {
   padding: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-inter), var(--body);
-  font-size: 15px;
+}
+
+/*
+ * The reading size is set here and not on <html> on purpose.
+ *
+ * A font-size on the root element redefines what a rem is, so putting the
+ * console's 14px there quietly shrinks every rem in the building — the type
+ * scale, the radii, this file's own measurements and every CSS module written
+ * against them — by an eighth. The bar ends up 42 pixels tall for no reason
+ * anybody can find. Root stays at the browser's size; the body is what reads
+ * small.
+ */
+body {
+  /* The fallback is inside the var(), not after it. An undefined custom
+     property in a font-family does not fall through to the next name in the
+     list — the whole declaration is dropped and the page inherits, which is
+     how a console that asked for Inter renders in Times. */
+  font-family: var(--font-inter, var(--body)), var(--body);
+  font-size: var(--step-1);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -35,63 +115,188 @@ a {
   color: inherit;
 }
 
+/* Anything that is a number, a timestamp or an id lines up in its column.
+   A queue is read by comparing rows, and proportional digits make two
+   timestamps the same length look different. */
+.numeric,
+time,
+td,
+th {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The frame ------------------------------------------------------------ */
+
 .shell {
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 100vh;
 }
 
+/* Sticky because the nav is how somebody leaves a screen, and a review queue
+   is eight hundred rows long. Scrolling to the top to change section is a tax
+   paid on every switch. */
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1.25rem;
+  gap: 1.25rem;
+  height: var(--topbar-h);
+  padding: 0 var(--gutter);
   border-bottom: 1px solid var(--line);
   background: var(--raised);
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--display);
+  font-size: var(--step1);
   font-weight: 600;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
+/* The word that says which system this is, set apart from the word that says
+   whose it is. Small, cased and boxed rather than merely grey: on a screen
+   with an applicant's name at the top, the header has to read as furniture. */
 .brand span {
-  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--step-2);
   font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.35rem;
 }
 
 .topbar nav {
   display: flex;
-  gap: 1rem;
-  margin-left: 1.5rem;
+  align-items: stretch;
+  gap: 0.15rem;
+  height: 100%;
   flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topbar nav::-webkit-scrollbar {
+  display: none;
 }
 
 .topbar nav a {
+  display: flex;
+  align-items: center;
+  padding: 0 0.7rem;
   color: var(--muted);
+  font-weight: 500;
   text-decoration: none;
-  padding: 0.25rem 0;
+  white-space: nowrap;
+  /* The underline is always there and usually transparent, so arriving on a
+     section does not shift the row it sits in by two pixels. */
   border-bottom: 2px solid transparent;
+  transition:
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
 }
 
 .topbar nav a:hover {
   color: var(--ink);
 }
 
+/* Where you are. Marked with aria-current first and coloured second, so the
+   answer is available to a screen reader and not only to an eye. */
+.topbar nav a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+/* Who is signed in ------------------------------------------------------ */
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+/* Initials, not a photograph. There is no avatar in this system to fetch, and
+   a coloured circle would be the one decorative colour on the screen. */
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  color: var(--ink);
+  font-size: var(--step-2);
+  font-weight: 500;
+}
+
 .who {
+  color: var(--ink);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 14rem;
+}
+
+/* The fallback, when neither a name nor an address is known. Monospace because
+   at that point it is an identifier and will be read a character at a time. */
+.who.id {
+  font-family: var(--mono);
+  font-weight: 400;
   color: var(--muted);
-  font-size: var(--step-1);
-  font-variant-numeric: tabular-nums;
+}
+
+.topbar form {
+  flex: none;
+}
+
+/* Signing out is not the next action on any screen, so it does not look like
+   one. It turns the colour of the thing it does on the way to being clicked. */
+.topbar form button {
+  border: none;
+  background: none;
+  padding: 0.25rem 0.35rem;
+  color: var(--muted);
+  font-size: var(--step-2);
+  font-weight: 500;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.topbar form button:hover {
+  background: none;
+  border-color: transparent;
+  color: var(--stop);
 }
 
 main {
-  padding: 1.5rem 1.25rem;
-  max-width: 72rem;
+  padding: 1.25rem var(--gutter) 3rem;
+  max-width: var(--content-max);
   width: 100%;
+  margin-inline: auto;
 }
 
+/* Type ----------------------------------------------------------------- */
+
+/* Serif for the things that name a screen or a panel, sans for everything
+   somebody works in. It is the one place the console is allowed a voice, and
+   it earns its keep by making the boundary between sections legible at a
+   glance in a layout that is otherwise all rules and rows. */
 h1 {
+  font-family: var(--display);
   font-size: var(--step2);
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -99,41 +304,205 @@ h1 {
 }
 
 h2 {
-  font-size: var(--step0);
+  font-family: var(--display);
+  font-size: var(--step1);
   font-weight: 600;
   margin: 0 0 0.75rem;
 }
 
 .lede {
   color: var(--muted);
-  margin: 0 0 1.5rem;
+  margin: 0 0 1.25rem;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid var(--line);
-}
-
-th {
+.meta {
   color: var(--muted);
-  font-weight: 500;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: var(--step-2);
 }
 
-tbody tr:hover {
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  letter-spacing: 0.02em;
+}
+
+.count {
+  color: var(--faint);
+  font-size: var(--step-2);
+  margin: 0.75rem 0 0;
+}
+
+.back {
+  display: inline-block;
+  color: var(--muted);
+  font-size: var(--step-2);
+  margin-bottom: 0.75rem;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.back:hover {
+  color: var(--ink);
+}
+
+/*
+ * The row a screen opens with: what this is on the left, what can be done
+ * about it on the right.
+ *
+ * One class rather than each screen inventing its own header, because the
+ * thing that makes a console feel like one product is that the title and the
+ * buttons are in the same place every time.
+ */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.page-head > :first-child {
+  min-width: 0;
+}
+
+.page-head h1,
+.page-head h2 {
+  margin-bottom: 0.15rem;
+}
+
+.page-head .lede {
+  margin-bottom: 0;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Panels and cards ----------------------------------------------------- */
+
+/*
+ * Depth is a border and a change of surface, never a shadow.
+ *
+ * Three planes and no blur: paper underneath, raised for the things you work
+ * on, sunken for the things you read out of. A drop shadow on a screen with
+ * fourteen panels is fourteen soft grey smudges and no more legible for it.
+ */
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+
+/* A panel's own title row, with room for a status pill beside the heading. */
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.panel-head h2,
+.panel-head h3 {
+  margin: 0;
+}
+
+.card {
+  width: 100%;
+  max-width: 22rem;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+}
+
+/* A recessed place to read something out of — a code block, an audit note, an
+   answer somebody typed. Sunken so it does not read as a thing to fill in. */
+.well {
   background: var(--sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
 }
 
+/*
+ * A row of counts across the top of a queue.
+ *
+ * Only the tiles whose numbers change what somebody does are coloured — apply
+ * .ok, .warn or .stop. The rest stay quiet, which is what makes the coloured
+ * ones mean anything on a row of eleven.
+ */
+/* A grid rather than a wrapping flex row: when eleven tiles do not fit, flex
+   stretches whatever landed on the last row to the full width and the row of
+   counts stops reading as one row. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.stat {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  padding: 0.5rem 0.7rem;
+}
+
+.stat dt,
+.stat .stat-label {
+  color: var(--muted);
+  font-size: var(--step-2);
+  margin: 0 0 0.15rem;
+}
+
+.stat dd,
+.stat .stat-value {
+  margin: 0;
+  font-size: var(--step1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat.ok {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.stat.ok .stat-value,
+.stat.ok dd {
+  color: var(--ok);
+}
+
+.stat.warn {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.stat.warn .stat-value,
+.stat.warn dd {
+  color: var(--warn);
+}
+
+.stat.stop {
+  border-color: var(--stop);
+  background: var(--stop-soft);
+}
+
+.stat.stop .stat-value,
+.stat.stop dd {
+  color: var(--stop);
+}
+
+/* Nothing here yet. Dashed rather than solid, so an empty table does not look
+   like a table that failed to load. */
 .empty {
   border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
@@ -142,43 +511,413 @@ tbody tr:hover {
   color: var(--muted);
 }
 
+/* Notices and refusals -------------------------------------------------- */
+
+/*
+ * The banner that says the API will not do something for this person.
+ *
+ * Every screen has one and they are all the same shape on purpose. An
+ * organizer who has met it once on the applicants queue should recognise it on
+ * the mail screen without reading it as a new kind of failure.
+ *
+ * Sunken and uncoloured by default, because a permission somebody does not
+ * hold is not an error — nothing went wrong, they are simply not on that team.
+ * The one thing that must survive being skim-read is the permission itself, so
+ * it is set in mono at ink weight inside a sentence that is otherwise muted.
+ */
+.refusal {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.85rem;
+  color: var(--muted);
+  font-size: var(--step-2);
+  line-height: 1.6;
+  margin-bottom: 1.25rem;
+}
+
+.refusal code,
+.refusal .mono {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/*
+ * A sentence about the state of the screen rather than about permission.
+ *
+ * Left rule and a soft fill, with the colour chosen by what the reader is
+ * meant to do: nothing at all by default, .warn for something not yet
+ * finished, .stop for something that failed, .ok for something confirmed.
+ */
+.notice {
+  border: 1px solid var(--line);
+  border-left-width: 2px;
+  border-radius: var(--radius);
+  background: var(--sunken);
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.notice.ok {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.notice.warn {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.notice.stop {
+  border-color: var(--stop);
+  background: var(--stop-soft);
+  color: var(--stop);
+}
+
+/* The message a form comes back with. A rule rather than a fill: it sits above
+   the field it is about, and a red box there is louder than the mistake. */
+.error {
+  border-left: 2px solid var(--stop);
+  padding-left: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+}
+
+/* Tables ---------------------------------------------------------------- */
+
+/*
+ * The container, not the table.
+ *
+ * It carries the border and the surface so the table itself is only rows, and
+ * it deliberately does not scroll: an element that scrolls in one axis scrolls
+ * in both, and a sticky header inside a scroll container stops tracking the
+ * page and starts tracking a box that has no height to scroll in. The corners
+ * are rounded on the header cells below rather than by clipping here, for the
+ * same reason.
+ */
+.table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  margin-bottom: 0.5rem;
+}
+
+/*
+ * The wide case: nine columns that will not fit, whatever the screen.
+ *
+ * Here the trade is taken the other way — the box scrolls in both directions
+ * and the header sticks to the top of the box instead of the top of the page,
+ * which only means anything if the box has a height. A page that scrolls
+ * sideways is worse than a table that does, because it takes the nav and the
+ * heading with it.
+ */
+.table-wrap.wide {
+  overflow: auto;
+  max-height: calc(100vh - var(--topbar-h) - 8rem);
+}
+
+.table-wrap.wide thead th {
+  top: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--step-1);
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--cell-y) var(--cell-x);
+}
+
+/*
+ * The header stays put.
+ *
+ * Row two hundred of a queue is unreadable without it — every column becomes a
+ * guess. It sticks below the top bar rather than at the top of the viewport,
+ * because two sticky things at zero stack on top of each other. Sunken and
+ * ruled so the rows scrolling under it do not appear to pass through it.
+ */
+thead th {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 1;
+  background: var(--sunken);
+  /* Inset rather than a border: with border-collapse the browser hands the
+     shared edge to whichever cell it likes, and on a sticky row that means the
+     rule under the header vanishes the moment it starts sticking. */
+  box-shadow: inset 0 -1px 0 var(--line);
+  color: var(--muted);
+  font-weight: 500;
+  font-size: var(--step-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* The frame's corners, drawn by the cells, because the frame cannot clip
+   without becoming a scroll container. */
+thead th:first-child {
+  border-top-left-radius: var(--radius-lg);
+}
+
+thead th:last-child {
+  border-top-right-radius: var(--radius-lg);
+}
+
+tbody td {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The one piece of feedback a dense table owes the reader: which row is under
+   the cursor. Fast, because it is answering a question the eye already asked. */
+tbody tr {
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+tbody tr:hover {
+  background: var(--sunken);
+}
+
+/* Counts, timestamps and identifiers. Right-aligned so the digits form a
+   column somebody can compare down rather than read across. */
+td.numeric,
+th.numeric {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  color: var(--muted);
+}
+
+/* The line under a table that says how much of it you are looking at. */
+.table-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem var(--cell-x);
+  border-top: 1px solid var(--line);
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+/* Status pills ---------------------------------------------------------- */
+
+/*
+ * Grouped by what the reader does about it, not by which status it is.
+ *
+ * There are eleven application statuses, six campaign statuses and a handful
+ * of form ones, and giving each its own colour would mean nothing was coloured
+ * at all — twenty-three hues is a palette, not a signal. So there are five
+ * groups, and the group is the whole vocabulary:
+ *
+ *   .neutral  in progress and nobody's problem yet — submitted, under review,
+ *             incomplete, draft
+ *   .ok       confirmed by the system — accepted, confirmed, checked in, sent,
+ *             live, active
+ *   .warn     open, and waiting on a person — waitlisted, queued, sending,
+ *             expiring, unsaved
+ *   .stop     failed or taken away — rejected, failed, revoked
+ *   .muted    over, without anybody having failed — declined, expired,
+ *             withdrawn, cancelled
+ *
+ * Rejected and expired are told apart deliberately: one is a decision somebody
+ * made and may be asked about, the other is a clock running out. Colouring
+ * both stop would put a queue's worth of red on a screen where only a few of
+ * them were ever decided.
+ *
+ * The dot is not decoration. It is the same signal as the fill for anybody who
+ * cannot separate the fills, and it is why the neutral and muted pills are
+ * still distinguishable in greyscale.
+ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius);
+  font-size: var(--step-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+/* Undecided by default: an unmodified pill is a status nobody has to act on,
+   which is most of them for most of the cycle. */
+.pill::before {
+  content: "";
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+
+/* Confirmed by the system. Never used as a button fill — "this is done" and
+   "this is what to press" must not look alike. */
+.pill.ok,
+.pill.active {
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: var(--ok);
+}
+
+.pill.ok::before,
+.pill.active::before,
+.pill.warn::before,
+.pill.expiring::before,
+.pill.widened::before,
+.pill.sensitive::before,
+.pill.stop::before,
+.pill.revoked::before {
+  background: currentColor;
+}
+
+/* Open, and waiting on somebody. */
+.pill.warn,
+.pill.expiring,
+.pill.widened,
+.pill.sensitive {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: var(--warn);
+}
+
+/* Failed, or taken away. */
+.pill.stop,
+.pill.revoked {
+  color: var(--stop);
+  background: var(--stop-soft);
+  border-color: var(--stop);
+}
+
+/* Over, and nothing to do about it. Quiet on purpose: a queue is mostly this,
+   and the colours only work if most of the screen has none. */
+.pill.muted,
+.pill.lapsed,
+.pill.narrowed {
+  color: var(--muted);
+  background: var(--sunken);
+  border-color: var(--line);
+}
+
+.pill.muted::before,
+.pill.lapsed::before,
+.pill.narrowed::before {
+  background: var(--faint);
+}
+
+.permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.permissions span {
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  background: var(--sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.4rem;
+}
+
+/* Buttons --------------------------------------------------------------- */
+
+/*
+ * Three kinds and no more: the next thing to do, everything else, and the
+ * thing that cannot be undone.
+ *
+ * Only the first is filled with the accent, and a screen should only have one
+ * of those. An interface where four buttons are all the brand colour is one
+ * where the colour has stopped saying anything.
+ */
 button,
 .button {
   font: inherit;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   border: 1px solid var(--line);
   background: var(--raised);
   color: var(--ink);
-  padding: 0.5rem 0.9rem;
+  padding: 0.35rem 0.75rem;
   border-radius: var(--radius);
   text-decoration: none;
-  display: inline-block;
+  font-weight: 500;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
 
 button:hover,
 .button:hover {
+  background: var(--sunken);
   border-color: var(--muted);
 }
 
 button:disabled {
   cursor: not-allowed;
   color: var(--faint);
+  background: var(--sunken);
+  border-color: var(--line);
 }
 
-.button.primary {
+button:disabled:hover {
+  border-color: var(--line);
+}
+
+.button.primary,
+button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
 }
 
+.button.primary:hover,
+button.primary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  /* Darkening is not available without a second hex, so the affordance is the
+     border tightening rather than the fill shifting. */
+  box-shadow: inset 0 0 0 1px var(--accent-soft);
+}
+
 /* The one destructive action on these screens. Its own colour because "this
-   is interactive" and "this cannot be taken back" must never look alike. */
+   is interactive" and "this cannot be taken back" must never look alike, and
+   filled rather than outlined so it is not mistaken for a secondary. */
 .button.danger,
 button.danger {
   color: var(--stop);
   border-color: var(--stop);
-  background: transparent;
+  background: var(--stop-soft);
+}
+
+.button.danger:hover,
+button.danger:hover {
+  background: var(--stop-soft);
+  border-color: var(--stop);
+  color: var(--stop);
 }
 
 button.link {
@@ -187,39 +926,104 @@ button.link {
   padding: 0;
   color: var(--muted);
   text-decoration: underline;
-  font-size: var(--step-1);
+  font-size: var(--step-2);
+  font-weight: 400;
 }
 
 button.link:hover {
+  background: none;
+  border-color: transparent;
   color: var(--stop);
 }
 
+button.icon {
+  padding: 0.15rem 0.45rem;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+button.icon:disabled {
+  color: var(--faint);
+  border-color: var(--line-soft);
+}
+
+button.icon.danger:not(:disabled):hover {
+  color: var(--stop);
+  border-color: var(--stop);
+}
+
+/* Form controls ---------------------------------------------------------- */
+
 input,
-select {
+select,
+textarea {
   font: inherit;
   background: var(--raised);
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 0.45rem 0.6rem;
+  padding: 0.35rem 0.5rem;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+/* The border answers first, before the focus ring the tokens draw. A heavy
+   glow on a form of twenty questions is twenty glows by the time somebody has
+   tabbed through it. */
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--faint);
+}
+
+/* A search box is a place to type into, not a field with an answer already in
+   it, so it sits in the recess rather than on the surface. */
+input.search {
+  background: var(--sunken);
 }
 
 label {
   display: block;
-  font-size: var(--step-1);
+  font-size: var(--step-2);
   color: var(--muted);
   margin-bottom: 0.25rem;
 }
 
-/* Panels, forms and rows ---------------------------------------------- */
-
-.panel {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--raised);
-  padding: 1.1rem 1.25rem;
-  margin-bottom: 1.25rem;
+/* A label, its control and the sentence explaining it, kept together. */
+.field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
+
+.hint {
+  color: var(--faint);
+  font-size: var(--step-2);
+  margin: 0.25rem 0 0;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--step-1);
+}
+
+.check.consent {
+  align-items: flex-start;
+}
+
+.check input {
+  margin: 0;
+}
+
+/* Layout helpers --------------------------------------------------------- */
 
 .columns {
   display: grid;
@@ -243,6 +1047,14 @@ label {
   flex: 1;
 }
 
+.filters {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
 .listing {
   list-style: none;
   margin: 0 0 1rem;
@@ -262,102 +1074,129 @@ label {
   border-bottom: none;
 }
 
-.meta {
-  color: var(--muted);
-  font-size: var(--step-1);
+/* Movement ---------------------------------------------------------------- */
+
+/*
+ * What is allowed to move, and why.
+ *
+ * Everything here either tells somebody the screen is still working or shows
+ * them where something new came from. Nothing celebrates, nothing bounces and
+ * nothing is on the path between opening a page and reading it — the panel
+ * slide is four pixels, which is enough to be traced by the eye and not enough
+ * to be waited for.
+ *
+ * All of it is switched off or settled by the reduced-motion rules above.
+ */
+
+/* A panel arriving — an inspector, a drawer, a confirmation step. It has to
+   read as "this is new" rather than "the page reloaded". */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
-code,
-.mono {
-  font-family: var(--mono);
-  font-size: 0.85em;
+.slide-in {
+  animation: slide-in var(--dur-slow) var(--ease) both;
 }
 
-/* Status. Coloured because it changes what you do next, never for decoration. */
+/*
+ * A shape where content will be.
+ *
+ * Preferred over a spinner because it says where the thing will appear as well
+ * as that it is coming, so the layout does not jump when it does. The sweep is
+ * slow and low-contrast on purpose: it is a sign of life, not something to
+ * watch.
+ */
+@keyframes skeleton-sweep {
+  to {
+    background-position: -200% 0;
+  }
+}
 
-.pill {
-  display: inline-block;
-  padding: 0.1rem 0.45rem;
+.skeleton {
   border-radius: var(--radius);
-  font-size: var(--step-1);
-  border: 1px solid transparent;
+  color: transparent;
+  user-select: none;
+  background-image: linear-gradient(
+    90deg,
+    var(--sunken) 0%,
+    var(--line-soft) 50%,
+    var(--sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s linear infinite;
 }
 
-.pill.active {
-  color: var(--ok);
-  background: var(--ok-soft);
+/*
+ * A count that arrives at its number rather than appearing at it.
+ *
+ * Used on the tiles above a queue, where the number changed while somebody was
+ * looking at the screen and the change is the information. Set the target on
+ * the element — style={{ "--tick": 842 }} — and leave it empty; the digits are
+ * generated, so there is nothing to go stale.
+ *
+ * Half a second, and the reduced-motion rule lands it on the final value
+ * immediately, which is the correct number either way.
+ */
+@property --tick {
+  syntax: "<integer>";
+  initial-value: 0;
+  inherits: false;
 }
 
-.pill.revoked {
-  color: var(--stop);
-  background: var(--stop-soft);
+@keyframes tick-up {
+  from {
+    --tick: 0;
+  }
 }
 
-.pill.expiring {
-  color: var(--warn);
-  background: var(--warn-soft);
+.tick {
+  counter-reset: tick var(--tick);
+  font-variant-numeric: tabular-nums;
+  animation: tick-up 500ms var(--ease) both;
 }
 
-.pill.lapsed {
-  color: var(--muted);
-  background: var(--sunken);
+.tick::after {
+  content: counter(tick);
 }
 
-/* The four permissions that move PII out of the system or change who may. */
-.pill.sensitive {
-  color: var(--warn);
-  background: var(--warn-soft);
-}
-
-/* Audit entries, coloured by direction rather than by action.
-   A reviewer scanning a week of the trail is looking for the changes that gave
-   somebody something; those are the ones that need a second look. Removals are
-   the safe direction and stay quiet, because colouring both would leave
-   nothing standing out. */
-.pill.widened {
-  color: var(--warn);
-  background: var(--warn-soft);
-}
-
-.pill.narrowed {
-  color: var(--muted);
-  background: var(--sunken);
-}
-
-.permissions {
+/*
+ * Something happened that the person did not need to stay and watch.
+ *
+ * Bottom corner, out of the way of the table, and it says what happened rather
+ * than that it succeeded. It does not steal focus: an organizer typing a note
+ * should not lose a keystroke to a save confirmation.
+ */
+.toasts {
+  position: fixed;
+  right: var(--gutter);
+  bottom: var(--gutter);
+  z-index: 40;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
 }
 
-.permissions span {
-  font-family: var(--mono);
-  font-size: var(--step-1);
-  background: var(--sunken);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  padding: 0.1rem 0.4rem;
+.toast {
+  pointer-events: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  color: var(--ink);
+  padding: 0.6rem 0.85rem;
+  max-width: 22rem;
+  animation: slide-in var(--dur-slow) var(--ease) both;
 }
 
-.back {
-  display: inline-block;
-  color: var(--muted);
-  font-size: var(--step-1);
-  margin-bottom: 0.75rem;
+.toast.ok {
+  border-color: var(--ok);
 }
 
-.filters {
-  display: flex;
-  gap: 0.6rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-
-.count {
-  color: var(--faint);
-  font-size: var(--step-1);
-  margin: 0.75rem 0 0;
+.toast.stop {
+  border-color: var(--stop);
 }
 
 /* Sign-in ------------------------------------------------------------- */
@@ -367,15 +1206,6 @@ code,
   display: grid;
   place-items: center;
   padding: 1.5rem;
-}
-
-.card {
-  width: 100%;
-  max-width: 22rem;
-  background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 1.75rem;
 }
 
 .card h1 {
@@ -394,15 +1224,8 @@ code,
 
 .note {
   margin-top: 1.25rem;
-  font-size: var(--step-1);
+  font-size: var(--step-2);
   color: var(--muted);
-}
-
-.error {
-  border-left: 2px solid var(--stop);
-  padding-left: 0.75rem;
-  color: var(--muted);
-  margin-bottom: 1.25rem;
 }
 
 /* The form builder ---------------------------------------------------- */
@@ -433,7 +1256,15 @@ code,
   background: var(--raised);
   color: var(--muted);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: var(--step-1);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.tab:hover {
+  color: var(--ink);
 }
 
 .tab.on {
@@ -443,10 +1274,11 @@ code,
 }
 
 /* The bar that says whether the work is safe. It sticks because "Saved" is
-   worthless if you have to scroll to it. */
+   worthless if you have to scroll to it — below the top bar, which sticks
+   first. */
 .toolbar {
   position: sticky;
-  top: 0;
+  top: var(--topbar-h);
   z-index: 2;
   display: flex;
   align-items: center;
@@ -458,7 +1290,7 @@ code,
 }
 
 .save {
-  font-size: var(--step-1);
+  font-size: var(--step-2);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -485,7 +1317,7 @@ code,
 
 .side {
   position: sticky;
-  top: 4rem;
+  top: calc(var(--topbar-h) + 1rem);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -556,24 +1388,8 @@ code,
 .ordinal {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
-  font-size: var(--step-1);
+  font-size: var(--step-2);
   min-width: 1.25rem;
-}
-
-button.icon {
-  padding: 0.15rem 0.45rem;
-  line-height: 1.2;
-  color: var(--muted);
-}
-
-button.icon:disabled {
-  color: var(--faint);
-  border-color: var(--line-soft);
-}
-
-button.icon.danger:not(:disabled):hover {
-  color: var(--stop);
-  border-color: var(--stop);
 }
 
 /* MLH's wording, shown as text because it is not ours to edit. Set at reading
@@ -628,23 +1444,6 @@ button.link.add-option:hover {
   border-top: 1px solid var(--line-soft);
 }
 
-.check {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
-  color: var(--ink);
-  font-size: 0.9rem;
-}
-
-.check.consent {
-  align-items: flex-start;
-}
-
-.check input {
-  margin: 0;
-}
-
 .problems {
   list-style: none;
   margin: 0.6rem 0 0;
@@ -653,7 +1452,7 @@ button.link.add-option:hover {
 
 .problems li {
   color: var(--stop);
-  font-size: var(--step-1);
+  font-size: var(--step-2);
   padding: 0.15rem 0;
 }
 
@@ -679,8 +1478,9 @@ button.link.add-option:hover {
 .preview legend {
   padding: 0 0.35rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  font-size: var(--step-2);
+  color: var(--muted);
 }
 
 .asked {
@@ -694,7 +1494,7 @@ button.link.add-option:hover {
 
 .asked-label {
   margin: 0 0 0.3rem;
-  font-size: 0.9rem;
+  font-size: var(--step-1);
 }
 
 .asked input,
@@ -732,9 +1532,9 @@ button.link.add-option:hover {
 .page-mark {
   margin: 0 0 0.2rem;
   color: var(--faint);
-  font-size: 0.75rem;
+  font-size: var(--step-2);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 .page-heading {
@@ -746,4 +1546,35 @@ button.link.add-option:hover {
    can submit. */
 .req {
   color: var(--stop);
+}
+
+/* Narrow screens -------------------------------------------------------- */
+
+/*
+ * A functional fallback, not a second design.
+ *
+ * Nobody reviews eight hundred applications on a phone, but somebody does look
+ * one up on the way to the venue. The bar keeps the nav and lets it scroll,
+ * and tables keep their own horizontal scroll rather than reflowing into
+ * something that no longer lines up.
+ */
+@media (max-width: 48rem) {
+  :root {
+    --gutter: 0.75rem;
+  }
+
+  .topbar {
+    gap: 0.6rem;
+  }
+
+  /* The name goes; the initials stay. On a 390px bar the choice is between the
+     name and the nav, and the nav is what somebody came for. */
+  .topbar .who {
+    display: none;
+  }
+
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

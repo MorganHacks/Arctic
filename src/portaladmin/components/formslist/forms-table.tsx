@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { FormRow } from "@/lib/api";
+import styles from "./formslist.module.css";
 import { CopyLink, ShareCode } from "./share-link";
 
 /**
@@ -25,26 +26,26 @@ export function FormsTable({ forms, now }: { forms: FormRow[]; now: number }) {
       <tbody>
         {forms.map((form) => (
           <tr key={form.id}>
-            <td style={{ verticalAlign: "top" }}>
-              <Link href={`/forms/${form.id}`}>{form.name}</Link>
-              <div className="meta">{form.kind}</div>
+            <td className={styles.cell}>
+              <Link href={`/forms/${form.id}`} className={styles.name}>
+                {form.name}
+              </Link>
+              <div>
+                <span className={styles.kind}>{form.kind}</span>
+              </div>
             </td>
 
-            <td style={{ verticalAlign: "top" }}>
+            <td className={styles.cell}>
               <Status form={form} now={now} />
             </td>
 
-            <td style={{ verticalAlign: "top" }}>{form.questions ?? "—"}</td>
+            <td className={styles.count}>{form.questions ?? "—"}</td>
 
-            <td style={{ verticalAlign: "top" }}>
+            <td className={styles.linkCell}>
               {/* The thing people read aloud at a club meeting and write on a
                   whiteboard, above the thing they paste into a group chat. */}
-              <div>
-                <ShareCode code={form.code} />
-              </div>
-              <div style={{ marginTop: "0.35rem" }}>
-                <CopyLink code={form.code} />
-              </div>
+              <ShareCode code={form.code} />
+              <CopyLink code={form.code} />
             </td>
           </tr>
         ))}

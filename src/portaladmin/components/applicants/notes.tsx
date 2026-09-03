@@ -43,7 +43,10 @@ export function Notes({ id, notes }: { id: string; notes: Note[] }) {
         </ul>
       )}
 
-      <form action={submit}>
+      {/* Ruled off from the notes above it. Reading what somebody else wrote
+          and writing your own are different jobs, and a composer that sits
+          flush against the list reads as the newest note. */}
+      <form action={submit} className={styles.composer}>
         <input type="hidden" name="id" value={id} />
         <label htmlFor="body">Add a note</label>
         <textarea
