@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import type {
+  Placeholder,
   Rendered,
   Template,
   TemplateDraft,
@@ -36,6 +37,17 @@ export type Saved =
 
 export type PreviewRead =
   | { ok: true; rendered: Rendered }
+  | { ok: false; error: string };
+
+/**
+ * The names a send can fill in.
+ *
+ * A failure here is not an error on the page. The editor simply stops offering
+ * a menu and stops calling anything unknown, because the only thing worse than
+ * not knowing which placeholders resolve is being told the wrong ones.
+ */
+export type PlaceholderRead =
+  | { ok: true; items: Placeholder[]; mocked: boolean }
   | { ok: false; error: string };
 
 /**
@@ -237,6 +249,96 @@ export async function renderPreview(input: {
   return { ok: true, rendered: (await response.json()) as Rendered };
 }
 
+/**
+ * Which placeholders resolve, from the only thing that knows.
+ *
+ * Two endpoints behind one function. With no campaign this is the general
+ * list, which is the editor's ordinary case: a template is written long before
+ * anybody decides who it goes to. Given a campaign it is that campaign's,
+ * narrowed to what its segment can actually fill.
+ *
+ * A campaign that cannot be read is never quietly widened to the general list.
+ * The narrow list exists precisely because the general one contains names this
+ * segment has no value for, so falling back would hand somebody a placeholder
+ * that renders empty — or refuses — for the exact audience they were writing
+ * to.
+ */
+export async function readPlaceholders(
+  campaignId?: string | null,
+): Promise<PlaceholderRead> {
+  const path = campaignId
+    ? `/admin/campaigns/${encodeURIComponent(campaignId)}/placeholders`
+    : "/admin/templates/placeholders";
+
+  let response: Response;
+  try {
+    response = await apiFetch(path);
+  } catch {
+    return { ok: false, error: "The API could not be reached." };
+  }
+
+  if (response.status === 404 && EXAMPLES) {
+    return { ok: true, items: examplePlaceholders(), mocked: true };
+  }
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: why(response.status, "Placeholders could not be loaded."),
+    };
+  }
+
+  let body: { placeholders?: unknown };
+  try {
+    body = (await response.json()) as { placeholders?: unknown };
+  } catch {
+    return { ok: false, error: "Placeholders could not be loaded." };
+  }
+
+  return { ok: true, items: named(body.placeholders), mocked: false };
+}
+
+/**
+ * The list, taken apart rather than cast to.
+ *
+ * Every name in here ends up in a menu somebody inserts from, so a row without
+ * a usable name is dropped instead of becoming `{{undefined}}` in an email.
+ * A missing description is null and not an empty string, because the editor
+ * lays the row out differently when there is nothing to say.
+ */
+function named(value: unknown): Placeholder[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const items: Placeholder[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+
+    const { name, description } = entry as {
+      name?: unknown;
+      description?: unknown;
+    };
+
+    if (typeof name !== "string" || name === "") {
+      continue;
+    }
+
+    items.push({
+      name,
+      description:
+        typeof description === "string" && description !== ""
+          ? description
+          : null,
+    });
+  }
+
+  return items;
+}
+
 // ---------------------------------------------------------------------------
 // Example data, until the API is there
 // ---------------------------------------------------------------------------
@@ -321,6 +423,29 @@ function examplePreview(input: {
     .join("\n");
 
   return { subject: input.subject, html, text: input.markdown };
+}
+
+/**
+ * The three names that resolve today, and nothing said about them.
+ *
+ * Scaffolding, and the shortest-lived thing in this file: it exists so the
+ * menu can be looked at before `/admin/templates/placeholders` answers, and it
+ * goes with the rest of this block the day it does. It is behind the same two
+ * locks as everything else here — never in production, and off by default —
+ * because a list of placeholder names that lives in this repo is exactly the
+ * failure the endpoint exists to prevent. It would be right until somebody
+ * adds a fourth name on the other side, and then this editor would be
+ * cheerfully offering names a send refuses.
+ *
+ * No descriptions. What `firstName` contains is the API's sentence to write,
+ * not this file's, and the editor lays a nameless row out correctly.
+ */
+function examplePlaceholders(): Placeholder[] {
+  return [
+    { name: "firstName", description: null },
+    { name: "lastName", description: null },
+    { name: "email", description: null },
+  ];
 }
 
 function placeholderNames(text: string): string[] {

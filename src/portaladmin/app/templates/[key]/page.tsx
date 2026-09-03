@@ -5,7 +5,7 @@ import styles from "@/components/templates/templates.module.css";
 import { kindLabel } from "@/components/templates/types";
 import { currentPerson } from "@/lib/api";
 import { Shell } from "../../shell";
-import { readTemplate } from "../api";
+import { readPlaceholders, readTemplate } from "../api";
 
 /**
  * One template, open.
@@ -16,19 +16,42 @@ import { readTemplate } from "../api";
  */
 export default async function TemplatePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ key: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { key } = await params;
+  const [{ key }, query] = await Promise.all([params, searchParams]);
 
   const person = await currentPerson();
   if (!person) {
     redirect("/sign-in");
   }
 
+  /*
+   * The campaign this template is being edited for, where there is one.
+   *
+   * A template is normally written before anybody has decided who it goes to,
+   * so the general list is the ordinary answer and this is the exception:
+   * opened from a campaign, the editor should only offer the names that
+   * campaign's segment can actually fill. Nothing in the console links here
+   * with it yet — see the note in the pull request.
+   */
+  const campaign =
+    typeof query.campaign === "string" && query.campaign !== ""
+      ? query.campaign
+      : null;
+
   // Not decoded again. The router hands over a decoded segment, and a second
   // pass would quietly rewrite any key with a percent sign in it.
-  const read = await readTemplate(key);
+  //
+  // Both reads are started together. The placeholders do not depend on the
+  // template, and awaiting them in turn would put a second round trip in front
+  // of a page that already waits on one.
+  const [read, names] = await Promise.all([
+    readTemplate(key),
+    readPlaceholders(campaign),
+  ]);
 
   if (!read.ok) {
     if (read.status === 404) {
@@ -80,6 +103,7 @@ export default async function TemplatePage({
       <Editor
         template={template}
         canManage={person.permissions.has("email.manage_templates")}
+        available={names.ok ? names.items : null}
       />
     </Shell>
   );
