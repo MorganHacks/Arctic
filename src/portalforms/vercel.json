@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+
+  "//": [
+    "Whether this project rebuilds, decided here rather than in the dashboard.",
+    "",
+    "The setting it replaces was inverted: it tested for a path relative to the",
+    "repository root while running from this directory, so the test always",
+    "passed and Vercel read exit 0 as 'skip'. Every deployment of portalforms",
+    "was Cancelled and forms.morganhacks.com never served anything.",
+    "",
+    "git diff --quiet has exactly the exit codes Vercel wants: 0 when nothing",
+    "changed, which means skip, and 1 when something did, which means build.",
+    "libs is included because both consoles import their palette from it, and a",
+    "change there that does not rebuild is a colour that means two things.",
+    "",
+    "On a shallow clone HEAD^ may not resolve. That errors non-zero, which",
+    "builds. Failing towards a build is the right way round."
+  ],
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet . ../../libs"
+}
