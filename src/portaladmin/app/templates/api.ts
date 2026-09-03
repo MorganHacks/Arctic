@@ -277,10 +277,6 @@ export async function readPlaceholders(
     return { ok: false, error: "The API could not be reached." };
   }
 
-  if (response.status === 404 && EXAMPLES) {
-    return { ok: true, items: examplePlaceholders(), mocked: true };
-  }
-
   if (!response.ok) {
     return {
       ok: false,
@@ -423,29 +419,6 @@ function examplePreview(input: {
     .join("\n");
 
   return { subject: input.subject, html, text: input.markdown };
-}
-
-/**
- * The three names that resolve today, and nothing said about them.
- *
- * Scaffolding, and the shortest-lived thing in this file: it exists so the
- * menu can be looked at before `/admin/templates/placeholders` answers, and it
- * goes with the rest of this block the day it does. It is behind the same two
- * locks as everything else here — never in production, and off by default —
- * because a list of placeholder names that lives in this repo is exactly the
- * failure the endpoint exists to prevent. It would be right until somebody
- * adds a fourth name on the other side, and then this editor would be
- * cheerfully offering names a send refuses.
- *
- * No descriptions. What `firstName` contains is the API's sentence to write,
- * not this file's, and the editor lays a nameless row out correctly.
- */
-function examplePlaceholders(): Placeholder[] {
-  return [
-    { name: "firstName", description: null },
-    { name: "lastName", description: null },
-    { name: "email", description: null },
-  ];
 }
 
 function placeholderNames(text: string): string[] {
