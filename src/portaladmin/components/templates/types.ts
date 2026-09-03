@@ -52,6 +52,21 @@ export type Template = {
 /** What the body and subject come out as. Rendered by the API, never here. */
 export type Rendered = { subject: string; html: string; text: string };
 
+/**
+ * A name a send can actually put a value in, and what that value will be.
+ *
+ * The API's list, read on every page load, and deliberately not a constant in
+ * this repo. Three names resolve today; a list written here would be right
+ * until the day a fourth is added or one is renamed, and then this editor
+ * would be confidently offering a placeholder that makes a campaign refuse to
+ * send. Offering nothing is the lesser failure, so where the list cannot be
+ * read the menu does not appear at all.
+ *
+ * `description` is what to tell somebody about the value — null where the API
+ * offers no sentence for it, which is not the same as an empty one.
+ */
+export type Placeholder = { name: string; description: string | null };
+
 /** Everything a create or a save sends. */
 export type TemplateDraft = {
   key: string;

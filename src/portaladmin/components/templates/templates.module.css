@@ -87,6 +87,100 @@
   padding: 0.6rem 0.7rem;
 }
 
+/*
+ * A field with a menu that can appear over it.
+ *
+ * Only here to give the menu something to be positioned against. The field
+ * inside keeps its own width, so nothing about the subject or the body moves
+ * because this wrapper exists.
+ */
+.completing {
+  position: relative;
+}
+
+/*
+ * The names, offered where the caret is.
+ *
+ * Drawn under the caret's line, never over it: the reason this exists is that
+ * an author could not see which placeholders were available, and a menu that
+ * covers the sentence they are writing has only moved the blindness one line
+ * up. The component measures the caret and flips above only when there is no
+ * room below at all.
+ *
+ * No animation. Not an oversight — this opens on `{{` and closes again a
+ * second later, dozens of times in one email, and a fade would be a delay
+ * levied on every single insertion. Nothing here moves, so there is nothing
+ * for reduced motion to switch off.
+ *
+ * Bordered rather than shadowed, because the console has no drop shadows and
+ * one raised surface with its own light source would read as a different
+ * application.
+ */
+.menu {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0.2rem;
+  list-style: none;
+  min-width: min(18rem, 100%);
+  max-width: 100%;
+  max-height: 14rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.menu[hidden] {
+  display: none;
+}
+
+/*
+ * One name and what it will contain.
+ *
+ * The description is the other half of the complaint: knowing that
+ * `firstName` exists is not the same as knowing what it puts in the email, and
+ * an author who has to guess will guess wrong for the people whose records are
+ * thin. Where the API says nothing the row is just the name — the gap is not
+ * filled in from here.
+ */
+.option {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: var(--radius);
+  cursor: default;
+}
+
+/*
+ * Which row Enter would take.
+ *
+ * The accent fill, because this one is a choice about to be made rather than a
+ * status — it is the same signal as a primary button and is read the same way.
+ */
+.current {
+  background: var(--accent-soft);
+}
+
+.option .name {
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.option .about {
+  color: var(--muted);
+  font-size: var(--step-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* What the medium supports, where somebody is about to test it. One line. */
 .medium {
   color: var(--muted);
@@ -111,6 +205,29 @@
   border-radius: var(--radius);
   padding: 0.1rem 0.4rem;
   color: var(--ink);
+}
+
+/*
+ * A name the send has no value for.
+ *
+ * Coloured, because this one is a verdict and not a distinction: everything
+ * else in this list will render, and this one is why a campaign will come back
+ * refused. It is also the only thing on the editor that carries the stop
+ * colour, which is what makes it worth carrying.
+ *
+ * The word is not decoration either. Colour alone would leave this identical
+ * to every other chip for anybody who cannot separate the two, on the one
+ * distinction on this screen that actually costs something.
+ */
+.placeholders li.unknown {
+  color: var(--stop);
+  background: var(--stop-soft);
+  border-color: var(--stop);
+}
+
+.mark {
+  font-family: var(--body);
+  margin-left: 0.35rem;
 }
 
 /*

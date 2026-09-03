@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { addTemplate, editTemplate, previewBody } from "@/app/templates/actions";
 import { EmailPreview } from "./email-preview";
+import { PlaceholderField } from "./placeholder-field";
 import styles from "./templates.module.css";
 import {
   placeholdersIn,
+  type Placeholder,
   type Rendered,
   type Template,
   type TemplateDraft,
@@ -34,9 +36,23 @@ const DEBOUNCE_MS = 600;
 export function Editor({
   template,
   canManage,
+  available,
 }: {
   template: Template | null;
   canManage: boolean;
+  /**
+   * The placeholders a send can fill in, or null where the API could not say.
+   *
+   * Read on the server by the page rather than fetched from here, so the menu
+   * is available on the first keystroke instead of after a round trip that
+   * would land somewhere in the middle of the first sentence.
+   *
+   * Null is not an empty list. Empty means the API answered and there is
+   * nothing to offer; null means nobody knows, and the difference decides
+   * whether a name the author typed can be called unknown — accusing a
+   * perfectly good placeholder of being wrong is worse than saying nothing.
+   */
+  available: Placeholder[] | null;
 }) {
   const router = useRouter();
 
@@ -79,9 +95,24 @@ export function Editor({
   const attempt = useRef(0);
 
   /** The names the body asks for, derived from what is typed rather than stored. */
-  const placeholders = useMemo(
+  const used = useMemo(
     () => placeholdersIn(subject, markdown),
     [subject, markdown],
+  );
+
+  /**
+   * The names that resolve, for looking one up.
+   *
+   * Null all the way through where the API could not be read, so the list
+   * below the editor keeps its old behaviour — every name simply listed — and
+   * nothing is marked wrong on the strength of a list nobody has.
+   */
+  const resolves = useMemo(
+    () =>
+      available === null
+        ? null
+        : new Set(available.map((placeholder) => placeholder.name)),
+    [available],
   );
 
   useEffect(() => {
@@ -213,11 +244,14 @@ export function Editor({
 
           <div className={styles.field}>
             <label htmlFor="subject">Subject</label>
-            <input
+            {/* The subject goes through the same renderer as the body, so it
+                offers the same names. A menu on one and not the other would
+                read as the subject not supporting placeholders at all. */}
+            <PlaceholderField
               id="subject"
               value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              autoComplete="off"
+              onChange={setSubject}
+              available={available}
               className={styles.wide}
             />
           </div>
@@ -258,11 +292,13 @@ export function Editor({
 
           <div className={styles.field}>
             <label htmlFor="markdown">Body</label>
-            <textarea
+            <PlaceholderField
               id="markdown"
               value={markdown}
-              onChange={(event) => setMarkdown(event.target.value)}
-              spellCheck={true}
+              onChange={setMarkdown}
+              available={available}
+              multiline
+              spellCheck
               className={styles.body}
             />
             {/* The answer to "can it carry HTML, CSS and JavaScript", where
@@ -271,19 +307,54 @@ export function Editor({
               Markdown. Email clients strip JavaScript and most CSS, so neither
               is offered here.
             </p>
+            {/* Said out loud because a menu nobody knows to summon is the same
+                as no menu, which is the state this screen was in. */}
+            {available !== null && available.length > 0 ? (
+              <p className={styles.medium}>
+                Type <span className="mono">{"{{"}</span> to insert a
+                placeholder.
+              </p>
+            ) : null}
           </div>
 
+          {/*
+            What the body asks for, against what a send can give it.
+
+            The same list as before, now able to disagree with itself. A name
+            the API does not know is the one that will come back refused, and
+            until now the only place that showed up was a campaign that would
+            not go — long after the person who typed it had moved on.
+          */}
           <div className={styles.field}>
             <span className="meta">Placeholders</span>
-            {placeholders.length === 0 ? (
+            {resolves === null ? (
+              <p className={styles.medium}>
+                Placeholder names could not be loaded.
+              </p>
+            ) : null}
+            {used.length === 0 ? (
               <p className={styles.medium}>None.</p>
             ) : (
               <ul className={styles.placeholders}>
-                {placeholders.map((name) => (
-                  <li key={name}>{name}</li>
-                ))}
+                {used.map((name) => {
+                  const unknown = resolves !== null && !resolves.has(name);
+
+                  return (
+                    <li key={name} className={unknown ? styles.unknown : ""}>
+                      {name}
+                      {unknown ? (
+                        <span className={styles.mark}>Unknown</span>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             )}
+            {resolves !== null && used.some((name) => !resolves.has(name)) ? (
+              <p className={styles.medium}>
+                A campaign refuses to send a placeholder that does not resolve.
+              </p>
+            ) : null}
           </div>
         </fieldset>
 
