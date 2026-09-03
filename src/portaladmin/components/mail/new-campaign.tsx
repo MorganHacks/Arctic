@@ -81,7 +81,7 @@ export function NewCampaign({
 
       <div className={styles.segment}>
         {kind === "applicants" ? (
-          <p className="field">
+          <div>
             <label htmlFor="eventId">Event</label>
             {events.length === 0 ? (
               <span className="meta">There is no event yet.</span>
@@ -94,7 +94,7 @@ export function NewCampaign({
                 ))}
               </select>
             )}
-          </p>
+          </div>
         ) : null}
 
         {kind === "applicants" ? (
@@ -131,7 +131,7 @@ export function NewCampaign({
         ) : null}
 
         {kind === "addresses" ? (
-          <div>
+          <div className={styles.addresses}>
             <label htmlFor="addresses">Addresses</label>
             <textarea
               id="addresses"

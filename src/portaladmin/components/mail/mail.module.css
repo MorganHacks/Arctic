@@ -8,22 +8,197 @@
  * little colour at all — the palette's rule is that colour carries meaning or
  * it is absent, and on this screen the things that carry meaning are whether a
  * campaign has gone out and whether the button in front of you sends it.
+ *
+ * Where a border needs to be the quiet edge of a coloured region rather than
+ * the colour itself, it is mixed down from the same token instead of being
+ * written as a second, lighter hex. One source for the colour, two weights of
+ * it.
  */
 
-/* The campaign's name, and the way back to the list. */
+/* The campaign's name, its state, and the warning that this page is different
+   from the others. */
 .head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/*
+ * The one line on the page that is coloured before anybody has done anything.
+ *
+ * Every other screen in this console can be undone. This one cannot, and the
+ * reader is told so at the top rather than at the button, where it would
+ * arrive too late to change which campaign they opened.
+ */
+.irreversible {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--stop);
+  font-size: var(--step-1);
+  font-weight: 500;
+  margin: 0;
+}
+
+.irreversible::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--stop);
+  flex: none;
+}
+
+/*
+ * The two-person rule, said before it is enforced.
+ *
+ * A ruled edge rather than a filled banner. It is accent-edged when the reader
+ * may send and stop-edged when they may not, because those are two different
+ * pieces of news and a reader who has learned to skip a blue rule must not
+ * skip the red one.
+ */
+.approval {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--sunken);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.approval.blocked {
+  border-left-color: var(--stop);
+}
+
+.approval p {
+  margin: 0;
+}
+
+/* The API's own sentence, at reading size. Never paraphrased on the way here. */
+.approvalSaid {
+  color: var(--ink);
+}
+
+.approvalWho {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.25rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/* Ruled off only when there is a sentence above it to be ruled off from. */
+.approvalSaid + .approvalWho {
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.approvalWho code {
+  color: var(--ink);
+}
+
+/*
+ * The page's shape: what the campaign is, beside what sending it would do.
+ *
+ * Uneven on purpose. The facts are a short list somebody checks once; the
+ * resolved recipients are the thing they read, and giving the two equal width
+ * would say they deserve equal attention.
+ */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* Stage two and the confirmation are not a column of anything. */
+.full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 62rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Panels ---------------------------------------------------------------- */
+
+/*
+ * A panel with a header strip, rather than a heading floating on the card.
+ *
+ * The strip is what makes the two stages countable at a glance: the marker
+ * sits in the same place in each, so somebody arriving at this screen can see
+ * that there are two of them before reading either.
+ */
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  overflow: hidden;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
+  background: var(--sunken);
+  border-bottom: 1px solid var(--line);
+}
+
+.cardHead h2 {
+  margin: 0;
+  font-size: var(--step-1);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* Which of the two stages this is. Accent because it is the thread through the
+   screen, and the accent is for the thing to do next. */
+.stage {
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+/* In the region that sends, the marker wears the colour of what it opens. */
+.commit .stage {
+  color: var(--stop);
+}
+
+.sep {
+  color: var(--line);
+}
+
+.cardBody {
+  padding: 1rem;
 }
 
 /* What the campaign is, before what it would do. */
 .facts {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.4rem 1rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem 1rem;
   margin: 0;
 }
 
@@ -34,6 +209,67 @@
 
 .facts dd {
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Numbers -------------------------------------------------------------- */
+
+/*
+ * Matched, sendable, suppressed.
+ *
+ * Three tiles because the difference between them is the whole reason a
+ * preview exists: a count of 400 says nothing about the twelve who were held
+ * back, and the twelve are the ones somebody has to go and find.
+ */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 30rem) {
+  .tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tile {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  padding: 0.6rem 0.75rem;
+}
+
+.tile dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+.tile dd {
+  margin: 0.15rem 0 0;
+}
+
+/* The one that is going to happen. */
+.tile.sendable {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+.tile.sendable dt,
+.tile.sendable .headline {
+  color: var(--ok);
+}
+
+/* The ones that are not, which is a fact about people and not an error. */
+.tile.held {
+  background: var(--stop-soft);
+  border-color: color-mix(in srgb, var(--stop) 35%, transparent);
+}
+
+.tile.held dt,
+.tile.held .headline {
+  color: var(--stop);
 }
 
 /*
@@ -44,18 +280,79 @@
  * should not be the same size as the label next to it.
  */
 .headline {
+  display: block;
   font-size: var(--step3);
+  line-height: 1.1;
   font-weight: 600;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   margin: 0;
 }
 
-/* The addresses the send resolved to. Mono, because these are read character
-   by character to check they are the right people. */
+/* Inside a tile the three sit side by side and must not tower over the panel. */
+.tile .headline {
+  font-size: var(--step2);
+}
+
+/* Why the held-back ones were held back ---------------------------------- */
+
+.reasons {
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.reasons li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+}
+
+/* The reason as the sender recorded it. Shown in its own words rather than
+   translated, so the twelve are findable by the name the system used. */
+.reasonName {
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  color: var(--ink);
+}
+
+.reasonCount {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/*
+ * What the API says is wrong with this campaign.
+ *
+ * Advisory at preview and fatal at send, and set apart from the numbers
+ * because a count nobody can act on and a sentence somebody must act on are
+ * not the same kind of thing.
+ */
+.problems {
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0.75rem 0 0 0.75rem;
+  border-top: 1px solid var(--line-soft);
+  border-left: 2px solid var(--warn);
+}
+
+.problems li {
+  padding: 0.15rem 0;
+  color: var(--ink);
+  font-size: var(--step-1);
+}
+
+/* The addresses ---------------------------------------------------------- */
+
+/* Mono, because these are read character by character to check they are the
+   right people. */
 .sample {
   list-style: none;
-  margin: 0.75rem 0 0;
+  margin: 0.9rem 0 0;
   padding: 0.75rem 0 0;
   border-top: 1px solid var(--line-soft);
   columns: 2;
@@ -70,10 +367,48 @@
 
 .sample li {
   break-inside: avoid;
-  padding: 0.15rem 0;
+  padding: 0.2rem 0;
   font-family: var(--mono);
   font-size: var(--step-1);
   overflow-wrap: anywhere;
+}
+
+/* How much of the list is not on screen. Ruled off, because "8 of 400 shown"
+   is a caveat about what is above it rather than another address. */
+.sampleFoot {
+  margin: 0.75rem 0 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* The send ---------------------------------------------------------------- */
+
+/*
+ * The only region on the console with a full stop-coloured border.
+ *
+ * It exists at all only once the recipients are on screen. Colour here is not
+ * emphasis and is deliberately not the accent: the accent means "this is the
+ * next thing to do", and this is "this cannot be taken back".
+ */
+.commit {
+  border: 1px solid var(--stop);
+  border-radius: var(--radius-lg);
+  background: var(--stop-soft);
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+
+.commitHead {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--stop) 30%, transparent);
+}
+
+.commit p {
+  margin: 0;
+  color: var(--ink);
 }
 
 /* The row of buttons under a preview, and the row that confirms one. */
@@ -85,23 +420,66 @@
   margin-top: 1rem;
 }
 
+/*
+ * The second press.
+ *
+ * Raised out of the region it sits in rather than merely indented, so that a
+ * screen somebody has already read once changes shape when the question
+ * becomes final. It is the same two presses the screen has always asked for;
+ * this only makes the second one look like what it is.
+ */
 .confirm {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin-top: 1rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--line-soft);
+  margin-top: 0.9rem;
+  padding: 0.85rem 0.95rem;
+  background: var(--raised);
+  border: 1px solid var(--stop);
+  border-radius: var(--radius);
+}
+
+.confirmAsk {
+  display: block;
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.confirm .actions {
+  margin-top: 0;
 }
 
 /*
- * What has already happened to this campaign.
+ * The button that sends.
  *
- * A ruled edge rather than a filled panel, and the only three colours on these
- * screens: it went out, it is going out, or it did not. Everything else — the
- * name, the segment, the template — is the same weight it was before, because
- * none of it changed.
+ * Filled rather than outlined, and the only filled stop-coloured control
+ * anywhere in the console. A destructive action that looks exactly like every
+ * other button is one somebody presses on the way past.
+ */
+/* Written past `button.danger` in globals.css, which paints its background
+   transparent — an outlined button is right for cancelling and wrong for the
+   one control on the console that cannot be taken back. */
+.commit button.send {
+  background: var(--stop);
+  border-color: var(--stop);
+  color: var(--raised);
+  font-weight: 600;
+}
+
+.commit button.send:hover:not(:disabled) {
+  border-color: var(--stop);
+  background: color-mix(in srgb, var(--stop) 85%, var(--ink));
+}
+
+.commit button.send:disabled {
+  color: var(--raised);
+  opacity: 0.55;
+}
+
+/* What has already happened ---------------------------------------------- */
+
+/*
+ * A ruled edge rather than a filled panel, and the only three colours here: it
+ * went out, it is going out, or it did not. Everything else — the name, the
+ * segment, the template — is the same weight it was before, because none of it
+ * changed.
  */
 .outcome {
   padding-left: 0.85rem;
@@ -125,9 +503,80 @@
   color: var(--muted);
 }
 
+/*
+ * How far through the queue it is.
+ *
+ * Counted per status and shown as the sender's own words. "Gone" is everything
+ * that has left this system whatever the provider did next, and it is the
+ * number that decides whether cancelling is still worth anything — so it is
+ * not quietly folded into "sent".
+ */
+.progress {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+}
+
+.progress li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: var(--step-1);
+}
+
+.progress b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.progress span {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--step-2);
+}
+
+/* The list --------------------------------------------------------------- */
+
+/*
+ * The campaigns table, on the same card as everything else.
+ *
+ * Ruled off rather than floating on the page, so the list of what has been
+ * sent reads as one object and not as rows that happen to be near each other.
+ * It scrolls inside its own edge on a narrow screen; the page never does.
+ */
+.tableCard {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  overflow-x: auto;
+}
+
+.tableCard table {
+  min-width: 34rem;
+}
+
+.tableCard tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The compose form ------------------------------------------------------- */
+
 /* The segment's own controls, revealed by the segment that needs them. */
 .segment {
   margin-top: 0.9rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.segment > * {
+  margin: 0;
+  min-width: 0;
 }
 
 .segment textarea {
@@ -144,10 +593,71 @@
   padding: 0.45rem 0.6rem;
 }
 
+.addresses {
+  flex: 1 1 100%;
+}
+
 .wide {
   width: 100%;
 }
 
 .numeric {
   font-variant-numeric: tabular-nums;
+}
+
+/* Movement ---------------------------------------------------------------- */
+
+/*
+ * Three movements and no more, none of them celebratory. This screen is about
+ * care rather than delight, and an animation that reads as congratulation
+ * beside a send that cannot be recalled would be the wrong feeling entirely.
+ *
+ * The global rule in libs/ui/tokens.css cuts every duration to nothing under
+ * prefers-reduced-motion, and each of these ends where the element belongs, so
+ * cutting them leaves the layout exactly as it is here.
+ */
+
+/* A stage arriving: it was not on the page a moment ago, and it is now. */
+@keyframes revealed {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+}
+
+/* A count settling on its number rather than appearing at it. */
+@keyframes settled {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+}
+
+/* The confirmation stepping up out of the region that asked for it. */
+@keyframes steppedUp {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+.revealed {
+  animation: revealed 220ms ease-out both;
+}
+
+.tile .headline {
+  animation: settled 260ms ease-out both;
+}
+
+.confirm {
+  animation: steppedUp 160ms ease-out both;
+  transform-origin: top center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revealed,
+  .tile .headline,
+  .confirm {
+    animation: none;
+  }
 }

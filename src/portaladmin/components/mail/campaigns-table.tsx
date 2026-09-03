@@ -16,35 +16,37 @@ import { when, type CampaignRow } from "./types";
  */
 export function CampaignsTable({ campaigns }: { campaigns: CampaignRow[] }) {
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Campaign</th>
-          <th>Status</th>
-          <th>Recipients</th>
-          <th>Sent</th>
-        </tr>
-      </thead>
-      <tbody>
-        {campaigns.map((campaign) => (
-          <tr key={campaign.id}>
-            <td>
-              <Link href={`/mail/${campaign.id}`}>{campaign.name}</Link>
-              <div className="meta">Created {when(campaign.createdAt)}</div>
-            </td>
-
-            <td>
-              <StatusPill status={campaign.status} />
-            </td>
-
-            <td className={styles.numeric}>
-              {campaign.status === "draft" ? "—" : campaign.recipientCount}
-            </td>
-
-            <td className={styles.numeric}>{when(campaign.sentAt)}</td>
+    <div className={styles.tableCard}>
+      <table>
+        <thead>
+          <tr>
+            <th>Campaign</th>
+            <th>Status</th>
+            <th>Recipients</th>
+            <th>Sent</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {campaigns.map((campaign) => (
+            <tr key={campaign.id}>
+              <td>
+                <Link href={`/mail/${campaign.id}`}>{campaign.name}</Link>
+                <div className="meta">Created {when(campaign.createdAt)}</div>
+              </td>
+
+              <td>
+                <StatusPill status={campaign.status} />
+              </td>
+
+              <td className={styles.numeric}>
+                {campaign.status === "draft" ? "—" : campaign.recipientCount}
+              </td>
+
+              <td className={styles.numeric}>{when(campaign.sentAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
