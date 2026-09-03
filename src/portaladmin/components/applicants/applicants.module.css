@@ -1,5 +1,5 @@
 /*
- * The applicants screen.
+ * The applicants screens.
  *
  * A module rather than more rules in globals.css. Nothing here is reused by
  * another screen, and the console's shared stylesheet is edited by everybody —
@@ -10,69 +10,195 @@
  * or it is absent, and a list somebody works down for an afternoon is the
  * exact place where a decorative tint costs the reader the ability to trust
  * the ones that mean something.
+ *
+ * Two surfaces live here and they are shaped by the same fact — an organizer
+ * is in them for hours. The list is a scanning surface: one line to a row,
+ * numbers under numbers, nothing that moves while it is being read. The record
+ * is a reading surface: one person, laid out so a decision can be made without
+ * scrolling back up to remember who it is about.
+ *
+ * Motion is short and never on the path of reading. The global
+ * prefers-reduced-motion rule in tokens.css flattens all of it.
  */
 
-/* Filters --------------------------------------------------------------- */
+/* The head of the list ---------------------------------------------------- */
 
 .head {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
+  flex-wrap: wrap;
   margin-bottom: 0.75rem;
 }
 
 /*
+ * Which event these applicants belong to.
+ *
+ * Beside the heading rather than in the filter bar, because it is not a filter
+ * — it is what the whole screen is about. Every number below it is a number
+ * about this event, and a reader who has forgotten which one they picked is
+ * reading counts that mean nothing.
+ */
+.scope {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/*
+ * The filter bar.
+ *
+ * One row, one form, one GET. Every control in it ends up in the URL, which is
+ * what lets somebody send "the waitlist, on this event" to whoever has to act
+ * on it — and what makes the back button work on a screen people spend an
+ * afternoon in.
+ */
+.controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+}
+
+.field {
+  min-width: 0;
+}
+
+.field label {
+  margin-bottom: 0.2rem;
+}
+
+.field select,
+.field input {
+  width: 100%;
+}
+
+/* The search box takes whatever is left. A name is what somebody types here
+   and an address is what they paste, and the paste is the long one. */
+.search {
+  flex: 1 1 16rem;
+}
+
+/* Event-wide counts ------------------------------------------------------- */
+
+/*
  * The counts, as the filter.
  *
- * Links rather than buttons, because the filter belongs in the URL: somebody
- * who finds a problem in the waitlist sends that link to whoever has to act on
- * it, and a filter held in React state is one that cannot be sent to anybody.
+ * Links rather than buttons, because the filter belongs in the URL. Counts are
+ * for the whole event and never for the filtered set: "how many are still
+ * undecided" is the question that decides which filter to press, and a number
+ * that moved with the filter would only ever confirm what the filter already
+ * said.
+ *
+ * One strip, not two. The mockup drew this twice.
+ *
+ * It scrolls sideways inside its own box rather than wrapping or taking the
+ * page with it. Eleven tiles is wider than a laptop and a strip that wrapped
+ * to three ragged rows would stop being a row of numbers to compare.
  */
 .tallies {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin: 0 0 1rem;
+  margin: 0 0 0.9rem;
   padding: 0;
   list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
 }
 
 .tally {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--raised);
-  font-size: var(--step-1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.7rem;
+  min-width: 5.5rem;
+  border-right: 1px solid var(--line-soft);
   text-decoration: none;
+  transition: background-color 120ms ease;
+}
+
+.tallies li:last-child .tally {
+  border-right: none;
+}
+
+/* Where "nothing has been decided yet" ends and an outcome begins. The one
+   division in the lifecycle a reader acts on, so it is the one that is drawn. */
+.divide {
+  border-left: 1px solid var(--line);
 }
 
 .tally:hover {
-  border-color: var(--muted);
+  background: var(--sunken);
 }
 
-/* The filter currently in force. The one thing on this bar that changes what
-   the table below means, so the one thing on it with the accent. */
-.tally.on {
-  border-color: var(--accent);
+/*
+ * The filter currently in force.
+ *
+ * A tinted tile with an accent rule under it. The rule rather than a heavier
+ * fill because the number inside already carries the status colour, and two
+ * backgrounds fighting over one tile is how a reader stops trusting either.
+ */
+.on {
   background: var(--accent-soft);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.on:hover {
+  background: var(--accent-soft);
+}
+
+.tallyLabel {
+  font-size: var(--step-2);
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.on .tallyLabel {
   color: var(--accent);
   font-weight: 600;
 }
 
-.count {
+.tallyCount {
+  font-size: var(--step1);
+  font-weight: 600;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
 }
 
-.tally.on .count {
-  color: inherit;
+/*
+ * A count coloured by what a reader does about it, not by which status it is.
+ *
+ * The same four families as the pills below, so the strip and the table teach
+ * each other. The figure only — no fill — because eleven filled tiles is the
+ * rainbow the token file was written to prevent.
+ */
+.figureUndecided {
+  color: var(--ink);
 }
 
-/* Status ---------------------------------------------------------------- */
+.figureWaiting {
+  color: var(--warn);
+}
+
+.figureIn {
+  color: var(--ok);
+}
+
+.figureOut {
+  color: var(--stop);
+}
+
+/* Status ------------------------------------------------------------------ */
 
 /*
  * Status is the one thing on this screen that earns colour.
@@ -98,6 +224,7 @@
   font-size: var(--step-1);
   white-space: nowrap;
   border: 1px solid transparent;
+  transition: background-color 140ms ease, color 140ms ease;
 }
 
 .undecided {
@@ -120,7 +247,7 @@
   background: var(--stop-soft);
 }
 
-/* The list -------------------------------------------------------------- */
+/* The list ---------------------------------------------------------------- */
 
 /*
  * The table scrolls, the page does not.
@@ -139,7 +266,7 @@
   overflow: auto;
   max-height: min(70vh, 44rem);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--raised);
   overscroll-behavior: contain;
 }
@@ -154,11 +281,15 @@
   border-spacing: 0;
 }
 
+/* Tighter than the console's default. This is the one table somebody reads
+   several hundred rows of, and every row of padding is a row that fell off
+   the bottom of the screen. */
 .table th,
 .table td {
+  padding: 0.45rem 0.75rem;
   border-bottom: 1px solid var(--line-soft);
   white-space: nowrap;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .table tbody tr:last-child td {
@@ -187,9 +318,22 @@
   z-index: 3;
 }
 
-/* Repainted on hover because a sticky cell has its own background and the
-   shared row-hover rule would otherwise stop at its edge. */
-.table tbody tr:hover .who {
+/* Focus counts as hover. Somebody tabbing down the list is doing exactly what
+   somebody pointing at it is doing, and only one of them was being shown
+   which row they were on. */
+.table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.table tbody tr:hover,
+.table tbody tr:focus-within {
+  background: var(--sunken);
+}
+
+/* Repainted because a sticky cell has its own background and the row rule
+   would otherwise stop at its edge. */
+.table tbody tr:hover .who,
+.table tbody tr:focus-within .who {
   background: var(--sunken);
 }
 
@@ -204,6 +348,7 @@
 
 .open:hover {
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* Dates are compared down the column, so they are fixed width and written
@@ -235,11 +380,88 @@
   color: var(--faint);
 }
 
+/*
+ * Rows that have been asked for and have not arrived.
+ *
+ * Rows rather than a spinner, and the same height as the real ones, so the
+ * page does not jump when they land under a reader's cursor. Three, because
+ * that is enough to read as "more is coming" without pretending to know how
+ * many.
+ */
+.pending td > span {
+  display: block;
+  height: 0.7rem;
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    var(--line-soft),
+    var(--line),
+    var(--line-soft)
+  );
+  background-size: 200% 100%;
+  animation: sweep 1.2s linear infinite;
+}
+
+.pending td:nth-child(1) > span {
+  width: 8rem;
+}
+
+.pending td:nth-child(2) > span {
+  width: 11rem;
+}
+
+.pending td:nth-child(3) > span {
+  width: 9rem;
+}
+
+.pending td:nth-child(4) > span {
+  width: 5rem;
+}
+
+.pending td:nth-child(5) > span {
+  width: 7rem;
+}
+
+.pending td:nth-child(6) > span {
+  width: 2.5rem;
+}
+
+@keyframes sweep {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/*
+ * The bar under the table.
+ *
+ * Attached to it rather than floating below, because everything on it is about
+ * the table: how much of the list is loaded, and how to get more. A count that
+ * looked like page furniture would be read as a page count.
+ */
 .foot {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
-  margin-top: 0.9rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--sunken);
+}
+
+.loaded {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .note {
@@ -253,7 +475,23 @@
   font-size: var(--step-1);
 }
 
-/* One applicant --------------------------------------------------------- */
+/* One applicant ----------------------------------------------------------- */
+
+/*
+ * Who this is, and where they have got to.
+ *
+ * Full width and above the split, because it is the answer to "whose record am
+ * I looking at" and both columns below are read against it. In the right-hand
+ * rail it would scroll away from the answers it is the heading for.
+ */
+.record {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  animation: rise 160ms ease-out both;
+}
 
 .person {
   display: flex;
@@ -269,8 +507,52 @@
 
 .identity {
   color: var(--muted);
-  margin: 0 0 1.5rem;
+  margin: 0;
   overflow-wrap: anywhere;
+}
+
+.caption {
+  margin: 1rem 0 0.4rem;
+  font-size: var(--step-2);
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/*
+ * The moments in this application's life, as things to compare.
+ *
+ * A row rather than a column, in a well of its own. They are read against each
+ * other — how long between submitting and a decision, whether the RSVP has run
+ * out — and a stack of label-and-value pairs is a stack nobody compares.
+ *
+ * Only the ones that happened. A grid of "—" against every stage an applicant
+ * has not reached is a grid nobody reads, and the history below already says
+ * what has and has not happened.
+ */
+.stamps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+
+.stamps dt {
+  color: var(--muted);
+  font-size: var(--step-2);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.stamps dd {
+  margin: 0;
+  font-size: var(--step-1);
+  font-variant-numeric: tabular-nums;
 }
 
 /*
@@ -284,8 +566,9 @@
 .split {
   display: grid;
   gap: 1.25rem;
-  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(19rem, 1fr);
   align-items: start;
+  animation: rise 160ms ease-out both;
 }
 
 @media (max-width: 64rem) {
@@ -294,17 +577,49 @@
   }
 }
 
+/* Panels stack with the grid's gap rather than their own margin, so the two
+   columns start level with each other. */
+.rail {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.rail :global(.panel),
+.split > :global(.panel) {
+  margin-bottom: 0;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Answers ----------------------------------------------------------------- */
+
 .qa {
-  padding: 0.7rem 0;
+  padding: 0.8rem 0;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.qa:first-child {
+  padding-top: 0;
 }
 
 .qa:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .question {
-  margin: 0 0 0.25rem;
+  margin: 0 0 0.3rem;
   color: var(--muted);
   font-size: var(--step-1);
 }
@@ -314,8 +629,16 @@
   font-family: var(--mono);
 }
 
+/*
+ * An answer, at reading width.
+ *
+ * Bounded because the left column is wide and a five-hundred-word answer set
+ * across the whole of it is one the eye loses its place in halfway through the
+ * first line. The measure is the reason this column exists.
+ */
 .answer {
   margin: 0;
+  max-width: 68ch;
   /* Line breaks somebody typed are kept. A long answer reflowed into one block
      is one nobody finishes. */
   white-space: pre-wrap;
@@ -332,18 +655,77 @@
   padding-left: 1.1rem;
 }
 
-/* Decision, history, notes ---------------------------------------------- */
+/* Refusals ---------------------------------------------------------------- */
+
+/*
+ * A section this reader may not see.
+ *
+ * The state to get right on this screen. Somebody on logistics holds
+ * `applications.view` and not `applications.view_resume`, opens a record, and
+ * three of its panels have nothing in them — and whether that reads as a
+ * working system or a broken one is decided entirely here.
+ *
+ * So it is drawn as a thing rather than as an absence: a block with a rule
+ * down its edge in `--warn`, which is the token for "attention", not `--stop`,
+ * which is the token for "something went wrong". Nothing went wrong. The
+ * permission is named in mono against the raised ground so it can be copied
+ * into a message to an admin, which is the entire point of naming it.
+ */
+.refusal {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 2px solid var(--warn);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--step-1);
+  /* A permission string is one long unbreakable token. In a narrow rail it
+     has to be allowed to break rather than push the panel sideways. */
+  overflow-wrap: anywhere;
+}
+
+.refusal code {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.3rem;
+  color: var(--ink);
+}
+
+/*
+ * The end of a lifecycle, which is not a refusal.
+ *
+ * Same shape so the panel reads consistently, neutral rule because nobody is
+ * missing anything. This is the record saying what it is, and colouring it
+ * would send somebody to ask an admin for a permission that would not help.
+ */
+.terminal {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 2px solid var(--line);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/* Decision ---------------------------------------------------------------- */
 
 .decide {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.7rem;
+}
+
+.decide select,
+.decide textarea,
+.notes textarea {
+  width: 100%;
 }
 
 .decide textarea,
 .notes textarea {
   font: inherit;
-  width: 100%;
   min-height: 4.5rem;
   resize: vertical;
   background: var(--raised);
@@ -353,6 +735,16 @@
   padding: 0.45rem 0.6rem;
 }
 
+/* History ----------------------------------------------------------------- */
+
+/*
+ * The trail, drawn as one.
+ *
+ * A rule down the left with a mark against each step, because this is read as
+ * a sequence — how this application got here — and a list of separate rows is
+ * read as a set of unrelated facts. The mark takes the colour of the status
+ * the step arrived at, which is the same four families as everywhere else.
+ */
 .trail {
   list-style: none;
   margin: 0;
@@ -360,12 +752,54 @@
 }
 
 .trail li {
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--line-soft);
+  position: relative;
+  padding: 0.55rem 0 0.55rem 1.2rem;
 }
 
-.trail li:last-child {
-  border-bottom: none;
+.trail li::before {
+  content: "";
+  position: absolute;
+  left: 0.1rem;
+  top: 0.95rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+/* The rule between one step and the next. Stops at the last one, because a
+   line running off the end suggests a step that has not been recorded. */
+.trail li::after {
+  content: "";
+  position: absolute;
+  left: 0.31rem;
+  top: 1.55rem;
+  bottom: -0.1rem;
+  width: 1px;
+  background: var(--line);
+}
+
+.trail li:last-child::after {
+  display: none;
+}
+
+/* Qualified by the list, because `.trail li::before` above sets the default
+   and outranks a bare class on its own. An unqualified rule here loses
+   silently and every mark on the trail comes out grey. */
+.trail li.markUndecided::before {
+  background: var(--faint);
+}
+
+.trail li.markWaiting::before {
+  background: var(--warn);
+}
+
+.trail li.markIn::before {
+  background: var(--ok);
+}
+
+.trail li.markOut::before {
+  background: var(--stop);
 }
 
 .step {
@@ -384,22 +818,30 @@
 }
 
 .reason {
-  margin: 0.25rem 0 0;
+  margin: 0.3rem 0 0;
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--step-1);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
+/* Notes ------------------------------------------------------------------- */
+
 .notes ul {
   list-style: none;
-  margin: 0 0 0.9rem;
+  margin: 0;
   padding: 0;
 }
 
 .notes li {
-  padding: 0.5rem 0;
+  padding: 0.6rem 0;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.notes li:first-child {
+  padding-top: 0;
 }
 
 .notes li:last-child {
@@ -407,7 +849,7 @@
 }
 
 .body {
-  margin: 0.2rem 0 0;
+  margin: 0.25rem 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -421,35 +863,27 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Ruled off from the notes above it. Writing one and reading them are
+   different jobs and the composer is not the newest note. */
+.composer {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* Resume ------------------------------------------------------------------ */
+
 .resume {
   display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
   margin: 0;
 }
 
+/* The one link on the record that leaves the console, and the thing to do next
+   in this panel, so it takes the accent. */
 .filename {
+  color: var(--accent);
   overflow-wrap: anywhere;
-}
-
-/* A row of dates that are read against each other. Fixed width so they line
-   up, and label-above-value so the labels do not double the width. */
-.stamps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.5rem 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-}
-
-.stamps dt {
-  color: var(--muted);
-  font-size: var(--step-1);
-}
-
-.stamps dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
 }

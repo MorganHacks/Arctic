@@ -67,7 +67,23 @@ export type Campaign = CampaignRow & {
  * everybody who ever started an application, and the addresses are the only
  * thing that tells the two apart.
  */
-export type Preview = { recipientCount: number; sample: string[] };
+export type Preview = {
+  /** People who will actually be mailed. */
+  recipientCount: number;
+
+  sample: string[];
+
+  /**
+   * Everybody the segment matched, before suppressions.
+   *
+   * Shown next to recipientCount when they differ, because "412 matched, 400
+   * will be sent" is the sentence that lets somebody find the twelve. The API
+   * writes suppressed recipients as rows rather than dropping them, so they
+   * are findable rather than merely counted.
+   */
+  segmentSize?: number;
+  suppressedCount?: number;
+};
 
 /** A form somebody could have answered, for the segment picker. */
 export type FormChoice = { id: string; name: string };

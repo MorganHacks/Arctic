@@ -27,8 +27,15 @@ Check that the `magic_link` template exists, because a missing one is logged
 loudly and then drops the send:
 
 ```sql
-SELECT key, from_local, from_domain FROM notify.templates WHERE key = 'magic_link';
+SELECT key, from_local, from_domain, version FROM notify.templates
+ WHERE key = 'magic_link' AND superseded_at IS NULL;
 ```
+
+`superseded_at IS NULL` matters. Editing a template writes a new row and
+retires the old one, so a key that has been edited has several rows and only
+one of them is the template atlas will find. Without the filter this shows
+every version there has ever been, and the addresses on the retired ones are
+the addresses that used to be right.
 
 **Rows in `pending`, none in `sent`** → lark is not sending. Go to 2.
 

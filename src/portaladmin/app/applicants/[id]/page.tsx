@@ -14,18 +14,21 @@ import { readApplicant } from "../api";
 /**
  * One applicant, in full.
  *
- * Answers on the left, everything that can be done about them on the right.
- * Not the other way round: the answers are what a decision is made from and
- * they are the long column, so the controls belong beside the scroll rather
- * than under it. Nobody should have to read to the bottom of an essay to find
- * the button.
+ * Who this is sits across the top, because both columns underneath are read
+ * against it and a name in the right-hand rail scrolls away from the answers
+ * it is the heading for. Then answers on the left, everything that can be done
+ * about them on the right. Not the other way round: the answers are what a
+ * decision is made from and they are the long column, so the controls belong
+ * beside the scroll rather than under it. Nobody should have to read to the
+ * bottom of an essay to find the button.
  *
- * Three of the panels are behind permissions of their own and can be absent —
- * the answers, the notes and the resume link. Each says which permission is
- * missing rather than rendering empty, because "you cannot see this" and
- * "there is nothing here" are different sentences and only one of them is
- * true. Naming the permission is what turns "it doesn't work" into a request
- * an admin can act on.
+ * Four of the panels are behind permissions of their own and can be absent —
+ * the answers, the notes, the resume link and the decision. Each says which
+ * permission is missing rather than rendering empty, because "you cannot see
+ * this" and "there is nothing here" are different sentences and only one of
+ * them is true. Naming the permission is what turns "it doesn't work" into a
+ * request an admin can act on, which matters most on a team that turns over
+ * completely every year.
  *
  * Never cached. A decision is made from what this says, so a stale status
  * would be a decision made against a record somebody else has already changed.
@@ -68,48 +71,59 @@ export default async function OneApplicant({
         ← Applicants
       </Link>
 
-      <div className={styles.person}>
-        <h1>{name(applicant)}</h1>
-        <StatusPill status={applicant.status} />
-      </div>
-
-      {/* The address as text, never in a link or a heading attribute. It is
-          what somebody typed into a public form. */}
-      <p className={styles.identity}>
-        {applicant.email}
-        {applicant.school ? ` · ${applicant.school}` : null}
-        {` · form v${applicant.formVersion}`}
-      </p>
-
-      <div className={styles.split}>
-        <div>
-          <section className="panel">
-            <h2>Answers</h2>
-            {applicant.answers === null ? (
-              <p className="meta">
-                You do not have <code>applications.view_responses</code>. Ask an
-                admin.
-              </p>
-            ) : (
-              <Answers answers={applicant.answers} />
-            )}
-          </section>
+      <div className={styles.record}>
+        <div className={styles.person}>
+          <h1>{name(applicant)}</h1>
+          <StatusPill status={applicant.status} />
         </div>
 
-        <div>
+        {/* The address as text, never in a link or a heading attribute. It is
+            what somebody typed into a public form. */}
+        <p className={styles.identity}>
+          {applicant.email}
+          {applicant.school ? ` · ${applicant.school}` : null}
+          {` · form v${applicant.formVersion}`}
+        </p>
+
+        <h2 className={styles.caption}>Dates (UTC)</h2>
+        <Dates applicant={applicant} />
+      </div>
+
+      <div className={styles.split}>
+        <section className="panel">
+          <h2>Answers</h2>
+          {applicant.answers === null ? (
+            <p className={styles.refusal}>
+              You do not have <code>applications.view_responses</code>. Ask an
+              admin.
+            </p>
+          ) : (
+            <Answers answers={applicant.answers} />
+          )}
+        </section>
+
+        <div className={styles.rail}>
           <section className="panel">
             <h2>Status</h2>
-            <Decision id={applicant.id} allowedNext={applicant.allowedNext} />
+            {/*
+              Whether this reader may decide is known before the button is
+              drawn, so it is said before the button is pressed. The permission
+              set is a courtesy and never the gate — the API refuses the change
+              whoever asks — but a reader on logistics who picks a status,
+              writes a reason and then reads "you do not have
+              applications.decide" has been told the same thing a minute later
+              and lost the reason they typed.
+            */}
+            <Decision
+              id={applicant.id}
+              allowedNext={applicant.allowedNext}
+              canDecide={person.permissions.has("applications.decide")}
+            />
           </section>
 
           <section className="panel">
             <h2>Resume</h2>
             <Resume applicant={applicant} />
-          </section>
-
-          <section className="panel">
-            <h2>Dates (UTC)</h2>
-            <Dates applicant={applicant} />
           </section>
 
           <section className="panel">
@@ -120,7 +134,7 @@ export default async function OneApplicant({
           <section className="panel">
             <h2>Notes</h2>
             {applicant.notes === null ? (
-              <p className="meta">
+              <p className={styles.refusal}>
                 You do not have <code>applications.note</code>. Ask an admin.
               </p>
             ) : (
@@ -141,6 +155,12 @@ export default async function OneApplicant({
  * one worth telling somebody about — it means bytes we said we had are not
  * there — and it already shouts in the API's log.
  *
+ * The middle one is the state this screen was drawn for. Logistics holds
+ * `applications.view` and not `applications.view_resume` on purpose, because a
+ * CV is more sensitive than a headcount, so this is not an edge case — it is
+ * what a whole team sees on every record they open, and it has to read as a
+ * boundary somebody drew rather than as a panel that failed to load.
+ *
  * The link is signed and lives about five minutes. It is minted when this page
  * is rendered rather than with the list, because a page of fifty rows would
  * mean fifty live links to open none of the files.
@@ -152,7 +172,7 @@ function Resume({ applicant }: { applicant: Applicant }) {
 
   if (applicant.resume === null) {
     return (
-      <p className="meta">
+      <p className={styles.refusal}>
         There is a resume. You do not have{" "}
         <code>applications.view_resume</code> to open it.
       </p>
@@ -181,6 +201,11 @@ function Resume({ applicant }: { applicant: Applicant }) {
 
 /**
  * The moments in this application's life, as things to compare.
+ *
+ * A row across the record rather than a column in the rail. They are read
+ * against each other — how long it sat between submitting and a decision,
+ * whether the RSVP has run out — and a stack of label-and-value pairs is a
+ * stack nobody compares.
  *
  * Only the ones that happened. A grid of "—" against every stage an applicant
  * has not reached is a grid nobody reads, and the history panel below already
