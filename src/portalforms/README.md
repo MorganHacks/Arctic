@@ -22,6 +22,75 @@ form in, which is why:
   off a flyer in March gets told the deadline passed, not a 404 they report as
   broken.
 
+## A section cuts the form into steps
+
+A field of type `section` is a heading, not a question. It is never answered,
+never sent, and takes no number. What it does is mark where one step of the
+form ends and the next begins:
+
+- fields before the first section are step one;
+- a section begins each step after that;
+- a form with **no** sections is a single page, exactly as it has always been.
+
+Most forms have none and should not be able to tell this exists. The
+application form has fifteen questions, and fifteen questions on one page is a
+wall — on a phone it is a scroll with no end in sight and no sense of how much
+is left.
+
+A section with nothing under it still gets a step. That is a heading and a
+description with nothing to fill in, which is a legitimate thing to want — an
+introduction, or instructions before the questions start — and dropping it
+would delete something somebody wrote.
+
+**Only the step on screen is checked.** Somebody on step one is never told
+about a required question on step four: it is not on their screen, there is
+nothing they can do about it from there, and a Next button that refuses for a
+reason nobody can see is a form that looks broken. Every problem on *this* step
+is raised at once, though, for the same reason it always was.
+
+The last step checks the whole form before it posts — everything behind it has
+already passed its own step, so this only catches somebody who walked back and
+emptied a box. If it finds something, they are taken to the step it is on. Same
+for a problem the API raises: whichever step the question lives on is the step
+they land on, because a complaint about a question you cannot see is not one
+you can act on.
+
+**Answers are never lost by moving.** Every answer for every step lives in one
+object for the whole form. Only the current step is mounted, so leaving one
+costs nothing and coming back puts every box exactly as it was left — including
+on steps nobody has reached yet.
+
+### The browser's Back button is not a step
+
+Going back a step is the on-screen **Back** button. The browser's own Back
+button leaves the form, and the unload guard makes the browser ask first.
+
+This was decided rather than defaulted to. Pushing a history entry per step is
+what a phone user's thumb expects — but every way of doing it hands the App
+Router a navigation, and a navigation this page does not survive takes every
+answer with it. `router.push` re-runs the server component, which loads the
+form `no-store`. Raw `pushState` avoids that until a `popstate` arrives for an
+entry the router did not create.
+
+The worst case of what is here is somebody swiping back out of habit and being
+asked whether they meant it. The worst case of the other choice is a
+fifteen-question application gone, silently, with nothing on screen to say why.
+
+### One progress indicator, not two
+
+A form in steps says `Step 2 of 4` and shows a bar for it. A form on one page
+keeps the `n of m answered` count it has always had, above eight questions.
+They are the same object measuring different things and they never appear
+together: on one page every question is on screen and the useful number is how
+many are done; in steps the useful number is which step.
+
+The count lives inside the step's heading, and the heading is what takes focus
+when a step changes. That makes one announcement — "Step 2 of 4, About you" —
+where a live region would have talked over whatever somebody was reading.
+Focus and scroll both go to the top on every step, because a silent swap of
+every question on the page is disorienting for anybody not looking at the whole
+screen.
+
 ## Validation happens twice, and only one of them counts
 
 The page checks required questions, email shape and number ranges before it
@@ -106,6 +175,23 @@ exists.
 
 Uploading a resume needs Azurite, which `docker compose up` starts. Without it
 the API answers 503 and says so; the rest of the form still works.
+
+### Looking at the steps without an API that serves sections
+
+Scaffolding, and it is meant to be deleted. `lib/preview.ts` makes up a form
+with sections in it so the multi-step page can be looked at before the API can
+serve one:
+
+```bash
+FORMS_PREVIEW=1 npm run dev
+# /preview      — a form in five steps
+# /previewflat  — the same questions with no sections, i.e. the single page
+```
+
+Two locks, both of which have to be open: `FORMS_PREVIEW=1`, and `NODE_ENV` not
+being `production`, so a shipped build can never serve it. The copy in it is
+placeholder and has not been approved. Delete the file and the marked block in
+`lib/api.ts` once a real form has sections.
 
 ## What is not here yet
 

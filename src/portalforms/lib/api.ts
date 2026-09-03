@@ -1,3 +1,6 @@
+// Scaffolding. Goes with the block in loadForm below. See lib/preview.ts.
+import { previewForm } from "./preview";
+
 /**
  * Where the API lives as far as the server is concerned.
  *
@@ -11,7 +14,18 @@
  */
 const apiOrigin = process.env.API_ORIGIN ?? "http://localhost:5080";
 
-/** The question types a form can ask. Spelled as the API spells them. */
+/**
+ * The question types a form can ask. Spelled as the API spells them.
+ *
+ * `section` is the odd one out and deliberately still lives here rather than in
+ * a list of its own. It arrives in the same `fields` array as everything else,
+ * so keeping it in the same union is what makes the compiler point at every
+ * place that assumed a field was a question — which is the whole of the risk in
+ * adding it.
+ *
+ * A section is never answered. It has no control, takes no value, and is never
+ * sent. It marks where one step of the form ends and the next begins.
+ */
 export type FieldType =
   | "shortText"
   | "paragraph"
@@ -23,7 +37,8 @@ export type FieldType =
   | "radio"
   | "checkboxes"
   | "consent"
-  | "file";
+  | "file"
+  | "section";
 
 export type FieldOption = { value: string; label: string };
 
@@ -72,6 +87,19 @@ export type PublicForm = {
  * seven-character codes are real — and so does this page.
  */
 export async function loadForm(code: string): Promise<PublicForm | null> {
+  /* ---- Scaffolding. Delete this block and the import with lib/preview.ts. --
+   *
+   * A made-up form with sections in it, so the multi-step page can be looked at
+   * before the API can serve one. Returns null unless both of its locks are
+   * open, and one of them is `NODE_ENV !== "production"`, so a shipped build
+   * never gets past this line. See lib/preview.ts.
+   */
+  const preview = previewForm(code);
+  if (preview) {
+    return preview;
+  }
+  /* ---- End of the scaffolding. ------------------------------------------ */
+
   let response: Response;
 
   try {
