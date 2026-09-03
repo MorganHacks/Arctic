@@ -1,0 +1,104 @@
+import type { FormField } from "@/lib/api";
+import type { ResponseItem } from "./types";
+
+/**
+ * What the table has a column for.
+ *
+ * Two kinds, because a form outlives its own questions. `asked` is a question
+ * the form has now, and gets the label somebody wrote. `retired` is a key that
+ * shows up in the answers and no longer belongs to any question — a question
+ * that was deleted after people had already answered it — and there is no
+ * label to show, because the label was deleted with it.
+ */
+export type Column =
+  | { kind: "asked"; key: string; label: string; field: FormField }
+  | { kind: "retired"; key: string; label: string; field: null };
+
+/**
+ * A file question is not a column.
+ *
+ * The answer to it is the resume, which has its own column and its own
+ * permission. A second column holding the same filename would be furniture.
+ */
+const NOT_A_COLUMN = new Set(["file"]);
+
+/**
+ * The columns for a set of loaded responses.
+ *
+ * The form's own questions first, in the order they are asked, whether or not
+ * anybody has answered them — a question added last week has no answers yet
+ * and its column being absent would read as the question being absent.
+ *
+ * Then whatever else the answers actually contain. Derived from the rows on
+ * screen rather than from any list of past versions, because the only thing
+ * that makes a retired key worth a column is that a response in front of the
+ * reader has one.
+ *
+ * Recomputed as more pages load, so a retired key that first appears on page
+ * four gains its column then. That moves the resume column right while
+ * somebody is reading, which is worth it: the alternative is silently not
+ * showing an answer.
+ */
+export function columnsFor(
+  fields: FormField[],
+  items: ResponseItem[],
+): Column[] {
+  const asked: Column[] = [];
+  const known = new Set<string>();
+
+  for (const field of fields) {
+    known.add(field.key);
+
+    if (NOT_A_COLUMN.has(field.type)) {
+      continue;
+    }
+
+    asked.push({
+      kind: "asked",
+      key: field.key,
+      // A question can be saved before it is worded. The key is what it is
+      // filed under and is readable on purpose, so it stands in.
+      label: field.label.trim() === "" ? field.key : field.label,
+      field,
+    });
+  }
+
+  const retired = new Set<string>();
+  for (const item of items) {
+    for (const key of Object.keys(item.answers)) {
+      if (!known.has(key)) {
+        retired.add(key);
+      }
+    }
+  }
+
+  return [
+    ...asked,
+    ...[...retired].sort().map(
+      (key): Column => ({ kind: "retired", key, label: key, field: null }),
+    ),
+  ];
+}
+
+/**
+ * The questions as the detail panel walks them.
+ *
+ * Everything the form asks, in order, including the file question — the panel
+ * is where a resume is actually downloaded — followed by whatever this one
+ * response holds that the form no longer asks. Unlike the table this is per
+ * response, because "what else did this person tell us" is a question about
+ * one submission.
+ */
+export function askedAndRetired(
+  fields: FormField[],
+  item: ResponseItem,
+): { asked: FormField[]; retired: string[] } {
+  const known = new Set(fields.map((field) => field.key));
+
+  return {
+    asked: fields,
+    retired: Object.keys(item.answers)
+      .filter((key) => !known.has(key))
+      .sort(),
+  };
+}
