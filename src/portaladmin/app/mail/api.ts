@@ -823,12 +823,61 @@ function exampleRenders(recipientCount: number): Render[] {
       return {
         email,
         subject: `Example Event · ${name}`,
-        html: `<h1>Example Event</h1>\n<p>${name}</p>`,
+        html: exampleBody(name, email, 4 + index * 7),
         text: `Example Event\n\n${name}`,
         unfilled,
       };
     },
   );
+}
+
+/**
+ * One example message, shaped like the thing it stands in for.
+ *
+ * The bodies here were a heading and a line, which is neither what anybody
+ * sends nor what the preview has to survive. A real broadcast is a fixed
+ * 600px table with a band at the top and a footer under it, and it is
+ * routinely taller than the panel showing it — so a fixture shorter than the
+ * frame can never show the frame failing, and that is exactly how a preview
+ * that could not hold a real message came to be reviewed and shipped.
+ *
+ * Still no wording: every string is a value this fixture already substituted
+ * — the event, the person, the address — arranged as markup. The words in a
+ * real message belong to whoever writes the emails.
+ *
+ * No colour either. Every border here takes `currentColor` rather than naming
+ * one, because a hex written in this repository is a hex somebody has to
+ * check against the palette, and the palette has nothing to say about
+ * somebody else's email.
+ *
+ * The row count grows with the index, so stepping through the sample steps
+ * between genuinely different heights. That is the other thing this panel has
+ * to do without moving.
+ */
+function exampleBody(name: string, email: string, rows: number): string {
+  const row = (n: number) =>
+    `<tr><td style="padding:8px 12px;border-bottom:1px solid">Example Person ${n}</td>` +
+    `<td style="padding:8px 12px;border-bottom:1px solid">person${n}@example.edu</td></tr>`;
+
+  return [
+    '<table role="presentation" width="600" cellpadding="0" cellspacing="0"',
+    ' style="width:600px;border-collapse:collapse;font-family:Arial,sans-serif">',
+    '<tr><td style="padding:24px;border-bottom:3px solid">',
+    '<h1 style="margin:0;font-size:24px">Example Event</h1>',
+    "</td></tr>",
+    '<tr><td style="padding:24px">',
+    `<p style="margin:0 0 16px">${name}</p>`,
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"',
+    ' style="border-collapse:collapse;font-size:14px">',
+    Array.from({ length: rows }, (_, index) => row(index + 1)).join(""),
+    "</table>",
+    "</td></tr>",
+    '<tr><td style="padding:24px;border-top:1px solid;font-size:12px">',
+    `<p style="margin:0">Example Event</p>`,
+    `<p style="margin:4px 0 0">${email}</p>`,
+    "</td></tr>",
+    "</table>",
+  ].join("");
 }
 
 function exampleChange(
