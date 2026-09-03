@@ -83,6 +83,12 @@ builder.Services.AddAuditTrail();
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
 
+// The writing side of the same table. Separate from TemplateStore for the
+// reason CampaignStore is separate from MessageQueue: that one is a single
+// indexed read on the path of somebody signing in, and this one rewrites the
+// rows every queued message points at.
+builder.Services.AddSingleton<TemplateCatalog>();
+
 // The broadcast side of the same schema. Separate from MessageQueue on
 // purpose: one queues a single message on the path of somebody signing in,
 // the other queues several hundred because an organizer decided to mail
@@ -288,6 +294,7 @@ app.MapAuditTrail();
 app.MapFormsAdmin();
 app.MapFormResponses();
 app.MapApplicants();
+app.MapTemplates();
 app.MapCampaigns();
 app.MapSesWebhook();
 
