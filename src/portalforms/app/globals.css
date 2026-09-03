@@ -232,6 +232,83 @@ fieldset.question > legend + * {
   transition: width 160ms ease-out;
 }
 
+/* One step of a form ---------------------------------------------------- */
+
+/*
+ * The heading of a step, and the bar that says which one it is.
+ *
+ * This is the progress indicator for a form in steps, and there is not a second
+ * one — the `n of m answered` count above belongs to a form that is one page,
+ * where every question is on screen. Two measures of "how far through" side by
+ * side is two things to reconcile at a glance and no reason to trust either.
+ *
+ * It reuses the same track and bar so the two forms of this page are visibly
+ * the same object measuring a different thing, rather than two indicators that
+ * happen to sit in the same place.
+ */
+.step {
+  margin-bottom: 1.25rem;
+}
+
+.step .tally-track {
+  margin-bottom: 0.9rem;
+}
+
+/*
+ * The step's name, in the same serif as the form's own.
+ *
+ * Smaller than the form name above it, because it is the second line of the
+ * same sentence: this form, this part of it. It takes focus when the step
+ * changes, which is what announces the change to somebody who is not looking at
+ * the screen.
+ */
+.step-title {
+  font-family: var(--display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 0;
+  scroll-margin-top: 1rem;
+
+  /* A section's name is somebody else's text and can be any length without a
+     space in it. It wraps rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 40rem) {
+  .step-title {
+    font-size: 1.4rem;
+  }
+}
+
+/*
+ * Which step this is.
+ *
+ * Inside the heading rather than beside it, so that focusing the heading says
+ * "Step 2 of 4" and then the step's name as one announcement. Set as an eyebrow
+ * above the name — the same treatment as the wordmark at the top of the page,
+ * because it is doing the same job: saying where you are before saying what
+ * this is.
+ */
+.step-of {
+  display: block;
+  font-family: var(--font-inter), var(--body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0.3rem;
+}
+
+.step-help {
+  color: var(--muted);
+  font-size: 0.9375rem;
+  margin: 0.45rem 0 0;
+}
+
 /* Controls ------------------------------------------------------------- */
 
 /*
@@ -469,6 +546,9 @@ button.quiet:hover {
 .submit {
   position: sticky;
   bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   padding: 1rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(to bottom, transparent, var(--sunken) 45%);
 }
@@ -487,9 +567,47 @@ button[type="submit"] {
   color: var(--accent-ink);
 }
 
+/* In the bar it shares a row with Back and takes whatever is left, rather than
+   the whole width it takes when it is standing alone on the error page. */
+.submit button[type="submit"] {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
 button[type="submit"]:disabled {
   cursor: progress;
   opacity: 0.7;
+}
+
+/*
+ * Back.
+ *
+ * The same height and the same reach as the button beside it, and quieter than
+ * it. Going backwards is never the thing to do next, so it does not take the
+ * accent — but it is pressed with the same thumb on the same phone, so it is
+ * not made smaller either.
+ *
+ * It sits first, on the left, which is both where a back control belongs and
+ * what puts Next second in the markup: pressing Enter in a text box then
+ * submits the step rather than leaving it.
+ */
+.back {
+  flex: 0 1 auto;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 3rem;
+  padding: 0.75rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.back:hover {
+  border-color: var(--muted);
 }
 
 .footnote {
@@ -497,6 +615,12 @@ button[type="submit"]:disabled {
   font-size: 0.8125rem;
   text-align: center;
   margin: 0.75rem 0 0;
+}
+
+/* Its own row under the buttons, however many of them there are. */
+.submit .footnote {
+  flex: 1 0 100%;
+  margin-top: 0;
 }
 
 /* Everything that is not a form ---------------------------------------- */

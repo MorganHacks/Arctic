@@ -87,6 +87,17 @@ export function answered(field: Field, answer: Answer | undefined): boolean {
  * the application form that address is the only way to reach them.
  */
 export function check(field: Field, answer: Answer | undefined): string | null {
+  /*
+   * A section is a heading, not a question, so there is nothing here to be
+   * wrong. The guard is at the top of the rule rather than at each caller
+   * because a section that arrived marked `required` would otherwise fail a
+   * check nobody can pass — there is no control to type into — and the form
+   * would refuse to submit with no way past it.
+   */
+  if (field.type === "section") {
+    return null;
+  }
+
   if (!answered(field, answer)) {
     if (!field.required) {
       return null;
@@ -156,6 +167,13 @@ export function payload(
   const body: Record<string, unknown> = {};
 
   for (const field of fields) {
+    // A section is never answered, so it is never sent. Nothing ever writes
+    // one into `answers`, but saying so here is what makes that a rule rather
+    // than a happy consequence of no control rendering for it.
+    if (field.type === "section") {
+      continue;
+    }
+
     const answer = answers[field.key];
     if (!answered(field, answer)) {
       continue;
