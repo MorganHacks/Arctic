@@ -16,10 +16,17 @@ namespace MorganHacks.Lark.Data.Domain;
 /// matching the HTML the first week nobody remembers to update it.
 /// <para>
 /// A deliberately small dialect: paragraphs, headings, lists, links, bold,
-/// italic, blockquotes, rules and images. That is the same list
-/// <see cref="EmailHtml"/> allows, and it is short for the same reason —
-/// everything longer is layout, and layout in email is tables and inline
-/// styles rather than Markdown.
+/// italic, blockquotes, rules and images. It stays small now that
+/// <see cref="EmailHtml"/> allows more than it produces, because the thing
+/// Markdown is good for is prose. An author who needs a button needs a table
+/// cell with a background colour, and the honest way to write one is to write
+/// HTML and say so — see <see cref="TemplateBody"/> — rather than to grow this
+/// dialect one layout construct at a time.
+/// </para>
+/// <para>
+/// Raw HTML written inside a Markdown source still passes through to
+/// <see cref="EmailHtml"/>, which is how a Markdown template can carry a
+/// styled paragraph without changing language.
 /// </para>
 /// <para>
 /// Hand-written rather than a Markdown package. The dialect is small enough to

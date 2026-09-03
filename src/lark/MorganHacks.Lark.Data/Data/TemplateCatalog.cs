@@ -27,7 +27,7 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
     private const string Duplicate = "23505";
 
     private const string Columns = """
-        id, key, kind, subject, body_markdown, body_html, body_text,
+        id, key, kind, subject, body_format, body_markdown, body_html, body_text,
         from_local, from_domain, reply_to, version, created_at, created_by
         """;
 
@@ -83,10 +83,10 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
     {
         var sql = $"""
             INSERT INTO notify.templates
-                (key, kind, subject, body_markdown, body_html, body_text,
-                 from_local, from_domain, reply_to, version, created_by)
-            VALUES (@key, @kind, @subject, @markdown, @html, @text,
-                    @fromLocal, @fromDomain, @replyTo, 1, @author)
+                (key, kind, subject, body_format, body_markdown, body_html,
+                 body_text, from_local, from_domain, reply_to, version, created_by)
+            VALUES (@key, @kind, @subject, @format, @source, @html,
+                    @text, @fromLocal, @fromDomain, @replyTo, 1, @author)
             RETURNING {Columns}
             """;
 
@@ -181,10 +181,10 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         await using var insert = new NpgsqlCommand(
             $"""
             INSERT INTO notify.templates
-                (key, kind, subject, body_markdown, body_html, body_text,
-                 from_local, from_domain, reply_to, version, created_by)
-            VALUES (@key, @kind, @subject, @markdown, @html, @text,
-                    @fromLocal, @fromDomain, @replyTo, @version, @author)
+                (key, kind, subject, body_format, body_markdown, body_html,
+                 body_text, from_local, from_domain, reply_to, version, created_by)
+            VALUES (@key, @kind, @subject, @format, @source, @html,
+                    @text, @fromLocal, @fromDomain, @replyTo, @version, @author)
             RETURNING {Columns}
             """,
             connection,
@@ -227,7 +227,8 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         cmd.Parameters.AddWithValue("key", draft.Key);
         cmd.Parameters.AddWithValue("kind", draft.Kind);
         cmd.Parameters.AddWithValue("subject", draft.Subject);
-        cmd.Parameters.AddWithValue("markdown", draft.Markdown);
+        cmd.Parameters.AddWithValue("format", draft.Format);
+        cmd.Parameters.AddWithValue("source", draft.Source);
         cmd.Parameters.AddWithValue("html", draft.Html);
         cmd.Parameters.AddWithValue("text", draft.Text);
         cmd.Parameters.AddWithValue("fromLocal", draft.FromLocal);
@@ -241,13 +242,14 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         reader.GetString(1),
         reader.GetString(2),
         reader.GetString(3),
-        reader.IsDBNull(4) ? null : reader.GetString(4),
-        reader.GetString(5),
+        reader.GetString(4),
+        reader.IsDBNull(5) ? null : reader.GetString(5),
         reader.GetString(6),
         reader.GetString(7),
         reader.GetString(8),
-        reader.IsDBNull(9) ? null : reader.GetString(9),
-        reader.GetInt32(10),
-        reader.GetFieldValue<DateTimeOffset>(11),
-        reader.IsDBNull(12) ? null : reader.GetGuid(12));
+        reader.GetString(9),
+        reader.IsDBNull(10) ? null : reader.GetString(10),
+        reader.GetInt32(11),
+        reader.GetFieldValue<DateTimeOffset>(12),
+        reader.IsDBNull(13) ? null : reader.GetGuid(13));
 }

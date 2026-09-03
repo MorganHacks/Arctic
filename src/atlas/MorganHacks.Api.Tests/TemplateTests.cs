@@ -121,26 +121,242 @@ public class TemplateTests(ApplicationsDatabase db)
     }
 
     [Fact]
-    public async Task Styling_is_not_a_thing_a_template_can_carry()
+    public async Task Inline_styling_is_kept_and_a_style_block_is_not()
     {
-        // Asked about specifically, so asserted specifically. CSS mostly does
-        // not survive a mail client, and a style attribute stored here would be
-        // a promise this cannot keep.
+        // This assertion used to run the other way: nothing styled survived at
+        // all. That was wrong about email rather than careful about safety —
+        // inline CSS works in essentially every client and is how all
+        // marketing mail is built, so refusing it meant no template could
+        // contain a button.
+        //
+        // The block is still discarded, and that is a different judgement:
+        // Gmail drops a <style> block when a message is forwarded, so a
+        // template that depends on one looks right until the first person
+        // passes it on. Every layout that needs it can be written inline.
         var (_, cookie) = await Comms();
 
         var saved = await Body(await Post(cookie, Draft(Key(), markdown:
             "<style>p { color: red }</style>\n\n"
-            + "<div class=\"wrapper\" style=\"color: red\">placeholder</div>")));
+            + "<div class=\"wrapper\" style=\"color: #123456\">placeholder</div>")));
 
         var html = saved.GetProperty("html").GetString()!;
 
-        Assert.DoesNotContain("style", html, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("class", html, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("color", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("style=\"color: #123456;\"", html, StringComparison.Ordinal);
+        Assert.Contains("class=\"wrapper\"", html, StringComparison.Ordinal);
 
-        // The div is unwrapped rather than discarded: the words inside it were
-        // the point of pasting it.
+        // The block's contents are gone, rather than printed as prose.
+        Assert.DoesNotContain("p { color: red }", html, StringComparison.Ordinal);
         Assert.Contains("placeholder", html, StringComparison.Ordinal);
+    }
+
+    // ------------------------------------------------------------------- html ---
+
+    [Fact]
+    public async Task An_html_template_round_trips()
+    {
+        // The source comes back as it was typed, under the format that says
+        // how to read it. An editor that reopened a template as generated
+        // markup would be the round trip through generated HTML that storing a
+        // source exists to remove.
+        var (_, cookie) = await Comms();
+        var key = Key();
+
+        var source =
+            "<div><h1>Placeholder heading</h1><p>A placeholder line.</p></div>";
+
+        var created = await Body(await Post(cookie, Html(key, body: source)));
+
+        Assert.Equal("html", created.GetProperty("format").GetString());
+        Assert.Equal(source, created.GetProperty("body").GetString());
+
+        // And null under the old name, rather than HTML in a field a caller
+        // that has not heard about formats would put in a Markdown editor.
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("markdown").ValueKind);
+
+        var read = await Body(await Client().SendAsync(
+            Request(HttpMethod.Get, $"/admin/templates/{key}", cookie)));
+
+        Assert.Equal("html", read.GetProperty("format").GetString());
+        Assert.Equal(source, read.GetProperty("body").GetString());
+        Assert.Contains("<h1>Placeholder heading</h1>",
+            read.GetProperty("html").GetString()!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_table_and_its_inline_styles_survive_an_html_template()
+    {
+        // A button in email is a one-cell table with a background colour.
+        // Outlook's flexbox and grid support is bad enough that this is still
+        // the layout mechanism, and cellpadding is honoured where a stylesheet
+        // is not — so the deprecated attributes are the ones that work.
+        var (_, cookie) = await Comms();
+
+        var saved = await Body(await Post(cookie, Html(Key(), body:
+            "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" "
+            + "cellspacing=\"0\" border=\"0\" bgcolor=\"#ffffff\">"
+            + "<tbody><tr><td align=\"center\" valign=\"middle\" colspan=\"2\" "
+            + "style=\"padding: 12px 24px; background-color: #101010; "
+            + "border-radius: 4px\">"
+            + "<a href=\"https://example.invalid/go\" "
+            + "style=\"color: #ffffff; text-decoration: none\">placeholder</a>"
+            + "</td></tr></tbody></table>")));
+
+        var html = saved.GetProperty("html").GetString()!;
+
+        foreach (var kept in new[]
+        {
+            "<table", "<tbody>", "<tr>", "<td", "role=\"presentation\"",
+            "width=\"100%\"", "cellpadding=\"0\"", "cellspacing=\"0\"",
+            "border=\"0\"", "bgcolor=\"#ffffff\"", "align=\"center\"",
+            "valign=\"middle\"", "colspan=\"2\"", "padding: 12px 24px;",
+            "background-color: #101010;", "border-radius: 4px;",
+            "text-decoration: none;", "https://example.invalid/go",
+        })
+        {
+            Assert.Contains(kept, html, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task An_html_template_is_sanitised_the_same_way_a_markdown_one_is()
+    {
+        // Same allow-list, same refusals. A second sanitiser for the second
+        // language would agree with the first until somebody changed one.
+        var (_, cookie) = await Comms();
+
+        var saved = await Body(await Post(cookie, Html(Key(), body:
+            "<p>placeholder one</p>"
+            + "<script>alert('one')</script>"
+            + "<iframe src=\"https://example.invalid/\"></iframe>"
+            + "<img src=\"https://example.invalid/a.png\" alt=\"pic\" "
+            + "onerror=\"alert('two')\">"
+            + "<a href=\"javascript:alert('three')\">placeholder two</a>")));
+
+        var html = saved.GetProperty("html").GetString()!;
+
+        Assert.DoesNotContain("script", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("iframe", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onerror", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("javascript", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert", html, StringComparison.OrdinalIgnoreCase);
+
+        // What was safe about each of them is still there.
+        Assert.Contains("placeholder one", html, StringComparison.Ordinal);
+        Assert.Contains("placeholder two", html, StringComparison.Ordinal);
+        Assert.Contains("<img src=\"https://example.invalid/a.png\"", html,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_style_value_that_could_execute_does_not_survive()
+    {
+        // The reason the style attribute is read rather than trusted.
+        // expression() is old IE's way of putting script in a stylesheet, and
+        // CSS has a comment syntax specifically good at spelling it in a way a
+        // substring check misses.
+        var (_, cookie) = await Comms();
+
+        var saved = await Body(await Post(cookie, Html(Key(), body:
+            "<p style=\"width: expression(alert(1)); color: #010203\">placeholder</p>"
+            + "<p style=\"width: expr/**/ession(alert(2))\">placeholder two</p>"
+            + "<p style=\"background: url(javascript:alert(3))\">placeholder three</p>")));
+
+        var html = saved.GetProperty("html").GetString()!;
+
+        Assert.DoesNotContain("expression", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("javascript", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert", html, StringComparison.OrdinalIgnoreCase);
+
+        // One refused declaration does not take the paragraph or the colour
+        // beside it. An author who asked for one thing this cannot vouch for
+        // has still written a paragraph.
+        Assert.Contains("color: #010203;", html, StringComparison.Ordinal);
+        Assert.Contains("placeholder three", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_html_template_gets_a_text_part_too()
+    {
+        // 0003 requires body_text and says why: text-only clients exist, and a
+        // message with no text part scores worse with spam filters. An HTML
+        // template has no prose source to derive it from, so it is read back
+        // out of the layout.
+        var (_, cookie) = await Comms();
+
+        var saved = await Body(await Post(cookie, Html(Key(), body:
+            "<table><tr><td style=\"padding: 8px\">"
+            + "<h1>Placeholder heading</h1>"
+            + "<p>One placeholder line.<br>Another placeholder line.</p>"
+            + "<ul><li>one</li><li>two</li></ul>"
+            + "<a href=\"https://example.invalid/go\">placeholder link</a>"
+            + "</td></tr></table>")));
+
+        var text = saved.GetProperty("text").GetString()!;
+
+        Assert.Contains("Placeholder heading", text, StringComparison.Ordinal);
+        Assert.Contains(
+            "One placeholder line.\nAnother placeholder line.",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains("- one", text, StringComparison.Ordinal);
+
+        // The URL survives as something somebody can copy, which is the whole
+        // reason a text part is worth having.
+        Assert.Contains(
+            "placeholder link <https://example.invalid/go>", text, StringComparison.Ordinal);
+
+        // And none of the layout does.
+        Assert.DoesNotContain("<td", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("padding", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_template_is_markdown_unless_it_says_otherwise()
+    {
+        // Every caller written before there was a choice sends no format and
+        // means markdown, so a request without one has to keep working exactly
+        // as it did.
+        var (_, cookie) = await Comms();
+
+        var saved = await Body(await Post(cookie, Draft(Key(), markdown: "**placeholder**")));
+
+        Assert.Equal("markdown", saved.GetProperty("format").GetString());
+        Assert.Contains(
+            "<strong>placeholder</strong>",
+            saved.GetProperty("html").GetString()!,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_format_that_is_not_one_of_the_two_is_refused()
+    {
+        // Rather than quietly treated as the default. A caller that asked for
+        // something else and got a markdown render back would find out from
+        // the mail.
+        var (_, cookie) = await Comms();
+
+        var response = await Post(cookie, Html(Key(), body: "<p>x</p>", format: "mdx"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_template_saved_as_markdown_can_be_saved_again_as_html()
+    {
+        // Converting is a thing an author does once the layout outgrows the
+        // dialect, and unlike kind it changes nothing about which queue the
+        // message joins or which subdomain it leaves from.
+        var (_, cookie) = await Comms();
+        var key = await Existing();
+
+        var saved = await Body(await Client().SendAsync(Request(
+            HttpMethod.Put,
+            $"/admin/templates/{key}",
+            cookie,
+            Html(key, body: "<p>Second placeholder body.</p>"))));
+
+        Assert.Equal("html", saved.GetProperty("format").GetString());
+        Assert.Equal(2, saved.GetProperty("version").GetInt32());
     }
 
     [Fact]
@@ -585,6 +801,30 @@ public class TemplateTests(ApplicationsDatabase db)
             kind,
             subject,
             markdown,
+            fromLocal = "news",
+            fromDomain = "news.example.invalid",
+            replyTo = (string?)null,
+        };
+
+    /// <summary>The same, written in HTML rather than in Markdown.</summary>
+    /// <remarks>
+    /// Sends the source as <c>body</c> rather than as <c>markdown</c>, which is
+    /// the name it has now that there are two languages. The older name is
+    /// still accepted and is what <see cref="Draft"/> above sends, so both are
+    /// exercised.
+    /// </remarks>
+    private static object Html(
+        string key,
+        string body,
+        string format = "html",
+        string kind = "broadcast",
+        string subject = "Placeholder one") => new
+        {
+            key,
+            kind,
+            subject,
+            format,
+            body,
             fromLocal = "news",
             fromDomain = "news.example.invalid",
             replyTo = (string?)null,

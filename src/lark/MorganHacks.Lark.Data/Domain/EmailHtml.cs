@@ -23,54 +23,120 @@ namespace MorganHacks.Lark.Data.Domain;
 /// event attribute, and would be wrong in between.
 /// </para>
 /// <para>
-/// <b>No styling at all.</b> There is no <c>style</c> attribute, no
-/// <c>&lt;style&gt;</c> element and no <c>class</c>, because a stylesheet does
-/// not survive Gmail and a class attribute has nothing to match. If this ever
-/// emits styling it has to be inline on the element, and it would be added
-/// here rather than by letting authors write it.
+/// <b>Styling is inline, and inline styling is allowed.</b> A <c>style</c>
+/// attribute is how every piece of marketing mail ever sent has been built,
+/// and it works in essentially every client; its contents are read by
+/// <see cref="EmailStyle"/> rather than trusted. <c>class</c> is allowed too —
+/// it does nothing on its own, and refusing it only mangles what somebody
+/// pasted out of a builder.
 /// </para>
 /// <para>
-/// <b>Never JavaScript.</b> Not because it is dangerous here but because it
-/// does not run: no mail client executes script. Allowing it would mean
-/// storing something that only ever works in the preview pane, which is worse
-/// than refusing it.
+/// <b>A <c>&lt;style&gt;</c> block is not.</b> That is the one styling
+/// judgement that goes the other way, and it is not really about safety.
+/// Gmail drops the block when a message is forwarded, so a template that
+/// depends on one looks correct until the first person forwards it to a
+/// friend; Outlook.com rewrites the selectors; and vouching for a whole
+/// stylesheet means parsing selectors, <c>@import</c> and <c>@media</c>
+/// rather than the flat list of declarations an attribute holds. Every layout
+/// that needs it can be written inline, so the block is discarded with its
+/// contents.
+/// </para>
+/// <para>
+/// <b>Tables stay.</b> Outlook's flexbox and grid support is bad enough that a
+/// table is still the layout mechanism email is built out of — a button is a
+/// single-cell table with a background colour — so the table tags and the old
+/// presentational attributes that make them behave are on the list. Email HTML
+/// is old-fashioned by necessity and this reflects that rather than arguing
+/// with it.
+/// </para>
+/// <para>
+/// <b>Never JavaScript.</b> The genuine exception, and the one place the
+/// product argument and the safety argument agree: every client strips it, so
+/// it would only ever work in a preview pane, and attempting it is a thing
+/// spam filters score against. <c>&lt;script&gt;</c> goes with its contents,
+/// <c>on*</c> handlers are simply not on any list here, and no <c>href</c> or
+/// <c>src</c> may name a <c>javascript:</c> or <c>data:</c> URL.
 /// </para>
 /// </remarks>
 public static partial class EmailHtml
 {
     /// <summary>
-    /// Every tag an email may contain, and the attributes each may keep.
+    /// Every tag an email may contain, and the attributes each may keep on top
+    /// of <see cref="Global"/>.
     /// </summary>
     /// <remarks>
     /// Chosen for what survives a mail client rather than for what is valid
-    /// HTML. Tables are the one notable absence — they are how real newsletters
-    /// are laid out, and adding them means adding the attributes that make them
-    /// work, at which point this is a layout language rather than a body of
-    /// text. Until somebody asks for a layout, a template is prose.
+    /// HTML, which is why the presentational attributes HTML deprecated twenty
+    /// years ago are here: <c>cellpadding</c> on a table is honoured by Outlook
+    /// and <c>padding</c> in a stylesheet is not, so the deprecated one is the
+    /// one that works.
+    /// <para>
+    /// <c>div</c>, <c>span</c>, <c>center</c> and <c>font</c> are kept for the
+    /// same reason. They are what a builder emits and what a wrapper pasted out
+    /// of an existing newsletter is made of; unwrapping them would leave the
+    /// words and lose every colour and width hung on them.
+    /// </para>
     /// </remarks>
     private static readonly Dictionary<string, string[]> Allowed =
         new(StringComparer.Ordinal)
         {
-            ["p"] = [],
+            ["p"] = ["align"],
             ["br"] = [],
-            ["hr"] = [],
-            ["h1"] = [],
-            ["h2"] = [],
-            ["h3"] = [],
-            ["h4"] = [],
-            ["h5"] = [],
-            ["h6"] = [],
+            ["hr"] = ["align", "width", "size"],
+            ["h1"] = ["align"],
+            ["h2"] = ["align"],
+            ["h3"] = ["align"],
+            ["h4"] = ["align"],
+            ["h5"] = ["align"],
+            ["h6"] = ["align"],
             ["strong"] = [],
             ["b"] = [],
             ["em"] = [],
             ["i"] = [],
+            ["u"] = [],
+            ["small"] = [],
             ["ul"] = [],
             ["ol"] = [],
             ["li"] = [],
             ["blockquote"] = [],
-            ["a"] = ["href", "title"],
-            ["img"] = ["src", "alt", "title"],
+            ["a"] = ["href", "title", "target"],
+            ["img"] = ["src", "alt", "title", "width", "height", "border", "align",
+                       "hspace", "vspace"],
+
+            // The layout language. `role` is here for `role="presentation"`,
+            // which is what stops a screen reader announcing a button as a
+            // one-by-one data table.
+            ["table"] = ["width", "height", "align", "border", "cellpadding",
+                         "cellspacing", "bgcolor", "role"],
+            ["thead"] = ["align", "valign", "bgcolor"],
+            ["tbody"] = ["align", "valign", "bgcolor"],
+            ["tfoot"] = ["align", "valign", "bgcolor"],
+            ["tr"] = ["align", "valign", "bgcolor", "height"],
+            ["td"] = ["width", "height", "align", "valign", "bgcolor", "colspan",
+                      "rowspan", "nowrap"],
+            ["th"] = ["width", "height", "align", "valign", "bgcolor", "colspan",
+                      "rowspan", "nowrap"],
+            ["caption"] = ["align"],
+
+            // The wrappers.
+            ["div"] = ["align"],
+            ["span"] = [],
+            ["center"] = [],
+            ["font"] = ["color", "face", "size"],
         };
+
+    /// <summary>
+    /// Attributes every allowed tag may carry.
+    /// </summary>
+    /// <remarks>
+    /// <c>style</c> is not passed through: <see cref="EmailStyle.Sanitize"/>
+    /// reads it declaration by declaration and what comes back is what is
+    /// written. <c>class</c> is passed through, because a class name is a
+    /// string with nothing to match it in an email — harmless to keep and
+    /// occasionally the only thing that makes a pasted builder export make
+    /// sense to the person who pasted it.
+    /// </remarks>
+    private static readonly string[] Global = ["style", "class"];
 
     /// <summary>Tags that close themselves and hold nothing.</summary>
     private static readonly HashSet<string> Void =
@@ -80,13 +146,18 @@ public static partial class EmailHtml
     /// Tags whose contents go with them.
     /// </summary>
     /// <remarks>
-    /// Everything else that is not allowed is unwrapped — a <c>&lt;div&gt;</c>
+    /// Everything else that is not allowed is unwrapped — an unknown wrapper
     /// disappears and the paragraph inside it stays, which is what somebody
     /// pasting from a page meant. These are the ones where the contents are not
     /// prose: the body of a <c>&lt;script&gt;</c> or a <c>&lt;style&gt;</c> is
     /// code, and unwrapping it would print the code into the email.
+    /// <para>
+    /// <c>svg</c>, <c>iframe</c>, <c>object</c> and <c>embed</c> are here
+    /// rather than merely absent for the same reason: each can carry script or
+    /// a remote document in its body, so the body has to go with the tag.
+    /// </para>
     /// </remarks>
-    private static readonly HashSet<string> Discarded =
+    internal static readonly HashSet<string> Discarded =
         new(StringComparer.Ordinal)
         {
             "script", "style", "iframe", "frame", "frameset", "object", "embed",
@@ -342,9 +413,23 @@ public static partial class EmailHtml
         return !scheme.Success || schemes.Contains(scheme.Value[..^1]);
     }
 
+    /// <summary>Whether an image may be loaded from this URL.</summary>
+    /// <remarks>
+    /// Public to the assembly so that <see cref="EmailStyle"/> asks the same
+    /// question of a <c>background-image</c> that this asks of an
+    /// <c>&lt;img src&gt;</c>. Two answers to "may an email load this" would
+    /// agree until one of them was changed.
+    /// </remarks>
+    internal static bool IsImageUrl(string value) => IsSafe(value, ImageSchemes);
+
     /// <summary>
     /// The attributes to write, or null if the whole tag has to go.
     /// </summary>
+    /// <remarks>
+    /// A <c>style</c> that survives as nothing is left off rather than written
+    /// empty, and it never takes its tag with it: an author who asked for one
+    /// colour this cannot vouch for has still written a paragraph.
+    /// </remarks>
     private static string? Attributes(Tag tag, string[] allowed)
     {
         var written = new StringBuilder();
@@ -353,8 +438,22 @@ public static partial class EmailHtml
 
         foreach (var (name, value) in tag.Attributes)
         {
-            if (!allowed.Contains(name, StringComparer.Ordinal))
+            if (!allowed.Contains(name, StringComparer.Ordinal)
+                && !Global.Contains(name, StringComparer.Ordinal))
             {
+                continue;
+            }
+
+            if (name == "style")
+            {
+                var declarations = EmailStyle.Sanitize(WebUtility.HtmlDecode(value));
+                if (declarations.Length > 0)
+                {
+                    written.Append(" style=\"")
+                           .Append(WebUtility.HtmlEncode(declarations))
+                           .Append('"');
+                }
+
                 continue;
             }
 
@@ -403,7 +502,7 @@ public static partial class EmailHtml
     }
 
     /// <summary>Where the contents of a discarded element end.</summary>
-    private static int SkipPast(string html, string name, int from)
+    internal static int SkipPast(string html, string name, int from)
     {
         var close = html.IndexOf("</" + name, from, StringComparison.OrdinalIgnoreCase);
         if (close < 0)
@@ -426,7 +525,7 @@ public static partial class EmailHtml
         text.Clear();
     }
 
-    private sealed record Tag(
+    internal sealed record Tag(
         string Name,
         bool Closing,
         bool SelfClosing,
@@ -442,7 +541,7 @@ public static partial class EmailHtml
     /// behind is attacker-shaped in exactly the way this file exists to
     /// prevent.
     /// </remarks>
-    private static bool TryReadTag(string html, int start, out Tag tag, out int next)
+    internal static bool TryReadTag(string html, int start, out Tag tag, out int next)
     {
         tag = null!;
         next = start;

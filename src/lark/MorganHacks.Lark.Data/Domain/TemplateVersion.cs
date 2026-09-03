@@ -9,9 +9,11 @@ namespace MorganHacks.Lark.Data.Domain;
 /// carries the Markdown source and the version number, which matter to an
 /// editor and are dead weight in a send loop.
 /// <para>
-/// <see cref="Markdown"/> is nullable because the seeded <c>magic_link</c> row
+/// <see cref="Source"/> is nullable because the seeded <c>magic_link</c> row
 /// was written as HTML in a migration and has no source. Saving it once through
-/// the editor gives it one.
+/// the editor gives it one. <see cref="Format"/> says which language that
+/// source is in; on a row with no source it is whatever the column defaulted
+/// to and means nothing, which is what the API says about it.
 /// </para>
 /// <para>
 /// <see cref="UpdatedAt"/> is the row's <c>created_at</c>, and that is not a
@@ -25,7 +27,8 @@ public sealed record TemplateVersion(
     string Key,
     string Kind,
     string Subject,
-    string? Markdown,
+    string Format,
+    string? Source,
     string Html,
     string Text,
     string FromLocal,
@@ -49,11 +52,19 @@ public sealed record TemplateVersion(
 }
 
 /// <summary>What an author submits when they save a template.</summary>
+/// <remarks>
+/// <see cref="Html"/> and <see cref="Text"/> are both rendered from
+/// <see cref="Source"/> by <see cref="TemplateBody.Render"/> before this record
+/// is made. They are carried rather than re-derived in the store so that a
+/// body which sanitises away to nothing is refused by the endpoint, with a
+/// sentence, rather than by a NOT NULL column with an exception.
+/// </remarks>
 public sealed record TemplateDraft(
     string Key,
     string Kind,
     string Subject,
-    string Markdown,
+    string Format,
+    string Source,
     string Html,
     string Text,
     string FromLocal,
