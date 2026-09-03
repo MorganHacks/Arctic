@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   grant,
   joinTeam,
@@ -9,6 +9,7 @@ import {
   ungrant,
   type FormState,
 } from "../actions";
+import styles from "../people.module.css";
 
 /** A team the person is on, as the screen needs it. */
 export type TeamRow = {
@@ -16,6 +17,8 @@ export type TeamRow = {
   name: string;
   expiresAt: string | null;
   expired: boolean;
+  /** The baseline this membership confers, from the catalogue. */
+  permissions: string[];
 };
 
 /** One individual grant. */
@@ -47,7 +50,10 @@ function Remove({
   const [state, submit, pending] = useActionState(action, {});
 
   return (
-    <form action={submit}>
+    // Inline, so it sits beside the expiry it belongs to rather than dropping
+    // onto a line of its own. A form is a block by default, and a Remove on its
+    // own line reads as a control for the row underneath.
+    <form action={submit} className={styles.inline}>
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
@@ -94,25 +100,39 @@ export function Teams({
       {rows.length === 0 ? (
         <p className="meta">On no teams, so the baselines grant them nothing.</p>
       ) : (
-        <ul className="listing">
+        <ul className={styles.memberships}>
           {rows.map((team) => (
-            <li key={team.slug}>
-              <span>
-                {team.name} <code>{team.slug}</code>
-              </span>
-              <span>
-                <Expiry expiresAt={team.expiresAt} expired={team.expired} />
-                {canManage ? (
-                  <>
-                    {" "}
-                    <Remove
-                      action={leaveTeam}
-                      fields={{ id: personId, slug: team.slug }}
-                      label="Remove"
-                    />
-                  </>
-                ) : null}
-              </span>
+            <li key={team.slug} className={team.expired ? styles.spent : undefined}>
+              <div className={styles.rowline}>
+                <span>
+                  {team.name} <code>{team.slug}</code>
+                </span>
+                <span>
+                  <Expiry expiresAt={team.expiresAt} expired={team.expired} />
+                  {canManage ? (
+                    <>
+                      {" "}
+                      <Remove
+                        action={leaveTeam}
+                        fields={{ id: personId, slug: team.slug }}
+                        label="Remove"
+                      />
+                    </>
+                  ) : null}
+                </span>
+              </div>
+
+              {/* What this membership is actually granting. Without it,
+                  removing somebody from a team is a click with an unknown
+                  consequence, and the consequence is the only thing that
+                  matters about it. */}
+              {team.permissions.length > 0 ? (
+                <ul className={styles.baseline}>
+                  {team.permissions.map((permission) => (
+                    <li key={permission}>{permission}</li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -187,7 +207,7 @@ export function Grants({
       ) : (
         <ul className="listing">
           {rows.map((row) => (
-            <li key={row.permission}>
+            <li key={row.permission} className={row.expired ? styles.spent : undefined}>
               <span>
                 <code>{row.permission}</code>{" "}
                 {row.sensitive ? <span className="pill sensitive">sensitive</span> : null}
@@ -265,10 +285,20 @@ export function Grants({
 /**
  * Revoking, behind a step somebody has to mean.
  *
- * A two-stage button rather than a browser confirm dialog: the confirmation
- * names the address, so the thing being read back is the person rather than
- * the verb. Revoking the wrong organizer during an event needs a second admin
- * to undo.
+ * The most destructive control in the console, and the only thing on this page
+ * that is dressed as one. --stop rather than the accent: the accent means "the
+ * thing to do next", and this is "cannot be taken back". Revoking the wrong
+ * organizer mid-event needs a second admin to undo, and that second admin may
+ * be asleep.
+ *
+ * Two presses, and a two-stage button rather than a browser confirm dialog: the
+ * confirmation names the address, so what is read back is the person rather
+ * than the verb. "Revoke" twice tells nobody whether they picked the right row.
+ *
+ * The question takes focus when it appears. Somebody hearing the page is told
+ * what they are being asked rather than left with a button that silently
+ * changed its meaning, and the keyboard focus that was on the first button does
+ * not land on the second — so holding Enter cannot make both presses.
  */
 export function Revoke({
   personId,
@@ -281,10 +311,17 @@ export function Revoke({
 }) {
   const [state, submit, pending] = useActionState(revokePerson, {});
   const [asked, setAsked] = useState(false);
+  const question = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (asked) {
+      question.current?.focus();
+    }
+  }, [asked]);
 
   if (isSelf) {
     return (
-      <section className="panel">
+      <section className={`panel ${styles.stop}`}>
         <h2>Revoke access</h2>
         <p className="meta">
           You cannot revoke yourself. Ask another admin.
@@ -294,7 +331,7 @@ export function Revoke({
   }
 
   return (
-    <section className="panel">
+    <section className={`panel ${styles.stop}`}>
       <h2>Revoke access</h2>
       <p className="meta" style={{ marginBottom: "0.75rem" }}>
         Takes them off the allowlist and ends every session they hold, including
@@ -302,11 +339,11 @@ export function Revoke({
       </p>
 
       {asked ? (
-        <form action={submit} className="row">
+        <form action={submit} className={styles.confirm}>
           <input type="hidden" name="id" value={personId} />
-          <span>
+          <p className={styles.asking} ref={question} tabIndex={-1}>
             Revoke <strong>{email}</strong>?
-          </span>
+          </p>
           <button type="submit" className="danger" disabled={pending}>
             {pending ? "Revoking…" : "Yes, revoke"}
           </button>

@@ -1,0 +1,285 @@
+/*
+ * The people screens, and mostly the one for a single person.
+ *
+ * A module rather than more rules in globals.css. The console's shared
+ * stylesheet is edited by everybody at once, and a class called `.sources` in
+ * it would collide with the next person's.
+ *
+ * Every colour is a token from libs/ui/tokens.css — not one hex — and there is
+ * very little colour here at all. That is the rule the palette is built on:
+ * colour carries meaning or it is absent. On this screen the only things that
+ * mean something are an expiry that is running down (--warn), access that has
+ * been ended (--stop), and the one control that ends it. A permission's
+ * provenance is not a warning, so nothing about it is coloured; it is told in
+ * words and in position.
+ */
+
+/* Who this is ----------------------------------------------------------- */
+
+/*
+ * The address, the kind of account, and whether it still works.
+ *
+ * One row, so the three things somebody checks before touching anything are
+ * read together rather than found one at a time. It wraps rather than
+ * truncating: an address is the only identifier on this page and half of one
+ * identifies nobody.
+ */
+.identity {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+.address {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Provenance ------------------------------------------------------------ */
+
+/*
+ * The union, with the reason for every line of it.
+ *
+ * This is the whole point of the screen. A flat list of permission strings
+ * answers "what can they do" and stops there, which leaves the actual question
+ * — why, and until when — to be reconstructed by reading two other panels and
+ * doing the union by hand. That reconstruction is where mistakes happen: the
+ * common one is removing a direct grant and expecting the permission to go,
+ * when a team baseline was granting it as well.
+ *
+ * Everything in the table is derived from what the API already sends: the
+ * person's memberships and grants with their expiries, and each team's
+ * baseline. Nothing here is guessed. Where the API sends nothing — who made a
+ * grant, and when — the table says nothing, rather than inventing a plausible
+ * answer that would be believed.
+ */
+.effective {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.effective th,
+.effective td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.effective th {
+  color: var(--muted);
+  font-size: var(--step-1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.effective tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The permission string itself, which is what somebody came here to read and
+   what they will quote back in a request for access. Mono, because it is an
+   identifier and not a phrase. */
+.key {
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  overflow-wrap: anywhere;
+}
+
+/* The last column is dates read against each other down the column. */
+.until {
+  width: 1%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Where a permission comes from.
+ *
+ * A list rather than a sentence, because a permission can arrive by more than
+ * one route at once and the useful fact is usually the second one — that
+ * taking away the grant would change nothing, because a team is granting it
+ * too. Several small blocks make that countable at a glance; prose would make
+ * it something to read.
+ */
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sunken);
+  font-size: var(--step-1);
+}
+
+/* Which of the two kinds of source this is, in a word rather than an icon or a
+   colour. The two behave differently — a baseline changes for everybody on the
+   team, a grant is this person alone — and that difference is the reason
+   somebody is reading the column. */
+.origin {
+  color: var(--faint);
+  font-size: var(--step-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Nothing is granting it. Only reachable if a team's baseline changed between
+   the two calls that built this page, and shown honestly rather than papered
+   over. */
+.blank {
+  color: var(--faint);
+}
+
+.nothing {
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/* Teams and grants ------------------------------------------------------ */
+
+/*
+ * A membership or a grant that has lapsed is still listed.
+ *
+ * It is the answer to the question this screen exists for. "They could export
+ * last week and cannot now" is only readable if the judge membership that
+ * expired on Sunday is still on the page — deleting the row from the screen
+ * deletes the explanation with it.
+ */
+.spent {
+  color: var(--muted);
+}
+
+/*
+ * A membership is two lines, not one.
+ *
+ * Its own list rather than the console's shared `.listing`, which lays a row
+ * out as a single flex line — right for a grant, which is one string and a
+ * date, and wrong for a membership, which is a team on the first line and the
+ * six or eight permissions it confers underneath.
+ */
+.memberships {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.memberships li {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.memberships li:last-child {
+  border-bottom: none;
+}
+
+/* A one-button form that has to sit on the same line as the thing it acts on. */
+.inline {
+  display: inline-block;
+}
+
+.rowline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* The baseline a team confers, under the team. It is what makes a membership
+   legible without a second screen, and it is why removing somebody from a team
+   is a decision rather than a click. */
+.baseline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.baseline li {
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  color: var(--muted);
+  background: var(--sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.35rem;
+}
+
+/* Revoking -------------------------------------------------------------- */
+
+/*
+ * The most destructive control in the console, and the only thing on the page
+ * that looks like one.
+ *
+ * --stop, not the accent. The accent means "the thing to do next"; this is
+ * "cannot be taken back". Ending somebody's access mid-event needs a second
+ * admin to undo, and that second admin may be asleep.
+ *
+ * It stays at the bottom of the page rather than in the header beside the
+ * address. A destructive button placed where a reader's eye lands first is one
+ * that gets pressed by a hand aiming for something else, and there is nothing
+ * above it here worth reaching past.
+ */
+.stop {
+  border-color: var(--stop);
+}
+
+.stop h2 {
+  color: var(--stop);
+}
+
+/*
+ * The second press.
+ *
+ * A row rather than a dialog: the confirmation names the address, so what is
+ * read back is the person rather than the verb — "Revoke" twice tells nobody
+ * whether they are revoking the right one.
+ *
+ * The question takes focus when it appears, so somebody hearing the page is
+ * told what they are being asked before they reach either button, and so a
+ * stray Enter on the button that was just pressed does not land on the button
+ * that was just revealed.
+ */
+.confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid var(--stop);
+  border-radius: var(--radius);
+  background: var(--stop-soft);
+  animation: confirm-in 140ms ease-out both;
+}
+
+.asking {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Honoured by the blanket reduced-motion rule in the token file, which cuts
+   every animation in the console to nothing. */
+@keyframes confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.2rem);
+  }
+}
