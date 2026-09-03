@@ -1,0 +1,455 @@
+/*
+ * The applicants screen.
+ *
+ * A module rather than more rules in globals.css. Nothing here is reused by
+ * another screen, and the console's shared stylesheet is edited by everybody —
+ * a class named `.table` in it would collide with the next person's.
+ *
+ * Every colour is a token from libs/ui/tokens.css. Not one hex, and almost no
+ * colour at all: the palette is built on the rule that colour carries meaning
+ * or it is absent, and a list somebody works down for an afternoon is the
+ * exact place where a decorative tint costs the reader the ability to trust
+ * the ones that mean something.
+ */
+
+/* Filters --------------------------------------------------------------- */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+/*
+ * The counts, as the filter.
+ *
+ * Links rather than buttons, because the filter belongs in the URL: somebody
+ * who finds a problem in the waitlist sends that link to whoever has to act on
+ * it, and a filter held in React state is one that cannot be sent to anybody.
+ */
+.tallies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.tally {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  font-size: var(--step-1);
+  text-decoration: none;
+}
+
+.tally:hover {
+  border-color: var(--muted);
+}
+
+/* The filter currently in force. The one thing on this bar that changes what
+   the table below means, so the one thing on it with the accent. */
+.tally.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.tally.on .count {
+  color: inherit;
+}
+
+/* Status ---------------------------------------------------------------- */
+
+/*
+ * Status is the one thing on this screen that earns colour.
+ *
+ * Four families, and the split is by what the reader does about it rather than
+ * by which status it is:
+ *
+ *   nothing decided yet  quiet. This is most of the queue for most of the
+ *                        cycle, and colouring it would leave nothing standing
+ *                        out on the day decisions start.
+ *   waiting on us        warn. A waitlist and a lapsed RSVP are both somebody
+ *                        who needs a second decision that nobody has made.
+ *   they are in          ok.
+ *   they are not         stop.
+ *
+ * The two coloured pairs are the outcomes, which is what a reader scanning a
+ * list of several hundred is actually looking for.
+ */
+.status {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius);
+  font-size: var(--step-1);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.undecided {
+  color: var(--muted);
+  background: var(--sunken);
+}
+
+.waiting {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.in {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.out {
+  color: var(--stop);
+  background: var(--stop-soft);
+}
+
+/* The list -------------------------------------------------------------- */
+
+/*
+ * The table scrolls, the page does not.
+ *
+ * A name, an address, a school, a status and two dates is wider than a laptop
+ * once the addresses are real. The choice is between the page scrolling
+ * sideways — which takes the navigation and the filters with it — and the
+ * table scrolling inside its own box, which keeps everything else still.
+ *
+ * Bounded vertically for the same reason. With a height the header can stick
+ * to the top of it and the name can stick to the left of it, and a reader
+ * three hundred rows down still knows which column is which and whose row they
+ * are on.
+ */
+.scroll {
+  overflow: auto;
+  max-height: min(70vh, 44rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  overscroll-behavior: contain;
+}
+
+.table {
+  /* Wider than its container when it needs to be. The global rule sets tables
+     to 100%, which inside a scrolling box means squeezing the columns into the
+     viewport instead of scrolling them. */
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The one column that is always in view. Whose row this is stays readable no
+   matter how far right somebody has scrolled. */
+.who {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--raised);
+  border-right: 1px solid var(--line-soft);
+}
+
+.table thead .who {
+  z-index: 3;
+}
+
+/* Repainted on hover because a sticky cell has its own background and the
+   shared row-hover rule would otherwise stop at its edge. */
+.table tbody tr:hover .who {
+  background: var(--sunken);
+}
+
+/* A name is a link and looks like one. Opening an applicant is what this whole
+   table is for, and a row a mouse can open but a keyboard cannot is a table
+   half the organizers cannot use. */
+.open {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.open:hover {
+  text-decoration: underline;
+}
+
+/* Dates are compared down the column, so they are fixed width and written
+   largest unit first. The API sends UTC and this shows it unconverted — see
+   the note on `stamp` in status.tsx. */
+.stamp {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* An address is the widest thing here and the least often read all the way
+   through. It gets a ceiling; the whole of it is on the record one click
+   away. */
+.email {
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.school {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A missing value. Quiet on purpose: half the list is drafts nobody finished,
+   and a column of coloured dashes would drown the things worth noticing. */
+.blank {
+  color: var(--faint);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.note {
+  color: var(--muted);
+  font-size: var(--step-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.failed {
+  color: var(--stop);
+  font-size: var(--step-1);
+}
+
+/* One applicant --------------------------------------------------------- */
+
+.person {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.person h1 {
+  margin: 0;
+}
+
+.identity {
+  color: var(--muted);
+  margin: 0 0 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Answers on the left, everything that can be done about them on the right.
+ *
+ * Not the other way round. The answers are what a decision is made from and
+ * they are the long column; the controls are short and belong beside the
+ * scroll rather than under it, so nobody has to read to the bottom of an essay
+ * to find the button.
+ */
+.split {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 64rem) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.qa {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.qa:last-child {
+  border-bottom: none;
+}
+
+.question {
+  margin: 0 0 0.25rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/* The key rather than a label, for a question the form no longer asks. */
+.questionKey {
+  font-family: var(--mono);
+}
+
+.answer {
+  margin: 0;
+  /* Line breaks somebody typed are kept. A long answer reflowed into one block
+     is one nobody finishes. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.unanswered {
+  margin: 0;
+  color: var(--faint);
+}
+
+.ticked {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+/* Decision, history, notes ---------------------------------------------- */
+
+.decide {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.decide textarea,
+.notes textarea {
+  font: inherit;
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.6rem;
+}
+
+.trail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.trail li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.trail li:last-child {
+  border-bottom: none;
+}
+
+.step {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Who did it, or that nobody did. A null actor is the honest record of a
+   change made by the applicant, by the expiry job, or by hand. */
+.actor {
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  color: var(--faint);
+}
+
+.reason {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: var(--step-1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notes ul {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+}
+
+.notes li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.notes li:last-child {
+  border-bottom: none;
+}
+
+.body {
+  margin: 0.2rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.byline {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--step-2);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.resume {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.filename {
+  overflow-wrap: anywhere;
+}
+
+/* A row of dates that are read against each other. Fixed width so they line
+   up, and label-above-value so the labels do not double the width. */
+.stamps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+
+.stamps dt {
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+.stamps dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

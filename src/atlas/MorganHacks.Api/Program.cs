@@ -104,6 +104,11 @@ builder.Services.AddSingleton<IEventStore, PostgresEventStore>();
 // the portal's scope because the resume endpoint reads it.
 builder.Services.AddSingleton<IApplicationStore, PostgresApplicationStore>();
 
+// And the registration team's read side of the same table, plus notes.
+// Separate from the store above because that one owns the lifecycle: there is
+// one way to change a status and this is deliberately not it.
+builder.Services.AddSingleton<IApplicantStore, PostgresApplicantStore>();
+
 // Resumes.
 //
 // Azure Blob rather than the R2 the plan suggests. We own the subscription
@@ -263,6 +268,7 @@ app.MapPeopleAdmin();
 app.MapAuditTrail();
 app.MapFormsAdmin();
 app.MapFormResponses();
+app.MapApplicants();
 app.MapSesWebhook();
 
 // Only here. Deployed environments are Staging or Production, set explicitly on

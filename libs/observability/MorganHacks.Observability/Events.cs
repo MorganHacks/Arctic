@@ -39,6 +39,24 @@ public static class Events
     public const string ApplicationSubmitted = "application.submitted";
 
     /// <summary>
+    /// An organizer moved an application to a new status.
+    /// </summary>
+    /// <remarks>
+    /// The record of the decision is <c>applications.status_history</c>, which
+    /// a trigger writes inside the same transaction and which outlives any log
+    /// retention window. This line is for the job a table cannot do: an alert
+    /// fires on a line arriving, and four hundred of these in an evening is
+    /// either the day decisions went out or somebody working through the queue
+    /// with a script.
+    /// <para>
+    /// Carries both person ids and the two statuses. Never the reason, which is
+    /// a sentence somebody wrote about an applicant — that lives on the history
+    /// row, behind a permission, where a log line is not.
+    /// </para>
+    /// </remarks>
+    public const string ApplicationStatusChanged = "application.status_changed";
+
+    /// <summary>
     /// A resume was accepted and written to the object store.
     /// </summary>
     /// <remarks>
