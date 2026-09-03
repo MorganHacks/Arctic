@@ -119,6 +119,23 @@ public static class Events
     public const string CampaignCancelled = "campaign.cancelled";
 
     /// <summary>
+    /// A template was created or saved. Nobody has been mailed.
+    /// </summary>
+    /// <remarks>
+    /// One event rather than a created and an edited, because the version
+    /// number on the line already says which it was and a template's first
+    /// version is not a different kind of fact from its fourth.
+    /// <para>
+    /// Watched for the same reason <c>campaign.queued</c> is, one step earlier:
+    /// this is the line that explains why a campaign somebody drafted on Monday
+    /// stopped being sendable on Tuesday. It carries the key, the version and
+    /// who saved it, and never the subject or the body — those are wording, and
+    /// wording belongs in the database rather than in a log somebody greps.
+    /// </para>
+    /// </remarks>
+    public const string TemplateWritten = "template.written";
+
+    /// <summary>
     /// Somebody changed somebody else's access.
     /// </summary>
     /// <remarks>
