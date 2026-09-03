@@ -71,6 +71,29 @@ export function blankField(type: FieldType): FormField {
 }
 
 /**
+ * A copy of a question, ready to sit beside the original.
+ *
+ * A new key, always. The key is what an answer is filed under, so two
+ * questions sharing one make their answers indistinguishable afterwards —
+ * which is why the API refuses to publish a form that has them.
+ *
+ * The copy is never locked and never keeps a column. MLH's questions own the
+ * columns they write to, and a second question pointed at the same one would
+ * overwrite the first's answer. Options are copied rather than shared, so
+ * editing one question's list does not reword the other's.
+ */
+export function copyOf(field: FormField): FormField {
+  return {
+    ...field,
+    key: newKey(),
+    locked: false,
+    storage: "responses",
+    column: null,
+    options: field.options.map((option) => ({ ...option })),
+  };
+}
+
+/**
  * A value for a new option, unique within its question.
  *
  * The value is what gets stored and the label is what gets shown, so two

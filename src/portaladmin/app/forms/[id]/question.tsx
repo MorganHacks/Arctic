@@ -18,6 +18,7 @@ export function Question({
   disabled,
   onChange,
   onMove,
+  onDuplicate,
   onRemove,
 }: {
   field: FormField;
@@ -27,6 +28,7 @@ export function Question({
   disabled: boolean;
   onChange: (changes: Partial<FormField>) => void;
   onMove: (delta: number) => void;
+  onDuplicate: () => void;
   onRemove: () => void;
 }) {
   // Locked is what MLH's affiliation requires; disabled is not holding
@@ -41,6 +43,21 @@ export function Question({
         i === at ? { ...option, ...changes } : option,
       ),
     });
+
+  // Options are ordered on purpose — "Prefer not to say" belongs at the
+  // bottom of a list and not wherever it happened to be typed — so the order
+  // has to be changeable after the fact, and by the same two buttons the
+  // questions use rather than by dragging.
+  const moveOption = (at: number, delta: number) => {
+    const to = at + delta;
+    if (to < 0 || to >= field.options.length) {
+      return;
+    }
+
+    const next = [...field.options];
+    [next[at], next[to]] = [next[to], next[at]];
+    onChange({ options: next });
+  };
 
   return (
     <li className={problems.length > 0 ? "question flagged" : "question"}>
@@ -101,20 +118,34 @@ export function Question({
           ↓
         </button>
 
+        {/* Not offered on a locked question. A copy of one is not one — it
+            carries MLH's wording without MLH's guarantee that the wording
+            stays, and a form with two of the same agreement on it is a form
+            somebody answers twice. */}
         {field.locked ? (
           <span className="pill sensitive" title="Required by MLH affiliation">
             Locked
           </span>
         ) : (
-          <button
-            type="button"
-            className="icon danger"
-            aria-label="Delete question"
-            disabled={disabled}
-            onClick={onRemove}
-          >
-            ✕
-          </button>
+          <>
+            <button
+              type="button"
+              className="icon"
+              disabled={disabled}
+              onClick={onDuplicate}
+            >
+              Duplicate
+            </button>
+            <button
+              type="button"
+              className="icon danger"
+              aria-label="Delete question"
+              disabled={disabled}
+              onClick={onRemove}
+            >
+              ✕
+            </button>
+          </>
         )}
       </div>
 
@@ -155,7 +186,11 @@ export function Question({
         <div className="options">
           <label>Options</label>
           {field.options.map((option, at) => (
-            <div className="option" key={`${field.key}-${at}`}>
+            /* Keyed by the stored value rather than by position, so
+               moving an option moves its row instead of rewriting two of
+               them — which is what keeps the keyboard focus on the button
+               that was just pressed, and lets it be pressed again. */
+            <div className="option" key={`${field.key}-${option.value}`}>
               {/* Only the label is editable. The value is what an answer is
                   stored as, and deriving it from the label would mean
                   rewording an option later silently changed what past
@@ -169,6 +204,24 @@ export function Question({
                 onChange={(event) => setOption(at, { label: event.target.value })}
               />
               <code className="option-value">{option.value}</code>
+              <button
+                type="button"
+                className="icon"
+                aria-label={`Move option ${at + 1} up`}
+                disabled={frozen || at === 0}
+                onClick={() => moveOption(at, -1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="icon"
+                aria-label={`Move option ${at + 1} down`}
+                disabled={frozen || at === field.options.length - 1}
+                onClick={() => moveOption(at, 1)}
+              >
+                ↓
+              </button>
               <button
                 type="button"
                 className="icon danger"
