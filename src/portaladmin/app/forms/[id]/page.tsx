@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
   apiFetch,
@@ -8,6 +7,7 @@ import {
 } from "@/lib/api";
 import { Shell } from "../../shell";
 import { Builder } from "./builder";
+import { FormHeader } from "./form-header";
 
 /**
  * The builder.
@@ -75,40 +75,15 @@ export default async function FormBuilder({
 
   return (
     <Shell personId={person.personId}>
-      <Link href="/forms" className="back">
-        ← Forms
-      </Link>
-
-      <div className="form-head">
-        <div>
-          <h1>{form.name}</h1>
-          <p className="lede" style={{ margin: 0 }}>
-            {form.kind}
-            {" · "}
-            <code>{form.code}</code>
-            {" · "}
-            {published ? (
-              <span className="pill active">Live · v{published.version}</span>
-            ) : (
-              <span className="pill lapsed">Never published</span>
-            )}
-            <span className="meta"> editing v{draft.version}</span>
-          </p>
-        </div>
-
-        {/* The other half of the pair the responses screen already builds.
-            Without this the two halves of a form are only reachable through
-            the list, which is a detour on every trip between building a form
-            and reading what it collected. */}
-        <div className="tabs">
-          <span className="tab on">Questions</span>
-          <Link href={`/forms/${form.id}/responses`} className="tab">
-            Responses
-          </Link>
-        </div>
-      </div>
+      <FormHeader
+        form={form}
+        published={published}
+        draftVersion={draft.version}
+        tab="questions"
+      />
 
       <Builder
+        formName={form.name}
         formId={form.id}
         initialFields={draft.fields}
         lockedKeys={locked}
