@@ -1,11 +1,13 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 using MorganHacks.Applications.Domain;
 using MorganHacks.Applications.Forms;
 using MorganHacks.Applications.Services;
+using MorganHacks.Identity.Services;
 using MorganHacks.Observability;
 
 namespace MorganHacks.Api;
@@ -14,19 +16,37 @@ namespace MorganHacks.Api;
 /// The public face of a form: <c>forms.morganhacks.com/&lt;code&gt;</c>.
 /// </summary>
 /// <remarks>
-/// Unauthenticated, on purpose. Applying is the first thing somebody does and
-/// there is nobody to be yet — requiring an account first would mean a sign-up
-/// before the sign-up.
+/// The application form is unauthenticated, on purpose and permanently.
+/// Applying is the first thing somebody does and there is nobody to be yet —
+/// requiring an account first would mean a sign-up before the sign-up, and the
+/// account it would demand is the one applying creates.
 /// <para>
-/// The code is therefore the whole permission, which is why it is seven random
-/// characters rather than a number. Everything here is reachable by anyone
-/// holding the link and nothing else is reachable at all: no form list, no way
-/// to enumerate codes, and no way to read an answer back.
+/// The code is therefore the whole permission for that form, which is why it
+/// is seven random characters rather than a number. Nothing else is reachable
+/// at all: no form list, no way to enumerate codes, and no way to read an
+/// answer back.
+/// </para>
+/// <para>
+/// A form can additionally require sign-in, and some must. A mentor sign-up,
+/// an RSVP and a post-event survey are all answered by people we already have
+/// on file, and asking them for an address again is both friction and a data
+/// problem — they typo it, or use a different one, and the answer cannot be
+/// joined to the application it is about. Those forms are for a named set of
+/// applicant statuses, which is per-form configuration rather than a rule
+/// here: an RSVP is for <c>accepted</c> and a feedback survey for
+/// <c>checked_in</c>.
+/// </para>
+/// <para>
+/// Two answers must never be confused and never be conflated: <em>not signed
+/// in</em> is a state the page can act on by asking for an address, and
+/// <em>signed in and not eligible</em> is a state where there is nothing to
+/// do. Neither of them, and nothing on the sign-in step, may say whether a
+/// given address is one we hold.
 /// </para>
 /// <para>
 /// Nothing in this file logs an answer or an address. A submission is logged
-/// as a form code and an application id, which is enough to find the row and
-/// tells a log reader nothing about who anybody is.
+/// as a form code and an id, which is enough to find the row and tells a log
+/// reader nothing about who anybody is.
 /// </para>
 /// </remarks>
 public static class PublicFormEndpoints
@@ -36,6 +56,18 @@ public static class PublicFormEndpoints
         var forms = app.MapGroup("/forms");
 
         forms.MapGet("/{code}", GetForm);
+
+        // The same limiter the portal's magic link is behind, because it is
+        // the same hazard: an endpoint open to the internet that sends mail
+        // from our domain to an address the caller chose. Unlimited, it makes
+        // us a spam relay and destroys the sending reputation that login
+        // depends on — and login is the one kind of mail that must not stop
+        // arriving.
+        //
+        // Per IP here and per address inside the handler. Either alone is
+        // trivially bypassed: one address from many hosts, or many addresses
+        // from one host.
+        forms.MapPost("/{code}/sign-in", RequestFormLink).RequireRateLimiting("magic-link");
 
         // Only the writes are throttled. Reading a form is what happens when
         // fifty people open the same link at the start of a club meeting, and
@@ -90,9 +122,17 @@ public static class PublicFormEndpoints
     /// page that reads as a broken link they will report.
     /// </para>
     /// </remarks>
+    /// <param name="respondents">
+    /// Only consulted for a form that requires sign-in. An ungated form does
+    /// not read the session at all, so the application form costs exactly what
+    /// it did before.
+    /// </param>
     private static async Task<IResult> GetForm(
         string code,
+        HttpContext http,
         IFormStore forms,
+        IRespondentStore respondents,
+        SessionService sessions,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -113,6 +153,10 @@ public static class PublicFormEndpoints
             // No questions with it. There is nothing to fill in, and sending
             // the form down anyway invites a page that renders it behind a
             // banner somebody can scroll past.
+            //
+            // Checked ahead of the gate on purpose: a closed form is closed to
+            // everybody, and asking somebody to sign in before telling them
+            // the deadline passed is a round trip that ends in the same place.
             return Results.Ok(new
             {
                 code = form.Code,
@@ -120,8 +164,52 @@ public static class PublicFormEndpoints
                 kind = form.Kind,
                 open = false,
                 closesAt = form.ClosesAt,
+                requiresSignIn = form.IsGated,
+                access = Closed,
             });
         }
+
+        if (!form.IsGated)
+        {
+            return Results.Ok(new
+            {
+                code = form.Code,
+                name = form.Name,
+                kind = form.Kind,
+                open = true,
+                closesAt = form.ClosesAt,
+                requiresSignIn = false,
+                access = Open,
+                version = published.Version,
+                fields = published.Fields.Select(Public),
+            });
+        }
+
+        var respondent = await WhoAsync(http, sessions, respondents, form, ct);
+
+        // The two refusals, told apart. They are different states of the same
+        // page: one has something to do — put in an address and wait for a
+        // link — and the other has nothing, and offering a sign-in box to
+        // somebody already signed in is how a person ends up requesting four
+        // links to a form that will not open for them either way.
+        //
+        // Neither carries the questions. An ineligible reader is not somebody
+        // to show the form to behind a banner.
+        if (respondent is null || !form.Admits(respondent.Status))
+        {
+            return Results.Ok(new
+            {
+                code = form.Code,
+                name = form.Name,
+                kind = form.Kind,
+                open = true,
+                closesAt = form.ClosesAt,
+                requiresSignIn = true,
+                access = respondent is null ? SignIn : Ineligible,
+            });
+        }
+
+        var locked = FixedAnswers.For(respondent);
 
         return Results.Ok(new
         {
@@ -130,10 +218,222 @@ public static class PublicFormEndpoints
             kind = form.Kind,
             open = true,
             closesAt = form.ClosesAt,
+            requiresSignIn = true,
+            access = Open,
             version = published.Version,
             fields = published.Fields.Select(Public),
+
+            // Who they are, from the record rather than from a question. This
+            // is what the sign-in was for: the page prints it and never asks
+            // for it, so there is no address to typo and nothing to join on
+            // afterwards.
+            //
+            // The status is deliberately absent. An applicant is never shown
+            // their internal status — the portal goes to some trouble over
+            // that, so that a reviewer can decide on Tuesday and the team
+            // announce on Friday — and a form leaking one would undo it for
+            // the same person on a different page.
+            you = new { name = respondent.Name, email = respondent.Email },
+
+            // Only what this form actually asks. Sending everything we hold
+            // would hand a page the applicant's whole record because it
+            // happened to ask one question.
+            prefill = published.Fields
+                .Where(field => field.Type != FieldType.Section
+                                && respondent.Known.ContainsKey(field.Key))
+                .ToDictionary(field => field.Key, field => respondent.Known[field.Key]),
+
+            // Shown as fixed rather than hidden. A question that vanishes is
+            // one somebody assumes was never asked; a question shown with its
+            // answer and no control says what we hold and that this is not the
+            // place to change it. See FixedAnswers for which and why.
+            @fixed = published.Fields
+                .Where(field => locked.Contains(field.Key))
+                .Select(field => field.Key),
         });
     }
+
+    /// <summary>
+    /// What state the page is in, as one word.
+    /// </summary>
+    /// <remarks>
+    /// A discriminator rather than a status code, because none of these is an
+    /// error and every one of them is a page with something on it. A 401 for
+    /// "not signed in" would be answered by the browser's own machinery and by
+    /// portalforms' error boundary, neither of which can render an email box.
+    /// </remarks>
+    private const string Open = "open";
+    private const string Closed = "closed";
+    private const string SignIn = "signIn";
+    private const string Ineligible = "ineligible";
+
+    /// <summary>
+    /// The person behind the session cookie, as this form's audience needs
+    /// them. Null when there is no session, the session is dead, or they have
+    /// no application on this form's event.
+    /// </summary>
+    /// <remarks>
+    /// All three collapse to null on purpose. From the page's point of view
+    /// they are one state — "we do not know who you are, ask for an address" —
+    /// and telling them apart would answer "does this address have an
+    /// application" for anybody who could get a session at all.
+    /// <para>
+    /// The session is revalidated against the database like every other gate
+    /// in this codebase, so revoking one closes a form on the next request
+    /// rather than at expiry.
+    /// </para>
+    /// </remarks>
+    private static async Task<Respondent?> WhoAsync(
+        HttpContext http,
+        SessionService sessions,
+        IRespondentStore respondents,
+        Form form,
+        CancellationToken ct)
+    {
+        var token = http.Request.Cookies[RequirePermissionExtensions.SessionCookie];
+        if (string.IsNullOrEmpty(token))
+        {
+            return null;
+        }
+
+        var session = await sessions.ValidateAsync(token, ct);
+        if (!session.Accepted)
+        {
+            return null;
+        }
+
+        return await respondents.ForPersonAsync(form.EventId, session.PersonId, form.Id, ct);
+    }
+
+    public sealed record SignInRequest(string? Email);
+
+    /// <summary>
+    /// Sends a link that opens this form, if the address is one we hold.
+    /// </summary>
+    /// <remarks>
+    /// Answers identically whether or not the address is on file, in status,
+    /// body and wording — exactly as <c>/auth/magic-link</c> does, and for the
+    /// same reason. A different answer for a known address turns a form
+    /// anybody can open into a way to ask who applied to the hackathon, and
+    /// the form's own link is handed out on flyers.
+    /// <para>
+    /// Timing is close but not constant: an address we hold costs a lookup, an
+    /// upsert and a queued row. Closing that gap properly means doing the work
+    /// regardless, which means sending mail to strangers; until then the rate
+    /// limiter is what makes the difference impractical to measure. Same trade
+    /// as the portal's, written down in the same place.
+    /// </para>
+    /// <para>
+    /// The account is created here when there is not one yet, which is what
+    /// makes this work for somebody who has never opened the portal.
+    /// Registering does not create an account today, so most applicants are in
+    /// <c>applications.applications</c> and not in <c>identity.people</c> —
+    /// without this, a sign-in form would refuse everybody it was built for.
+    /// What stops it being a way to fill that table is the check above it: the
+    /// address has to already have an application on this form's own event.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> RequestFormLink(
+        string code,
+        SignInRequest? request,
+        IFormStore forms,
+        IRespondentStore respondents,
+        IIdentityStore people,
+        MagicLinkService links,
+        IEmailSender email,
+        IConfiguration config,
+        IMemoryCache cache,
+        ILogger<SignInRequest> log,
+        CancellationToken ct)
+    {
+        var form = await forms.ByCodeAsync(code, ct);
+        if (form is null || await forms.PublishedAsync(form.Id, ct) is null)
+        {
+            return NoSuchForm();
+        }
+
+        if (!form.IsGated)
+        {
+            // Not a refusal about the address, so it does not have to be
+            // careful about one. A form that anybody can open has no sign-in
+            // step to attempt, and saying so is the only answer that leaves
+            // the caller anywhere to go.
+            return Results.BadRequest(new { error = "This form does not use sign-in." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request?.Email))
+        {
+            return Results.BadRequest(new { error = "An email address is required." });
+        }
+
+        // Before any database work, like the portal's. Rejection is answered
+        // exactly like success: "too many requests for this address" would
+        // confirm the address exists, which is what the identical response is
+        // there to hide.
+        if (AuthEndpoints.TooManyFor(cache, request.Email, "form-sign-in"))
+        {
+            return Sent();
+        }
+
+        var onFile = await respondents.FindOnFileAsync(form.EventId, request.Email, ct);
+        if (onFile is null)
+        {
+            // Logged without the address. That somebody tried an address we do
+            // not hold is worth knowing; which address is not worth storing.
+            log.LogInformation(
+                "A form sign-in was requested for an address that is not on file. {code}",
+                form.Code);
+
+            return Sent();
+        }
+
+        // The stored address, not the one that was typed. They differ in case
+        // often enough — a phone capitalises the first letter — and the
+        // account, the link and the row should all agree on one string.
+        var personId = await people.EnsureHackerAsync(onFile.Email, onFile.FullName, ct);
+        if (personId is null)
+        {
+            // An organizer's address, or somebody revoked. Answered like
+            // everything else here, and not mailed: organizers sign in through
+            // Google so their access is tied to an allowlisted account, and a
+            // hacker link would be a second way in that skips it.
+            return Sent();
+        }
+
+        if (onFile.PersonId is null)
+        {
+            // The application had no account against it until now. Linking it
+            // is what lets the form find them again after the link is clicked,
+            // and what makes the answer joinable to the application.
+            await respondents.LinkPersonAsync(onFile.ApplicationId, personId.Value, ct);
+        }
+
+        var issued = await links.IssueAsync(onFile.Email, ct);
+        if (issued is not null)
+        {
+            await email.SendMagicLinkAsync(
+                issued.PersonId,
+                onFile.Email,
+                AuthEndpoints.FormLink(config, form.Code, issued.Token),
+                ct);
+        }
+
+        return Sent();
+    }
+
+    /// <summary>
+    /// The one answer the sign-in step ever gives.
+    /// </summary>
+    /// <remarks>
+    /// Every path returns this: on file, not on file, an organizer's address,
+    /// throttled. One method rather than the literal repeated, so a future
+    /// edit cannot make one of them different by accident — and a difference
+    /// is the whole failure.
+    /// </remarks>
+    private static IResult Sent() => Results.Accepted(value: new
+    {
+        message = "If that address is on file, a sign-in link is on its way.",
+    });
 
     /// <summary>
     /// A question as an applicant is allowed to see it.
@@ -173,8 +473,11 @@ public static class PublicFormEndpoints
     private static async Task<IResult> Submit(
         string code,
         SubmitRequest? request,
+        HttpContext http,
         IFormStore forms,
         ISubmissionStore submissions,
+        IRespondentStore respondents,
+        SessionService sessions,
         TimeProvider clock,
         ILogger<SubmitRequest> log,
         CancellationToken ct)
@@ -199,6 +502,12 @@ public static class PublicFormEndpoints
             return Results.Json(
                 new { error = "This form has closed." },
                 statusCode: StatusCodes.Status410Gone);
+        }
+
+        if (form.IsGated)
+        {
+            return await SubmitSignedIn(
+                form, published, request, http, respondents, sessions, log, ct);
         }
 
         if (!form.IsApplication)
@@ -284,6 +593,89 @@ public static class PublicFormEndpoints
                 new { error = "This form cannot accept applications. Let the organizers know." },
                 statusCode: StatusCodes.Status500InternalServerError);
         }
+    }
+
+    /// <summary>
+    /// Takes an answer from somebody who signed in to give it.
+    /// </summary>
+    /// <remarks>
+    /// The answer is recorded against the person, never against an address
+    /// that arrived with the request. That is the whole difference between
+    /// this and the application form's submit: there is no address to typo,
+    /// nothing to deduplicate afterwards by hand, and the row joins to the
+    /// application without anybody matching strings.
+    /// <para>
+    /// Eligibility is checked here as well as on the read. They are two
+    /// requests with a gap between them, and the gap is wide enough for a
+    /// decision to land — somebody who opened an RSVP as <c>accepted</c> and
+    /// submits it after being withdrawn must not be writing to it.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> SubmitSignedIn(
+        Form form,
+        FormVersion published,
+        SubmitRequest? request,
+        HttpContext http,
+        IRespondentStore respondents,
+        SessionService sessions,
+        ILogger<SubmitRequest> log,
+        CancellationToken ct)
+    {
+        var respondent = await WhoAsync(http, sessions, respondents, form, ct);
+
+        if (respondent is null)
+        {
+            // 401 rather than the read's quiet "sign in" state, because this
+            // is a write that did not happen and the page has to know the
+            // difference. It says nothing about whether an address is on file:
+            // the caller either has a live session for somebody with an
+            // application here, or they do not.
+            return Results.Json(
+                new { error = "Sign in to answer this form." },
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        if (!form.Admits(respondent.Status))
+        {
+            // Which status they are in is not said, and neither is which
+            // statuses the form wants. They are signed in, so this is a
+            // refusal rather than a hidden route — but an applicant is never
+            // told their internal status, and a form is not the place that
+            // rule stops applying.
+            return Results.Json(
+                new { error = "This form is not open to you." },
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        // Before validation, not after. A required fixed question posted empty
+        // would otherwise be refused for being unanswered while we are holding
+        // the answer — and a crafted one would be validated as though the
+        // caller's value counted.
+        var answers = FixedAnswers.Apply(
+            request?.Answers ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal),
+            published.Fields,
+            respondent);
+
+        var problems = SubmissionValidation.Check(published.Fields, answers);
+        if (problems.Count > 0)
+        {
+            return Results.BadRequest(new
+            {
+                error = "Some answers need another look.",
+                problems = problems.Select(p => new { field = p.FieldKey, message = p.Message }),
+            });
+        }
+
+        var id = await respondents.RecordAsync(
+            form.Id, published.Version, respondent, answers, ct);
+
+        // The code and the ids. Not the person's address and not a single
+        // answer, like every other line this file writes.
+        log.LogInformation(
+            "A signed-in form was answered. {code} {submissionId} {PersonId}",
+            form.Code, id, respondent.PersonId);
+
+        return Results.Ok(new { submitted = true });
     }
 
     /// <summary>

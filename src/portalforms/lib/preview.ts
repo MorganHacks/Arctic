@@ -48,7 +48,14 @@ const STEPPED = "preview";
 /** The same questions with no sections at all — the single page, unchanged. */
 const FLAT = "previewflat";
 
-const shell = { kind: "application", open: true, closesAt: null, version: 1 };
+const shell = {
+  kind: "application",
+  open: true,
+  closesAt: null,
+  version: 1,
+  requiresSignIn: false,
+  access: "open" as const,
+};
 
 function field(part: Partial<Field> & Pick<Field, "key" | "type" | "label">): Field {
   return {

@@ -70,4 +70,26 @@ public interface IFormStore
     Task<FormVersion> PublishAsync(Guid formId, Guid? actorId, CancellationToken ct = default);
 
     Task<IReadOnlyList<FormVersion>> HistoryAsync(Guid formId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sets who a form is for.
+    /// </summary>
+    /// <remarks>
+    /// A property of the form rather than of a version, and deliberately not
+    /// versioned with the questions. Who may answer is not something an
+    /// applicant is shown and not something an answer is read against — it is
+    /// the door, not the form — so freezing it into a published version would
+    /// mean republishing a form to close it to a status, and nobody would.
+    /// <para>
+    /// Both halves at once, because they are one decision. Saving a gate
+    /// without an audience is a form nobody can open, and a check constraint
+    /// refuses that combination outright.
+    /// </para>
+    /// </remarks>
+    /// <returns>The form as stored, or null when there is no such form.</returns>
+    Task<Form?> SaveAudienceAsync(
+        Guid formId,
+        bool requiresSignIn,
+        IReadOnlyList<string> eligibleStatuses,
+        CancellationToken ct = default);
 }

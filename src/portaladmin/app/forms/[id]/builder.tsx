@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldType, FormField, FormProblem, VersionRow } from "@/lib/api";
 import { publishForm, saveDraft } from "../actions";
+import { Audience } from "./audience";
 import styles from "./builder.module.css";
 import { TYPES, blankField, blankSection, copyOf } from "./fields";
 import { PageBreakIcon, Publish, Save, TypeIcon, Warning } from "./icons";
@@ -29,15 +30,27 @@ type SaveStatus = "clean" | "dirty" | "saving" | "saved" | "failed";
 export function Builder({
   formName,
   formId,
+  formKind,
   initialFields,
   lockedKeys,
+  statuses,
+  requiresSignIn,
+  eligibleStatuses,
   versions,
   canManage,
 }: {
   formName: string;
   formId: string;
+
+  /** Which kind of form this is, which decides whether it can have an audience. */
+  formKind: string;
   initialFields: FormField[];
   lockedKeys: string[];
+
+  /** Every application status, for the audience panel to offer. */
+  statuses: string[];
+  requiresSignIn: boolean;
+  eligibleStatuses: string[];
   versions: VersionRow[];
   canManage: boolean;
 }) {
@@ -423,6 +436,15 @@ export function Builder({
 
         <aside className={styles.side}>
           <Preview fields={shown} formName={formName} />
+
+          <Audience
+            formId={formId}
+            kind={formKind}
+            statuses={statuses}
+            initialRequiresSignIn={requiresSignIn}
+            initialStatuses={eligibleStatuses}
+            canManage={canManage}
+          />
 
           {versions.length > 0 ? (
             <section className={styles.history}>

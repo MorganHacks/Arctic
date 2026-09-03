@@ -253,6 +253,14 @@ Emailed sign-in links are built from `PublicBaseUrl` on atlas, which defaults to
 `http://localhost:3000` and therefore needs nothing set locally. In a deployed
 environment it is the portal's real origin, set from `PUBLIC_BASE_URL`.
 
+A sign-in link for a **form** lands somewhere else: `FormsBaseUrl`, which
+defaults to `http://localhost:3002` — the port `dev.sh` starts `portalforms` on
+— and is set from `FORMS_BASE_URL` when deployed. It has to be its own setting
+because the session cookie is host-only: a link that lands on the portal sets a
+cookie the forms site is never sent, so the person arrives at the form still
+signed out while their browser holds a perfectly good session for a different
+hostname.
+
 ---
 
 ## Google sign-in for organizers

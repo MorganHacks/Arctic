@@ -2,8 +2,21 @@ import type { Metadata } from "next";
 import { loadForm } from "@/lib/api";
 import { NoForm } from "../no-form";
 import { Questions } from "./questions";
+import { SignIn } from "./sign-in";
 
-type Props = { params: Promise<{ code: string }> };
+type Props = {
+  params: Promise<{ code: string }>;
+
+  /**
+   * Only ever read for `link`, which a refused sign-in link sets.
+   *
+   * The flag says a link did not work and never which way. Expired, already
+   * spent and never issued are one answer, because telling them apart only
+   * helps somebody probing links — the same rule the portal's sign-in page
+   * follows.
+   */
+  searchParams: Promise<{ link?: string }>;
+};
 
 /**
  * The form's own name in the tab.
@@ -11,7 +24,9 @@ type Props = { params: Promise<{ code: string }> };
  * Worth the second call: somebody applying has three tabs open and "Untitled"
  * on all of them is how they lose the one they were filling in.
  */
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: Pick<Props, "params">): Promise<Metadata> {
   const { code } = await params;
   const form = await loadForm(code);
 
@@ -26,8 +41,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * campus wifi, a phone, a link somebody just read off a whiteboard — the
  * alternative is a blank page followed by a spinner followed by the form.
  */
-export default async function FormPage({ params }: Props) {
-  const { code } = await params;
+export default async function FormPage({ params, searchParams }: Props) {
+  const [{ code }, query] = await Promise.all([params, searchParams]);
   const form = await loadForm(code);
 
   /*
@@ -61,22 +76,86 @@ export default async function FormPage({ params }: Props) {
     return <Closed name={form.name} closedAt={form.closesAt} />;
   }
 
+  /*
+   * The two states a form for people on file has before it has any questions.
+   *
+   * They are told apart deliberately, and it is the difference between a page
+   * with something to do on it and a page with nothing. Somebody signed out
+   * gets a box; somebody signed in who this form is not for gets a sentence
+   * and no box, because offering them a sign-in step they have already
+   * completed is how a person requests four links to a form that will not open
+   * for them either way.
+   *
+   * Neither says anything about which addresses we hold. The API answers the
+   * email step identically whether or not an address is on file, and this page
+   * has nothing extra to add.
+   */
+  if (form.access === "signIn") {
+    return (
+      <main className="page">
+        <Masthead name={form.name} closesAt={form.closesAt} />
+        <SignIn code={form.code} expired={query.link === "expired"} />
+      </main>
+    );
+  }
+
+  if (form.access === "ineligible") {
+    return (
+      <main className="notice">
+        <h1>{form.name}</h1>
+        <p>You are signed in, and this form is not one for you to fill in.</p>
+        <p>If you think that is wrong, let the organizers know.</p>
+      </main>
+    );
+  }
+
   if (!form.fields || form.fields.length === 0) {
     return <NoForm />;
   }
 
   return (
     <main className="page">
-      <div className="masthead">
-        <p className="wordmark">MorganHacks</p>
-        <h1>{form.name}</h1>
-        {form.closesAt ? (
-          <p className="lede">Open until {longDate(form.closesAt)}.</p>
-        ) : null}
-      </div>
+      <Masthead name={form.name} closesAt={form.closesAt} you={form.you} />
 
-      <Questions code={form.code} fields={form.fields} />
+      <Questions
+        code={form.code}
+        fields={form.fields}
+        prefill={form.prefill}
+        fixed={form.fixed}
+      />
     </main>
+  );
+}
+
+/**
+ * The form's name, and who is answering it when we know.
+ *
+ * The line naming the reader appears only on a form that required signing in,
+ * where it is doing real work: the form does not ask for a name or an address,
+ * so this is the only thing on the page that says whose answers these will be
+ * filed as. On a form anybody can open there is nobody to name.
+ */
+function Masthead({
+  name,
+  closesAt,
+  you,
+}: {
+  name: string;
+  closesAt: string | null;
+  you?: { name: string | null; email: string };
+}) {
+  return (
+    <div className="masthead">
+      <p className="wordmark">MorganHacks</p>
+      <h1>{name}</h1>
+      {you ? (
+        <p className="lede">
+          Answering as {you.name ? `${you.name}, ` : ""}
+          {you.email}.
+        </p>
+      ) : null}
+      {closesAt ? <p className="lede">Open until {longDate(closesAt)}.</p> : null}
+    </div>
   );
 }
 

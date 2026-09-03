@@ -105,6 +105,43 @@ export async function publishForm(formId: string): Promise<SaveResult> {
 }
 
 /**
+ * Sets who a form is for.
+ *
+ * Both halves in one call, because they are one decision. A gate with nobody
+ * behind it is a form nobody can open, and the API refuses that combination
+ * rather than storing a form whose audience has to be guessed at.
+ *
+ * Revalidated, unlike the draft save above. This is a deliberate press rather
+ * than a debounce as somebody types, and what it changes — who can open the
+ * form — is shown in the header and on the list.
+ */
+export async function saveAudience(
+  formId: string,
+  requiresSignIn: boolean,
+  eligibleStatuses: string[],
+): Promise<SaveResult> {
+  let response: Response;
+
+  try {
+    response = await apiFetch(`/admin/forms/${formId}/audience`, {
+      method: "PUT",
+      body: JSON.stringify({ requiresSignIn, eligibleStatuses }),
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return { ok: false, error: "The API could not be reached.", problems: [] };
+  }
+
+  if (!response.ok) {
+    return readFailure(response);
+  }
+
+  revalidatePath(`/forms/${formId}`);
+  revalidatePath("/forms");
+  return { ok: true, problems: [] };
+}
+
+/**
  * Creates a form and goes straight into it.
  *
  * The list is not where a form gets built, and a new one has nothing on it

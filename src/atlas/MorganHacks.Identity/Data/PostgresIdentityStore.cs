@@ -41,6 +41,45 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         return await cmd.ExecuteScalarAsync(ct) as Guid?;
     }
 
+    public async Task<Guid?> EnsureHackerAsync(
+        string email, string? fullName, CancellationToken ct)
+    {
+        // One statement, so the check and the create cannot be separated. Two
+        // sign-in requests for the same address arriving together — a
+        // double-tapped button on a slow connection is the ordinary way —
+        // would both pass a separate existence check and the second would hit
+        // people_email_lower_key as a 500.
+        //
+        // ON CONFLICT ... DO UPDATE rather than DO NOTHING because only an
+        // UPDATE returns a row on conflict, and the row is what we came for.
+        // The assignment is a no-op on purpose: this runs unauthenticated, and
+        // it must never be able to rewrite anything about an account that
+        // already exists.
+        const string upsert = """
+            INSERT INTO identity.people (kind, email, full_name)
+            VALUES ('hacker', @email, @fullName)
+            ON CONFLICT (lower(email)) DO UPDATE SET email = identity.people.email
+            RETURNING id, kind, revoked_at IS NOT NULL
+            """;
+
+        await using var cmd = dataSource.CreateCommand(upsert);
+        cmd.Parameters.AddWithValue("email", email);
+        cmd.Parameters.AddWithValue("fullName", (object?)fullName ?? DBNull.Value);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return null;
+        }
+
+        var (id, kind, revoked) = (reader.GetGuid(0), reader.GetString(1), reader.GetBoolean(2));
+
+        // The two cases this refuses. An organizer's address must not gain a
+        // second way in that skips Google, and a revoked person must not get
+        // an account back by asking a form for one.
+        return kind == "hacker" && !revoked ? id : null;
+    }
+
     public async Task<IReadOnlyList<PersonSummary>> ListPeopleAsync(CancellationToken ct)
     {
         // Teams aggregated in the query rather than fetched per person. The

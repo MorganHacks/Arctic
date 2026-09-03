@@ -187,6 +187,18 @@ export type FormSummary = {
   name: string;
   kind: string;
   closesAt: string | null;
+
+  /**
+   * Whether this form is for people we already have on file.
+   *
+   * Always false on the application form, and the API refuses to make it
+   * anything else: applying is how somebody gets an account, so a gate there
+   * would make applying impossible.
+   */
+  requiresSignIn: boolean;
+
+  /** Which applicants may open it. Empty unless it requires sign-in. */
+  eligibleStatuses: string[];
 };
 
 /** A row on the forms list. */
@@ -196,6 +208,8 @@ export type FormRow = {
   name: string;
   kind: string;
   closesAt: string | null;
+  requiresSignIn: boolean;
+  eligibleStatuses: string[];
   published: boolean;
   publishedVersion: number | null;
   questions: number | null;
@@ -221,6 +235,16 @@ export type DraftView = {
    * actually enforce, and those are the same only when nothing has gone wrong.
    */
   locked: string[];
+
+  /**
+   * Every application status an audience can be built from, in lifecycle
+   * order.
+   *
+   * From the server rather than a copy over here, so a status added to the
+   * lifecycle appears in the builder without anybody remembering to add it
+   * twice.
+   */
+  statuses: string[];
 };
 
 export type VersionRow = {

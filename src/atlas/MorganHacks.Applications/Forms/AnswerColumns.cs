@@ -71,6 +71,22 @@ public static class AnswerColumns
             ["mlh_data_sharing_at"] = ColumnKind.Timestamp,
         };
 
+    /// <summary>
+    /// Every column an answer may be stored in, and how it is stored.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so a read can select all of them without a second copy of the
+    /// list. That matters more than it looks: the prefill on a sign-in form
+    /// reads these columns back, and a hand-written select list there would be
+    /// one that quietly stops matching this one.
+    /// <para>
+    /// Sorted so any statement built from it is byte-for-byte the same on
+    /// every request, which is what lets Postgres reuse a plan for it.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<KeyValuePair<string, ColumnKind>> All { get; } =
+        [.. Writable.OrderBy(entry => entry.Key, StringComparer.Ordinal)];
+
     public static bool TryKindOf(string? column, out ColumnKind kind)
     {
         kind = default;

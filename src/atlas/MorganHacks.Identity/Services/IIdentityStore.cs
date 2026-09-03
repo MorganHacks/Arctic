@@ -68,6 +68,41 @@ public interface IIdentityStore
     Task<Guid?> FindHackerIdByEmailAsync(string email, CancellationToken ct);
 
     /// <summary>
+    /// The hacker account for an address, created if there is not one yet.
+    /// </summary>
+    /// <remarks>
+    /// Applying does not create an account. That is the right default — an
+    /// applicant has no reason to hold one until there is something to sign in
+    /// to — and it leaves a gap the moment a form is for people already on
+    /// file: they are in <c>applications.applications</c> and not in
+    /// <c>identity.people</c>, so a magic link could never be issued to them
+    /// and the form would refuse everybody it was built for.
+    /// <para>
+    /// The caller must have already found the address on file. This method
+    /// will happily create a row for any address it is handed, so what stops
+    /// it being a way for a stranger to fill this table is entirely the check
+    /// that happens before it — see <c>PublicFormEndpoints</c>, where the
+    /// address has to belong to an application on the form's own event first.
+    /// </para>
+    /// <para>
+    /// Null for an address that belongs to an organizer or to somebody
+    /// revoked, and it must stay null. Organizers sign in through Google
+    /// precisely so their access is tied to an allowlisted account and a bound
+    /// subject id; minting them a hacker row here would be a second way in
+    /// that skips all of it, reachable by anyone who can read their inbox —
+    /// which is the same reason <see cref="FindHackerIdByEmailAsync"/> filters
+    /// on kind.
+    /// </para>
+    /// </remarks>
+    /// <param name="fullName">
+    /// What we already know them as, used only when the row is created. Never
+    /// overwrites a name already there: this runs on an unauthenticated
+    /// request, and a stale application should not be able to rename an
+    /// account.
+    /// </param>
+    Task<Guid?> EnsureHackerAsync(string email, string? fullName, CancellationToken ct);
+
+    /// <summary>
     /// Everyone with an account, for the admin people screen.
     /// </summary>
     /// <remarks>

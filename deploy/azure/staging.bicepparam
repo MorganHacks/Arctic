@@ -25,6 +25,10 @@ param googleRedirectUri = readEnvironmentVariable('GOOGLE_REDIRECT_URI', '')
 // The portalweb origin. Emailed sign-in links are built from it.
 param publicBaseUrl = readEnvironmentVariable('PUBLIC_BASE_URL', '')
 
+// The portalforms origin. A sign-in link for a form lands here instead, so the
+// session cookie is set on the host the form is actually served from.
+param formsBaseUrl = readEnvironmentVariable('FORMS_BASE_URL', '')
+
 // Web-facing replicas kept warm. Zero lets them sleep, which is most of the
 // reason this environment is cheap; set WARM_REPLICAS=1 on the GitHub
 // environment for the weeks registration is open, and unset it afterwards.

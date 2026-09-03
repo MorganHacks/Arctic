@@ -41,6 +41,12 @@ public static class AdminFormEndpoints
         forms.MapPost("/{id:guid}/publish", Publish)
              .RequirePermission(Permission.FormsManage);
 
+        // Who the form is for, which is not one of its questions. Behind
+        // forms.manage with the rest of the writing, because narrowing an
+        // audience closes a live form to people who were about to answer it.
+        forms.MapPut("/{id:guid}/audience", SaveAudience)
+             .RequirePermission(Permission.FormsManage);
+
         return app;
     }
 
@@ -56,6 +62,9 @@ public static class AdminFormEndpoints
     public sealed record CreateFormRequest(string? Name, string? Kind);
 
     public sealed record SaveDraftRequest(IReadOnlyList<FormField>? Fields);
+
+    public sealed record AudienceRequest(
+        bool? RequiresSignIn, IReadOnlyList<string>? EligibleStatuses);
 
     // ------------------------------------------------------------- reading ---
 
@@ -105,6 +114,8 @@ public static class AdminFormEndpoints
                 name = form.Name,
                 kind = form.Kind,
                 closesAt = form.ClosesAt,
+                requiresSignIn = form.RequiresSignIn,
+                eligibleStatuses = form.EligibleStatuses,
                 published = published is not null,
                 publishedVersion = published?.Version,
                 questions = published is null ? (int?)null : Questions(published.Fields),
@@ -166,6 +177,14 @@ public static class AdminFormEndpoints
                 publishedAt = published.PublishedAt,
             },
             locked = LockedFields.Keys.OrderBy(k => k),
+
+            // The statuses an audience can be built from, so the builder
+            // offers the real set rather than asking somebody to type one.
+            // Ships with the draft for the same reason the event list ships
+            // with the forms list: it is needed to draw one screen, and a
+            // second round trip to fill a checkbox group is a waterfall for no
+            // benefit.
+            statuses = EligibleStatuses.All,
         });
     }
 
@@ -360,6 +379,81 @@ public static class AdminFormEndpoints
         });
     }
 
+    /// <summary>
+    /// Sets who a form is for. Requires <c>forms.manage</c>.
+    /// </summary>
+    /// <remarks>
+    /// Both halves in one request, because they are one decision: a gate with
+    /// no audience is a form nobody can open, and the schema refuses to store
+    /// that combination rather than leaving it to be discovered by the people
+    /// it locks out.
+    /// <para>
+    /// The application form is refused outright and the sentence says why.
+    /// Gating it makes applying impossible — the account it would demand is
+    /// created by applying — and a check constraint refuses the same thing at
+    /// the database, so this is the half that gives an author a reason rather
+    /// than a 500.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> SaveAudience(
+        Guid id,
+        AudienceRequest? request,
+        HttpContext http,
+        IFormStore forms,
+        ILogger<AudienceRequest> log,
+        CancellationToken ct)
+    {
+        if (request?.RequiresSignIn is not { } requiresSignIn)
+        {
+            return Results.BadRequest(new { error = "Say whether this form requires sign-in." });
+        }
+
+        var form = await Find(forms, id, ct);
+        if (form is null)
+        {
+            return Results.NotFound(new { error = "No such form." });
+        }
+
+        if (form.IsApplication && requiresSignIn)
+        {
+            return Results.BadRequest(new
+            {
+                error = "The application form cannot require sign-in. "
+                        + "Applying is how somebody gets an account.",
+            });
+        }
+
+        var statuses = request.EligibleStatuses ?? [];
+
+        if (!EligibleStatuses.AllKnown(statuses))
+        {
+            return Results.BadRequest(new { error = "That is not an application status." });
+        }
+
+        if (requiresSignIn && statuses.Count == 0)
+        {
+            // Refused rather than read as "everybody" or as "nobody". An empty
+            // list has both readings and the wrong one is chosen silently, on
+            // the form that decides who gets fed.
+            return Results.BadRequest(new
+            {
+                error = "Choose which applicants can open this form.",
+            });
+        }
+
+        var saved = await forms.SaveAudienceAsync(id, requiresSignIn, statuses, ct);
+        if (saved is null)
+        {
+            return Results.NotFound(new { error = "No such form." });
+        }
+
+        log.LogInformation(
+            "Form audience saved. {actor} {form} {gated} {statuses}",
+            http.PersonId(), id, requiresSignIn, saved.EligibleStatuses.Count);
+
+        return Results.Ok(Describe(saved));
+    }
+
     // ------------------------------------------------------------- shaping ---
 
     /// <summary>
@@ -404,6 +498,8 @@ public static class AdminFormEndpoints
         name = form.Name,
         kind = form.Kind,
         closesAt = form.ClosesAt,
+        requiresSignIn = form.RequiresSignIn,
+        eligibleStatuses = form.EligibleStatuses,
     };
 
     private static object Describe(EventSummary summary) => new

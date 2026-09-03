@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Field } from "@/lib/api";
+import type { Field, Prefill } from "@/lib/api";
 import {
   answered,
   check,
@@ -75,7 +75,29 @@ type Landing = { at: "summary" | "step"; n: number };
  * it. The worst case of the other choice is a fifteen-question application
  * gone, silently, with nothing on screen to say why.
  */
-export function Questions({ code, fields }: { code: string; fields: Field[] }) {
+export function Questions({
+  code,
+  fields,
+  prefill,
+  fixed,
+}: {
+  code: string;
+  fields: Field[];
+
+  /**
+   * What we already hold, keyed by question. Empty on a form anybody can open.
+   *
+   * Seeded into the answers rather than pushed into the inputs, so every one
+   * of them stays editable and the rest of this component cannot tell a
+   * prefilled answer from a typed one. That is the whole point: somebody
+   * correcting the school we have on file is doing the same thing as somebody
+   * typing it for the first time.
+   */
+  prefill?: Record<string, Prefill>;
+
+  /** The questions that are ours to state and not theirs to change. */
+  fixed?: string[];
+}) {
   const router = useRouter();
   const form = useRef<HTMLFormElement>(null);
   const summary = useRef<HTMLDivElement>(null);
@@ -83,7 +105,18 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
 
   const { steps, ordinals, questions } = useMemo(() => plan(fields), [fields]);
 
-  const [answers, setAnswers] = useState<Answers>({});
+  const locked = useMemo(() => new Set(fixed ?? []), [fixed]);
+
+  /*
+   * The starting answers, computed once.
+   *
+   * A function rather than the object, because this runs on every render
+   * otherwise and the work is thrown away every time after the first. It also
+   * has to be the initial state and not an effect: an effect would paint the
+   * form empty and then fill it in, which on a slow phone looks exactly like
+   * losing what somebody typed.
+   */
+  const [answers, setAnswers] = useState<Answers>(() => seed(prefill));
   const [problems, setProblems] = useState<Problems>({});
   const [banner, setBanner] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -234,6 +267,14 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
     const found: Problems = {};
 
     for (const field of list) {
+      // A fixed question is not one somebody can act on, so a complaint about
+      // it is a Next button that refuses for a reason nobody can fix. What we
+      // hold is what gets stored either way, and if what we hold is not enough
+      // the API says so — against the question, in its own words, once.
+      if (locked.has(field.key)) {
+        continue;
+      }
+
       const problem = check(field, answers[field.key]);
       if (problem) {
         found[field.key] = problem;
@@ -490,6 +531,7 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
             index={ordinals[field.key]}
             answer={answers[field.key]}
             problem={problems[field.key]}
+            fixed={locked.has(field.key)}
             onChange={set}
             onBusy={setBusy}
           />
@@ -632,6 +674,24 @@ function Progress({ done, total }: { done: number; total: number }) {
       </div>
     </div>
   );
+}
+
+/**
+ * What we already hold, in the shapes the controls take.
+ *
+ * A number arrives as a number because that is how it is stored, and every
+ * text-shaped control on this page holds a string — so an age would otherwise
+ * render as an empty box beside a question somebody has already answered.
+ * Everything else is already the right shape.
+ */
+function seed(prefill: Record<string, Prefill> | undefined): Answers {
+  const answers: Answers = {};
+
+  for (const [key, value] of Object.entries(prefill ?? {})) {
+    answers[key] = typeof value === "number" ? String(value) : value;
+  }
+
+  return answers;
 }
 
 /** Whether this browser has been asked not to animate anything. */
