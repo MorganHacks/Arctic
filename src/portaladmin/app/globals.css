@@ -78,6 +78,42 @@
   }
 }
 
+/*
+ * The parts of a control the browser paints for us follow the theme too.
+ *
+ * Everything else in this file is a colour we chose. This declaration covers
+ * the ones we cannot: the list a <select> drops down, the calendar a date
+ * field opens, the scrollbars, the spinner on a number field, the caret. With
+ * no colour-scheme declared the browser assumes a light page and paints all of
+ * them for one — which is how the dark console ended up with a white dropdown
+ * falling out of a dark control and a black calendar glyph on a dark field
+ * that nobody could see.
+ *
+ * Three blocks rather than one `light dark`, mirroring the tokens, because the
+ * console's theme is not always the browser's: an explicit [data-theme] has to
+ * win over the media query in both directions, or the palette and the popup
+ * disagree about which theme this is.
+ */
+:root {
+  color-scheme: light;
+
+  /* The safety net under the controls drawn further down. Anything native left
+     unstyled — a range, a progress bar, a checkbox in some browser that
+     refuses appearance:none — is at least the console's own blue rather than
+     the browser's. */
+  accent-color: var(--accent);
+}
+
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -954,15 +990,33 @@ button.icon.danger:not(:disabled):hover {
 
 /* Form controls ---------------------------------------------------------- */
 
+/*
+ * Why all of this hangs off element selectors and not classes.
+ *
+ * Every screen in the console writes a plain <select>, <input> or <textarea>.
+ * A class would have to be added at some forty call sites across six screens
+ * that four other people are editing at the same time, and the one that gets
+ * missed is the one still rendering the browser's own idea of a control. So
+ * the styling attaches to the element and a screen adopts it by doing nothing.
+ *
+ * The classes here — .field, .check, .choices — are for the arrangement around
+ * a control. None of them is required to make a control look right.
+ */
+
 input,
 select,
 textarea {
   font: inherit;
-  background: var(--raised);
+  background-color: var(--raised);
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0.35rem 0.5rem;
+  /* Thirty-two pixels. The console is dense on purpose, but a control twenty-six
+     pixels tall is one somebody misses on a trackpad, and a missed click costs
+     more than the six pixels save. */
+  min-height: 2rem;
+  max-width: 100%;
   transition: border-color var(--dur-fast) var(--ease);
 }
 
@@ -980,10 +1034,556 @@ textarea::placeholder {
   color: var(--faint);
 }
 
+/*
+ * Off, but still readable.
+ *
+ * A disabled control is usually showing a value somebody still needs to read —
+ * the event a campaign is locked to, the address on a revoked grant. The
+ * browser's own greying is a guess at contrast against a white page, so on the
+ * dark theme it hands back grey on grey. This is the console's recessed
+ * surface and its quietest ink, which is legible in both.
+ *
+ * -webkit-text-fill-color is not a duplicate of `color`: WebKit overrides the
+ * text colour of a disabled control and ignores `color` entirely, which is how
+ * a field can look right in Chrome and be unreadable in Safari. The opacity is
+ * there for the same reason on iOS, which fades disabled controls to 0.4 of
+ * whatever they were.
+ */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  color: var(--faint);
+  -webkit-text-fill-color: var(--faint);
+  background-color: var(--sunken);
+  border-color: var(--line-soft);
+  opacity: 1;
+}
+
+/* Read-only is not disabled. The value is current and correct, it is just not
+   this person's to change here, so it keeps full-contrast ink and gives up
+   only the surface — nothing about it should read as broken.
+
+   By attribute rather than :read-only, which also matches every control that
+   was never typeable in the first place: a checkbox, a file input and a button
+   all match :read-only permanently. */
+input[readonly],
+textarea[readonly] {
+  background-color: var(--sunken);
+}
+
+/*
+ * Wrong, and only once somebody has had a go at it.
+ *
+ * :invalid matches a required field from the moment the page loads, so a form
+ * of ten required questions would open with ten red borders, saying nothing
+ * except that the console is annoyed in advance. :user-invalid waits until the
+ * field has been filled in and left, or the form submitted — which is the
+ * point at which "this is wrong" is information rather than nagging.
+ *
+ * After the focus rule deliberately: a field somebody is in the middle of
+ * fixing goes on saying it is wrong until it is not.
+ */
+input:user-invalid,
+select:user-invalid,
+textarea:user-invalid {
+  border-color: var(--stop);
+}
+
+/* Down only. A textarea that can be dragged wider than its column drags the
+   layout with it, and the thing people actually run out of is lines. */
+textarea {
+  resize: vertical;
+  min-height: 4.5rem;
+  line-height: 1.5;
+}
+
 /* A search box is a place to type into, not a field with an answer already in
-   it, so it sits in the recess rather than on the surface. */
-input.search {
-  background: var(--sunken);
+   it, so it sits in the recess rather than on the surface. By type as well as
+   by class, because most of the search boxes in the console never got the
+   class. */
+input.search,
+input[type="search"] {
+  background-color: var(--sunken);
+}
+
+/*
+ * What the browser filled in for somebody.
+ *
+ * Chrome paints an autofilled field with a background of its own and ignores
+ * `background-color` outright, which on the dark theme is a pale block that is
+ * the loudest thing on the sign-in screen. An inset shadow is the one paint it
+ * does not override. Split into two rules on purpose: a selector list is
+ * dropped whole if any selector in it is unknown, and only some browsers know
+ * each of these two spellings.
+ */
+input:autofill {
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  box-shadow: inset 0 0 0 100px var(--raised);
+}
+
+input:-webkit-autofill {
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  box-shadow: inset 0 0 0 100px var(--raised);
+}
+
+/* Dropdowns -------------------------------------------------------------- */
+
+/*
+ * A native <select>, styled hard, rather than a listbox of our own.
+ *
+ * The two options were a custom listbox — a button, a div of ARIA roles,
+ * aria-activedescendant, our own keyboard handling — which can be made to look
+ * like anything on a desktop; or the native element, which can be styled
+ * everywhere except the list it opens.
+ *
+ * Native, for reasons specific to this console:
+ *
+ *  - The part we would be replacing is the part somebody looks at for half a
+ *    second and the part that is hardest to get right. Type-ahead, Home and
+ *    End, PageUp and PageDown, typing "acc" to land on Accepted, the screen
+ *    reader saying "Accepted, 4 of 9", the list flipping above the control at
+ *    the bottom of a short window: all of it is already there, none of it is
+ *    free to rewrite, and every one of them is a thing an organizer on the
+ *    review queue actually uses.
+ *  - Every select here is inside a form that posts. A div does not submit; it
+ *    needs a hidden input shadowing it, and the first time the two disagree
+ *    somebody sends a campaign to the wrong segment.
+ *  - Half of them render in server components. A listbox is client-side by
+ *    definition, so adopting it would mean every screen that owns a select
+ *    changing its call site — for a control that was working.
+ *  - On a phone the native list is the OS picker, which is better than
+ *    anything we would build.
+ *
+ * So the closed control, which is what a person looks at for the other eight
+ * hours, is entirely ours; and the open list is the platform's, themed to
+ * match by the color-scheme declaration near the top of this file. Where a
+ * browser will hand us the list as well without giving any of that up — the
+ * @supports block below — we take it.
+ */
+
+/*
+ * The arrow's colour, kept in a property of its own.
+ *
+ * The arrow is two gradients (below) and gradients cannot be recoloured a
+ * piece at a time, so every state would otherwise have to restate both of
+ * them. One custom property means a state says the one thing it changes, and
+ * says it at a weight the geometry rule below deliberately does not have.
+ */
+select {
+  --arrow: var(--muted);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+/* A select is as much a button as a field, so it answers a pointer the way the
+   buttons above it do. */
+select:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+select:focus {
+  --arrow: var(--accent);
+}
+
+select:disabled {
+  --arrow: var(--faint);
+  cursor: not-allowed;
+}
+
+/*
+ * The arrow itself, and the room made for it.
+ *
+ * Drawn with two gradients rather than an inline image: an SVG data URI would
+ * have to carry a hex, and a hex is the one thing this file does not have —
+ * the arrow would be the single part of the console that stayed dark grey on
+ * the dark theme. Gradients take var() colours, so it turns with everything
+ * else.
+ *
+ * The two :not()s are what makes a select a dropdown rather than a list box —
+ * nothing drops out of a multiple or a sized one, so there is no arrow to draw
+ * and no lane to keep clear. They also, deliberately, weigh enough that a
+ * screen stylesheet writing `.something select { background: var(--sunken) }`
+ * does not take the arrow off with it. `background` is a shorthand: it resets
+ * background-image, and that rule was written when the arrow was the
+ * browser's and a shorthand could not have cost anything. Colour, surface and
+ * padding are all still that file's to set; only the arrow is held.
+ */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  /* Room for the arrow, so a long option name does not run underneath it. */
+  padding-right: 1.75rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--arrow) 50%),
+    linear-gradient(135deg, var(--arrow) 50%, transparent 50%);
+  background-position:
+    right 0.9rem center,
+    right 0.6rem center;
+  background-size: 0.3rem 0.3rem;
+  background-repeat: no-repeat;
+}
+
+/*
+ * A select with nothing chosen in it yet.
+ *
+ * Several screens open a required select on a disabled "Pick a template"
+ * option. That is a placeholder and should read as one, in the same faint ink
+ * a placeholder attribute gets, rather than as an answer somebody gave.
+ *
+ * :invalid here rather than :user-invalid, and it is not a contradiction of
+ * the rule above: this is not an error state and it is not coloured like one.
+ * It is the empty state, and it has to be visible before anyone touches the
+ * control rather than after.
+ */
+select:required:invalid {
+  color: var(--faint);
+}
+
+option:disabled {
+  color: var(--faint);
+}
+
+/*
+ * The list itself, on the browsers that will hand it over.
+ *
+ * `appearance: base-select` gives the popup to CSS while the element stays a
+ * real <select>: same keyboard behaviour, same accessibility tree, same form
+ * submission, same markup at every call site. It is the only way to style a
+ * dropdown list that does not involve reimplementing one.
+ *
+ * Everything in here is an enhancement on a control that is already finished.
+ * Where it is unsupported the block does not apply and a person gets the
+ * platform's list, which is why it is safe to have at all.
+ *
+ * https://developer.mozilla.org/docs/Learn_web_development/Extensions/Forms/Customizable_select
+ */
+@supports (appearance: base-select) {
+  /* The same selector as the rule above, not a lighter one: `appearance: none`
+     is set there at this weight, and a bare `select` here would lose to it —
+     leaving a block that reads as though it works and does nothing at all. */
+  select:not([multiple]):not([size]),
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  /* The arrow is ::picker-icon from here on, so the drawn one comes off. */
+  select:not([multiple]):not([size]) {
+    background-image: none;
+    /* base-select lays the control out as a row: the value, then the icon. */
+    padding-right: 0.6rem;
+    gap: 0.5rem;
+  }
+
+  select::picker-icon {
+    color: var(--muted);
+    transition: transform var(--dur) var(--ease), color var(--dur-fast) var(--ease);
+  }
+
+  select:hover::picker-icon {
+    color: var(--ink);
+  }
+
+  /* The same answer the drawn arrow gives when the control is focused, since
+     the property it reads is not consulted here. */
+  select:focus::picker-icon {
+    color: var(--accent);
+  }
+
+  /* The one bit of movement in a control, and it is the arrow answering a
+     click that already opened something — it is not on the way to anything. */
+  select:open::picker-icon {
+    transform: rotate(180deg);
+  }
+
+  select:disabled::picker-icon {
+    color: var(--faint);
+  }
+
+  ::picker(select) {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background-color: var(--raised);
+    padding: 0.25rem;
+    margin-top: 0.25rem;
+    /* Lifted off the page rather than ruled onto it: a list is in front of the
+       table, and on the dark theme a border alone does not say that. Mixed
+       from the ink so it darkens and lightens with the theme. */
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--radius);
+    color: var(--ink);
+    background-color: transparent;
+    cursor: pointer;
+  }
+
+  /* The row under the pointer and the row the keyboard is on are the same
+     thing to the person reading, so they look the same. In the accent's own
+     soft tone rather than the recessed surface: on the dark theme the recess
+     is darker than the panel, and a row that sinks does not read as the row
+     about to be chosen. */
+  option:hover,
+  option:focus {
+    background-color: var(--accent-soft);
+  }
+
+  option:disabled {
+    color: var(--faint);
+    cursor: not-allowed;
+  }
+
+  /* The tick that marks what is already chosen. Left in place rather than
+     hidden — it is the only thing distinguishing the current value in an open
+     list, and colour alone would not be enough anyway. */
+  option::checkmark {
+    color: var(--accent);
+  }
+}
+
+/* Ticks and choices ------------------------------------------------------- */
+
+/*
+ * Drawn, not inherited.
+ *
+ * A checkbox is the one control that cannot be made to match anything: it is a
+ * different size, shape and blue in every browser, it ignores the accent the
+ * rest of the console uses, and on the dark theme Safari still draws a light
+ * square on a dark field. It is also thirteen pixels — a small target for the
+ * thing that decides whether a form can be submitted at all.
+ *
+ * appearance: none takes away the paint and leaves the element: the checked
+ * state, the keyboard, the label association, the form value and the
+ * indeterminate state are all still the browser's. Nothing here is a div
+ * pretending.
+ *
+ * The edge and the fill are one shadow rather than a border and a background,
+ * and the size is a minimum rather than a width. Both are deliberate.
+ *
+ * Two screen stylesheets set `.something input { width: 100% }` so text fields
+ * fill their column, and then carry a `width: auto` rule to keep the tick
+ * boxes out of it — along with `border: 0; background: none`, which put a
+ * browser-drawn checkbox back the way it was. All of that was right while the
+ * browser drew the box. It is fatal to a box drawn in CSS: `auto` on a control
+ * with no content is a control nought pixels wide, and stripping the border
+ * and the background of a drawn control strips the control.
+ *
+ * A minimum size cannot be undone by `auto`, and an inset shadow is not
+ * something any of those files touch — so the console keeps a visible tick box
+ * on every screen without this file having to outrank anybody. Those rules can
+ * come out as each screen adopts this layer; nothing breaks in the meantime,
+ * which is the only reason it is written this way.
+ */
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: none;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  min-width: 1.125rem;
+  min-height: 1.125rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius);
+  /* The 1px is the edge and the 1rem is the fill, in that order because the
+     first shadow in the list is painted on top. --muted, not --line: --line is
+     the right weight for the edge of a field somebody reads past, and an empty
+     box has nothing inside it to be noticed by. */
+  box-shadow:
+    inset 0 0 0 1px var(--muted),
+    inset 0 0 0 1rem var(--raised);
+  /* An inline box with nothing in it sits its bottom edge on the text baseline,
+     which for a box this much bigger than the browser's leaves it riding high
+     beside its own label. */
+  vertical-align: -0.25em;
+  cursor: pointer;
+  transition: box-shadow var(--dur-fast) var(--ease);
+}
+
+/*
+ * Round, and it has to stay round.
+ *
+ * The shape is the whole message: a circle says one of these and a square says
+ * as many as you like, and it is the only thing saying it before somebody
+ * clicks. A screen stylesheet setting `border-radius` across `.something
+ * input` — which two of them do, for the text fields — would otherwise turn
+ * every radio in that screen into a rounded square. :root is there for the
+ * weight and nothing else.
+ */
+:root input[type="radio"] {
+  border-radius: 50%;
+}
+
+/*
+ * The mark inside.
+ *
+ * Scaled from nothing rather than faded in, because at this size a fade reads
+ * as a rendering fault and a scale reads as a tick appearing. Ninety
+ * milliseconds; the reduced-motion rule in the tokens lands it on the final
+ * state immediately, which is the correct mark either way.
+ */
+input[type="checkbox"]::before,
+input[type="radio"]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  transform: scale(0);
+  background-color: var(--accent-ink);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+input[type="checkbox"]::before {
+  width: 0.625rem;
+  height: 0.625rem;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+input[type="radio"]::before {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+/* Both shadows are named in every state, so what changes between them is a
+   colour and nothing else — a list that grows or shrinks interpolates by
+   sliding the spread, which reads as the box inflating rather than filling. */
+input[type="checkbox"]:checked,
+input[type="radio"]:checked,
+input[type="checkbox"]:indeterminate {
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    inset 0 0 0 1rem var(--accent);
+}
+
+input[type="checkbox"]:checked::before,
+input[type="radio"]:checked::before,
+input[type="checkbox"]:indeterminate::before {
+  transform: scale(1);
+}
+
+/* Some, not all — the state a "select every status" box is in while half the
+   statuses are ticked. The browser tracks it; without a mark of its own it
+   renders as unticked, which is a lie about what is selected. */
+input[type="checkbox"]:indeterminate::before {
+  clip-path: polygon(12% 42%, 88% 42%, 88% 58%, 12% 58%);
+}
+
+input[type="checkbox"]:not(:disabled):hover,
+input[type="radio"]:not(:disabled):hover {
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    inset 0 0 0 1rem var(--raised);
+}
+
+input[type="checkbox"]:not(:disabled):checked:hover,
+input[type="radio"]:not(:disabled):checked:hover,
+input[type="checkbox"]:not(:disabled):indeterminate:hover {
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    inset 0 0 0 1rem var(--accent);
+}
+
+input[type="checkbox"]:disabled,
+input[type="radio"]:disabled {
+  cursor: not-allowed;
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    inset 0 0 0 1rem var(--sunken);
+}
+
+/* A tick that is on and cannot be changed. It still has to read as on from
+   across the row, so it keeps a filled box and loses only the colour that
+   means "you can do something here". */
+input[type="checkbox"]:disabled:checked,
+input[type="radio"]:disabled:checked,
+input[type="checkbox"]:disabled:indeterminate {
+  box-shadow:
+    inset 0 0 0 1px var(--faint),
+    inset 0 0 0 1rem var(--faint);
+}
+
+input[type="checkbox"]:disabled::before,
+input[type="radio"]:disabled::before {
+  background-color: var(--sunken);
+}
+
+/* Files and dates --------------------------------------------------------- */
+
+/*
+ * A file field is a button with a sentence after it, and only the button is
+ * ours. ::file-selector-button is the standard way to reach it — the older
+ * ::-webkit-file-upload-button is not needed, every browser we support
+ * understands the standard one.
+ *
+ * The sentence beside it is the browser's, in the browser's words, and stays
+ * that way; all it needed was ink that is legible on both themes.
+ */
+input[type="file"] {
+  padding: 0.25rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+input[type="file"]::file-selector-button {
+  font: inherit;
+  cursor: pointer;
+  margin-right: 0.6rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--sunken);
+  color: var(--ink);
+  font-weight: 500;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+input[type="file"]:not(:disabled)::file-selector-button:hover {
+  border-color: var(--muted);
+}
+
+input[type="file"]:disabled::file-selector-button {
+  cursor: not-allowed;
+  color: var(--faint);
+  border-color: var(--line-soft);
+}
+
+/*
+ * The calendar button on a date field.
+ *
+ * The glyph itself follows color-scheme, so it is already the right colour on
+ * both themes; what it is not is the right weight — full-strength black or
+ * white next to muted labels, on a control most people type into rather than
+ * click. Dimmed to sit with the rest, and back to full when it is the thing
+ * being aimed at.
+ */
+input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+input:disabled::-webkit-calendar-picker-indicator {
+  cursor: not-allowed;
+  opacity: 0.3;
 }
 
 label {
@@ -1006,13 +1606,25 @@ label {
   margin: 0.25rem 0 0;
 }
 
+/* A tick and the thing it means, on one line. The whole label is the target,
+   not just the eighteen pixels of box — which is most of the reason the
+   markup puts the input inside the label everywhere. */
 .check {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   margin: 0;
   color: var(--ink);
   font-size: var(--step-1);
+  cursor: pointer;
+}
+
+/* The row says it is off, not just the box in it. Without this the label is
+   full-strength ink beside a greyed-out control, which reads as a tick
+   somebody could take if they clicked harder. */
+.check:has(input:disabled) {
+  cursor: not-allowed;
+  color: var(--muted);
 }
 
 .check.consent {
@@ -1021,6 +1633,15 @@ label {
 
 .check input {
   margin: 0;
+}
+
+/* Several of them: a checkbox group, or a set of radios. A column because the
+   question is "which of these" and that is read down, and because ragged
+   options wrapping mid-row is how somebody misses one. */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 /* Layout helpers --------------------------------------------------------- */
