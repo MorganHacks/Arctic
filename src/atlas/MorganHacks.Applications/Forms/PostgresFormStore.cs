@@ -175,7 +175,13 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     {
         var draft = await DraftAsync(formId, actorId, ct);
 
-        var problems = FormValidation.Check(draft.Fields);
+        // Read rather than taken on trust from the caller. Publishing is the
+        // moment the obligations either apply or do not, and a kind passed in
+        // by whoever called this is a kind that can be wrong.
+        var form = await ByIdAsync(formId, ct)
+            ?? throw new InvalidOperationException($"No form {formId}.");
+
+        var problems = FormValidation.Check(draft.Fields, form.IsApplication);
         if (problems.Count > 0)
         {
             // Refused before anything is written. A half-published form is not
