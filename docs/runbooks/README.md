@@ -14,7 +14,8 @@ One page each, each ending with an escalation name.
 
 ## Still to write
 
-- [ ] Registration form returning errors — waits on the form existing
+- [ ] Registration form returning errors — the form exists now, so this one is
+      only waiting on somebody writing it
 - [ ] Broadcast circuit breaker tripped — waits on the breaker existing (M7)
 - [ ] Check-in scanners offline at the venue — phase two
 - [ ] Database connection exhaustion
