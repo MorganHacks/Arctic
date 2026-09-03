@@ -4,12 +4,17 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldType, FormField, FormProblem, VersionRow } from "@/lib/api";
 import { publishForm, saveDraft } from "../actions";
+import styles from "./builder.module.css";
 import { TYPES, blankField, blankSection, copyOf } from "./fields";
+import { PageBreakIcon, Publish, Save, TypeIcon, Warning } from "./icons";
 import { Preview } from "./preview";
 import { Question } from "./question";
 
 /** How long to wait after the last keystroke before writing. */
 const DEBOUNCE_MS = 700;
+
+/** How long a card that has just moved is marked as having moved. */
+const SETTLE_MS = 260;
 
 /**
  * What the bar says about the work.
@@ -22,12 +27,14 @@ const DEBOUNCE_MS = 700;
 type SaveStatus = "clean" | "dirty" | "saving" | "saved" | "failed";
 
 export function Builder({
+  formName,
   formId,
   initialFields,
   lockedKeys,
   versions,
   canManage,
 }: {
+  formName: string;
   formId: string;
   initialFields: FormField[];
   lockedKeys: string[];
@@ -41,7 +48,16 @@ export function Builder({
   const [problems, setProblems] = useState<FormProblem[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
-  const [adding, setAdding] = useState<FieldType>("shortText");
+
+  /**
+   * The question that has just been moved, if the movement was recent.
+   *
+   * Reordering by button gives no sense of travel — the list simply differs
+   * from the one that was there a frame ago — and on a form of twenty
+   * questions it is genuinely hard to see which card went where. Held by key
+   * rather than by index, because the index is the thing that just changed.
+   */
+  const [settled, setSettled] = useState<string | null>(null);
 
   /**
    * Counts edits rather than tracking a boolean.
@@ -131,6 +147,22 @@ export function Builder({
     return () => clearTimeout(timer);
   }, [edits, fields, canManage, write]);
 
+  /*
+   * The settle mark is taken off again.
+   *
+   * Left on, a second press on the same button would not re-run the animation
+   * — the class never changed — so the second move of a card would be the one
+   * with no motion on it at all.
+   */
+  useEffect(() => {
+    if (settled === null) {
+      return;
+    }
+
+    const timer = setTimeout(() => setSettled(null), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [settled]);
+
   /** Every mutation goes through here, so nothing can change without saving. */
   const change = useCallback((next: (current: FormField[]) => FormField[]) => {
     setFields(next);
@@ -144,17 +176,19 @@ export function Builder({
       current.map((field, i) => (i === index ? { ...field, ...changes } : field)),
     );
 
-  const move = (index: number, delta: number) =>
-    change((current) => {
-      const to = index + delta;
-      if (to < 0 || to >= current.length) {
-        return current;
-      }
+  const move = (index: number, delta: number) => {
+    const to = index + delta;
+    if (to < 0 || to >= fields.length) {
+      return;
+    }
 
+    setSettled(fields[index].key);
+    change((current) => {
       const next = [...current];
       [next[index], next[to]] = [next[to], next[index]];
       return next;
     });
+  };
 
   const remove = (index: number) =>
     change((current) => current.filter((_, i) => i !== index));
@@ -168,11 +202,12 @@ export function Builder({
       ...current.slice(index + 1),
     ]);
 
-  const add = () => change((current) => [...current, blankField(adding)]);
+  const add = (type: FieldType) =>
+    change((current) => [...current, blankField(type)]);
 
   // Appended like a question, because it is a field in the same array and
   // moves with the same two buttons. Everything after it is the next page, so
-  // adding one at the bottom and dragging it up is how a form gets split.
+  // adding one at the bottom and moving it up is how a form gets split.
   const addSection = () => change((current) => [...current, blankSection()]);
 
   async function publish() {
@@ -245,11 +280,16 @@ export function Builder({
     ordinals.push(asked);
   }
 
+  const anyLocked = shown.some((field) => field.locked);
+
   return (
     <>
-      <div className="toolbar">
-        <span className={`save ${status}`}>{SAVE_LABELS[status]}</span>
-        <span className="grow" />
+      <div className={styles.toolbar}>
+        <span className={status === "failed" ? styles.saveFailed : styles.save}>
+          <span className={`${styles.dot} ${DOT_CLASS(status)}`} />
+          {SAVE_LABELS[status]}
+        </span>
+        <span className={styles.spacer} />
 
         {canManage ? (
           <>
@@ -259,17 +299,20 @@ export function Builder({
                 all. */}
             <button
               type="button"
+              className={styles.toolbarButton}
               disabled={status === "saving" || publishing}
               onClick={() => void write(fields)}
             >
+              <Save />
               Save now
             </button>
             <button
               type="button"
-              className="button primary"
+              className={`button primary ${styles.toolbarButton}`}
               disabled={publishing}
               onClick={publish}
             >
+              <Publish />
               {publishing ? "Publishing…" : "Publish"}
             </button>
           </>
@@ -283,31 +326,37 @@ export function Builder({
       {notice ? <p className="error">{notice}</p> : null}
 
       {loose.length > 0 ? (
-        <div className="panel problems-panel">
+        <div className={`panel ${styles.problemsPanel}`}>
           <h2>Not ready to publish</h2>
-          <ul className="problems">
+          <ul className={styles.problems}>
             {loose.map((problem) => (
-              <li key={problem.message}>{problem.message}</li>
+              <li key={problem.message}>
+                <Warning />
+                {problem.message}
+              </li>
             ))}
           </ul>
         </div>
       ) : null}
 
-      <div className="builder">
+      <div className={styles.pane}>
         <div>
           {/* Said once, here, rather than under each of the ten locked
               questions an application form starts with. Somebody needs to know
               why the controls are missing; they do not need to be told ten
-              times on one screen. */}
-          <p className="meta" style={{ margin: "0 0 0.6rem" }}>
-            Questions marked <span className="pill sensitive">Locked</span> are
-            required by MLH affiliation, in their wording. The API refuses to
-            drop or reword one, not just this screen — the alternative is
-            finding out at the export, when there is no way to ask several
-            hundred people again.
-          </p>
+              times on one screen. And a survey carries none, so on one this
+              paragraph is a warning about something that is not on the page. */}
+          {anyLocked ? (
+            <p className={styles.lockNotice}>
+              Questions marked <span className="pill sensitive">Locked</span> are
+              required by MLH affiliation, in their wording. The API refuses to
+              drop or reword one, not just this screen — the alternative is
+              finding out at the export, when there is no way to ask several
+              hundred people again.
+            </p>
+          ) : null}
 
-          <ol className="questions">
+          <ol className={styles.list}>
             {shown.map((field, index) => (
               <Question
                 key={field.key}
@@ -317,6 +366,7 @@ export function Builder({
                 count={shown.length}
                 problems={byKey.get(field.key) ?? []}
                 disabled={!canManage}
+                settling={settled === field.key}
                 onChange={(changes) => patch(index, changes)}
                 onMove={(delta) => move(index, delta)}
                 onDuplicate={() => duplicate(index)}
@@ -326,48 +376,58 @@ export function Builder({
           </ol>
 
           {canManage ? (
-            <div className="panel add-question">
-              <div className="row">
-                <div>
-                  <label htmlFor="add-type">Add a question</label>
-                  <select
-                    id="add-type"
-                    value={adding}
-                    onChange={(event) => setAdding(event.target.value as FieldType)}
+            <div className={styles.picker}>
+              {/*
+               * Every type on the screen at once rather than behind a menu.
+               *
+               * The eleven are the vocabulary of this editor and they fit, so a
+               * list that has to be opened to be read is a list nobody reads —
+               * somebody reaches for Short text forty times and never finds out
+               * Date is in there. It is also one press instead of two, which is
+               * the smaller of the two wins.
+               */}
+              <span className={styles.pickerHead} id="add-question">
+                Add a question
+              </span>
+
+              <div className={styles.pickerGrid} role="group" aria-labelledby="add-question">
+                {TYPES.map((type) => (
+                  <button
+                    key={type.value}
+                    type="button"
+                    className={styles.pickerBtn}
+                    onClick={() => add(type.value)}
                   >
-                    {TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button type="button" onClick={add}>
-                  Add
-                </button>
-
-                <span className="grow" />
-
-                {/* Its own button rather than an entry in the menu beside it.
-                    A page break is not a kind of question, and putting it in
-                    that list is how somebody turns question nine into a
-                    divider by aiming badly — with the answers already given to
-                    it still filed under its key. */}
-                <button type="button" onClick={addSection}>
-                  Add page break
-                </button>
+                    <TypeIcon type={type.value} />
+                    {type.label}
+                  </button>
+                ))}
               </div>
+
+              {/* Outside that grid rather than a twelfth button in it. A page
+                  break is not a kind of question, and putting it in that list
+                  is how somebody turns question nine into a divider by aiming
+                  badly — with the answers already given to it still filed
+                  under its key. */}
+              <button
+                type="button"
+                className={styles.pickerBreak}
+                onClick={addSection}
+              >
+                <PageBreakIcon size={16} />
+                Add page break
+              </button>
             </div>
           ) : null}
         </div>
 
-        <aside className="side">
-          <Preview fields={shown} />
+        <aside className={styles.side}>
+          <Preview fields={shown} formName={formName} />
 
           {versions.length > 0 ? (
-            <section className="panel">
+            <section className={styles.history}>
               <h2>History</h2>
-              <ul className="listing">
+              <ul>
                 {versions.map((version) => (
                   <li key={version.version}>
                     <span>
@@ -398,3 +458,19 @@ const SAVE_LABELS: Record<SaveStatus, string> = {
   saved: "Saved",
   failed: "Not saved",
 };
+
+/**
+ * The dot beside the words.
+ *
+ * The shape stays put while the label changes, so somebody who has been here
+ * for an hour has one constant thing to glance at instead of a sentence to
+ * re-read. Only the write in flight moves, and it breathes rather than blinks.
+ */
+const DOT_CLASS = (status: SaveStatus): string =>
+  ({
+    clean: styles.dotClean,
+    dirty: styles.dotDirty,
+    saving: styles.dotSaving,
+    saved: styles.dotSaved,
+    failed: styles.dotFailed,
+  })[status];
