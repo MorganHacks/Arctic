@@ -18,8 +18,17 @@ import type { NextConfig } from "next";
  * It also keeps the OAuth round trip on one origin: Google redirects back here,
  * not to an Azure hostname a person has never seen.
  */
+/*
+ * Harbor, not atlas.
+ *
+ * Every request here is /api/something, and stripping that prefix is harbor's
+ * job -- atlas serves /forms, not /api/forms. Pointed straight at atlas every
+ * call 404s, which surfaces as a form that says it does not exist and a
+ * console that redirects to sign-in forever, with nothing in any log saying
+ * why. The old default was atlas, so it could never have worked.
+ */
 const apiOrigin =
-  process.env.API_ORIGIN ?? "http://localhost:5080";
+  process.env.API_ORIGIN ?? "http://localhost:5050";
 
 const nextConfig: NextConfig = {
   /**
