@@ -173,7 +173,11 @@ for app in portaladmin:3001 portalforms:3002; do
     (cd "src/$name" && npm install --silent) >"$LOGS/$name-install.log" 2>&1 \
       || { fail "npm install failed"; tail -6 "$LOGS/$name-install.log"; exit 1; }
   fi
-  (cd "src/$name" && PORT="$port" API_ORIGIN="$API" npm run dev) \
+  # The console shows and copies the public address of a form. Left to its
+  # default that is forms.morganhacks.com, which is a link nobody can open
+  # yet and which is not the form running two ports away.
+  (cd "src/$name" && PORT="$port" API_ORIGIN="$API" \
+      NEXT_PUBLIC_FORMS_ORIGIN="http://localhost:3002" npm run dev) \
     >"$LOGS/$name.log" 2>&1 &
   PIDS+=($!)
   wait_for "http://localhost:$port/" "$name" && ok || exit 1
