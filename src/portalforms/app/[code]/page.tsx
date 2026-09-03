@@ -146,7 +146,6 @@ function Masthead({
 }) {
   return (
     <div className="masthead">
-      <p className="wordmark">MorganHacks</p>
       <h1>{name}</h1>
       {you ? (
         <p className="lede">
