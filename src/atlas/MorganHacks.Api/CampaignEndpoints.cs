@@ -72,6 +72,32 @@ public static class CampaignEndpoints
     /// </remarks>
     private const int SampleSize = 10;
 
+    /// <summary>How many fully rendered messages a preview hands back.</summary>
+    /// <remarks>
+    /// Three. The job is to let somebody read the email before four hundred
+    /// copies of it leave the building, and the fourth one adds nothing a
+    /// person will actually read — every render is a whole HTML body, so a
+    /// preview of a five-hundred-person segment that shipped one each would be
+    /// several megabytes to answer a question three answers.
+    /// <para>
+    /// Which three matters more than how many, so <see cref="Rendered"/> puts
+    /// a recipient with a gap first when the segment has one. Three people
+    /// whose names are all on file is a preview that quietly says everything
+    /// is fine.
+    /// </para>
+    /// </remarks>
+    private const int RenderSize = 3;
+
+    /// <summary>How many addresses a placeholder's coverage names.</summary>
+    /// <remarks>
+    /// Enough to go and open the row, nowhere near enough to be a copy of the
+    /// segment — the same argument as <see cref="SampleSize"/>, and a smaller
+    /// number because this one is repeated for every placeholder rather than
+    /// given once. Nothing beyond these few is ever held: the counting keeps a
+    /// number and stops collecting addresses once it has them.
+    /// </remarks>
+    private const int ExampleSize = 3;
+
     /// <summary>The longest a campaign's name may be.</summary>
     /// <remarks>
     /// Internal-only text — it never reaches a recipient — so this is a bound
@@ -91,6 +117,12 @@ public static class CampaignEndpoints
         campaigns.MapPost("", Create)
                  .RequirePermission(Permission.EmailManageTemplates);
         campaigns.MapPost("/{id:guid}/preview", Preview)
+                 .RequirePermission(Permission.EmailManageTemplates);
+
+        // Drafting, not stats: this is the list an editor offers while
+        // somebody writes the template a campaign points at, so it sits with
+        // the preview rather than with the read-only surface above.
+        campaigns.MapGet("/{id:guid}/placeholders", Placeholders)
                  .RequirePermission(Permission.EmailManageTemplates);
 
         // The two that move mail. Same permission for both, and deliberately:
@@ -298,8 +330,8 @@ public static class CampaignEndpoints
     }
 
     /// <summary>
-    /// Resolves the segment now and says who that is. Requires
-    /// <c>email.manage_templates</c>.
+    /// Resolves the segment now, says who that is, and shows what they would
+    /// receive. Requires <c>email.manage_templates</c>.
     /// </summary>
     /// <remarks>
     /// Nothing is written and nothing is frozen — this is the answer to "who
@@ -315,6 +347,29 @@ public static class CampaignEndpoints
     /// of mail somebody unsubscribes from. The mirror of that rule — an
     /// unsubscribe never standing between somebody and their sign-in link —
     /// is <see cref="MessageQueue.IsSuppressedAsync"/>'s and is tested.
+    /// </para>
+    /// <para>
+    /// <b>Rendered messages, and the gaps, per placeholder.</b> A count of
+    /// recipients is not an email, and nobody could previously read the thing
+    /// they were about to send several hundred copies of. <c>renders</c> is a
+    /// handful of real ones through the same <see cref="TemplateRenderer"/>
+    /// the send uses — see <see cref="Rendered"/> — and
+    /// <c>placeholderCoverage</c> is the refusal in <see cref="Send"/> said
+    /// early and said per placeholder, so "twelve people have no first name"
+    /// arrives while somebody can still go and fix twelve rows. Covered
+    /// placeholders are listed too: a screen that can only draw red cannot
+    /// tell "checked and fine" from "not checked".
+    /// </para>
+    /// <para>
+    /// <b>No second permission.</b> <see cref="FormResponseEndpoints"/> gates
+    /// a resume link inside its handler because a separate permission exists
+    /// for exactly that file and holding one does not imply the other. There
+    /// is no equivalent here: a rendered body is this campaign's template,
+    /// which <c>email.manage_templates</c> already reads in full through
+    /// <see cref="TemplateEndpoints"/>, filled with the three fields the same
+    /// permission already sees in <c>sample</c> on this very response. A
+    /// second gate would either be a check that is always true or a permission
+    /// nobody holds, and neither withholds anything from anybody.
     /// </para>
     /// </remarks>
     private static async Task<IResult> Preview(
@@ -364,7 +419,14 @@ public static class CampaignEndpoints
             problems.Add(problem);
         }
 
-        if (Missing(template, sendable) is { } gap)
+        // Against whatever the key means now, which is what the gap warning
+        // has always been measured against. When that is not the row this
+        // campaign holds, MissingTemplate above is already saying the campaign
+        // has to be drafted again — and showing the current wording is still
+        // the most useful thing on the screen while somebody does.
+        var coverage = Covered(template, sendable);
+
+        if (Missing(coverage) is { } gap)
         {
             problems.Add(gap);
         }
@@ -386,6 +448,58 @@ public static class CampaignEndpoints
             // sample of the wrong list.
             sample = sendable.Take(SampleSize).Select(m => m.Email),
             problems,
+
+            // Every placeholder the template uses, covered ones included.
+            placeholderCoverage = coverage.Placeholders.Select(p => new
+            {
+                placeholder = p.Placeholder,
+                missing = p.Missing,
+                total = p.Total,
+                examples = p.Examples,
+            }),
+
+            // A few of them, actually rendered. Of the sendable list for the
+            // same reason the sample is.
+            renders = Rendered(template, sendable),
+        });
+    }
+
+    /// <summary>
+    /// What this campaign's segment can fill in. Requires
+    /// <c>email.manage_templates</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same list <see cref="TemplateEndpoints"/> gives, narrowed to what
+    /// this segment carries, so an editor opened from a campaign offers
+    /// <c>{{firstName}}</c> only where there is a first name to put in it.
+    /// Both come off <see cref="MergeFields"/>, which is also what the send
+    /// renders with — an editor offering a fourth placeholder would be
+    /// offering a template that refuses at send.
+    /// <para>
+    /// Reads nothing but the campaign's own row. The segment is not resolved:
+    /// which fields a segment can fill is a property of its shape rather than
+    /// of who is in it today, and an editor asking on every keystroke must not
+    /// be a scan of <c>applications.*</c> each time.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> Placeholders(
+        Guid id, CampaignStore campaigns, CancellationToken ct)
+    {
+        var campaign = await campaigns.FindAsync(id, ct);
+        if (campaign is null)
+        {
+            return Results.NotFound(new { error = "No such campaign." });
+        }
+
+        if (!TryStored(campaign, out var segment, out var unreadable))
+        {
+            return unreadable;
+        }
+
+        return Results.Ok(new
+        {
+            placeholders = MergeFields.For(segment!)
+                .Select(field => new { name = field.Name, description = field.Description }),
         });
     }
 
@@ -528,14 +642,14 @@ public static class CampaignEndpoints
 
         var sendable = resolved.Members.Where(m => !suppressed.ContainsKey(m.Email)).ToList();
 
-        if (Missing(template, sendable) is { } gap)
+        if (Missing(Covered(template, sendable)) is { } gap)
         {
             return Results.BadRequest(new { error = gap });
         }
 
         var recipients = resolved.Members.Select(member =>
         {
-            var rendered = TemplateRenderer.Render(template, Values(member));
+            var rendered = TemplateRenderer.Render(template, MergeFields.Values(member));
             return new BroadcastRecipient(
                 member.PersonId, member.Email,
                 rendered.Subject, rendered.BodyHtml, rendered.BodyText,
@@ -640,50 +754,6 @@ public static class CampaignEndpoints
     // ------------------------------------------------------------- checking ---
 
     /// <summary>
-    /// The merge values a segment can supply for one recipient.
-    /// </summary>
-    /// <remarks>
-    /// Three, and no more. Every value here is one a template author can rely
-    /// on for every recipient of every segment, which is the property that
-    /// makes <see cref="Unfillable"/> able to refuse before the send rather
-    /// than after it. Growing this list is cheap; growing it by something only
-    /// some segments carry is how "Hi {{school}}," reaches four hundred people.
-    /// </remarks>
-    private static Dictionary<string, string> Values(SegmentMember member)
-    {
-        var values = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["email"] = member.Email,
-        };
-
-        if (!string.IsNullOrWhiteSpace(member.FirstName))
-        {
-            values["firstName"] = member.FirstName;
-        }
-
-        if (!string.IsNullOrWhiteSpace(member.LastName))
-        {
-            values["lastName"] = member.LastName;
-        }
-
-        return values;
-    }
-
-    /// <summary>
-    /// The placeholders a segment can fill for everybody in it.
-    /// </summary>
-    /// <remarks>
-    /// A typed list of addresses carries an address and nothing else — the
-    /// recipient is frequently a sponsor contact this system has never heard
-    /// of — so a template that greets people by name cannot be sent to one.
-    /// </remarks>
-    private static IReadOnlySet<string> Fillable(Segment segment) => segment switch
-    {
-        Segment.Addresses => new HashSet<string>(StringComparer.Ordinal) { "email" },
-        _ => new HashSet<string>(StringComparer.Ordinal) { "email", "firstName", "lastName" },
-    };
-
-    /// <summary>
     /// Whether this template asks for something this segment cannot give it,
     /// as a sentence, or null.
     /// </summary>
@@ -697,7 +767,7 @@ public static class CampaignEndpoints
     private static string? Unfillable(EmailTemplate template, Segment segment)
     {
         var wanted = TemplateRenderer.PlaceholdersIn(template);
-        var available = Fillable(segment);
+        var available = MergeFields.Fillable(segment);
         var missing = wanted.Where(p => !available.Contains(p)).OrderBy(p => p, StringComparer.Ordinal).ToList();
 
         return missing.Count == 0
@@ -709,9 +779,32 @@ public static class CampaignEndpoints
                 string.Join(", ", missing.Select(m => $"{{{{{m}}}}}")));
     }
 
+    /// <summary>One placeholder, and who has nothing to put in it.</summary>
+    /// <remarks>
+    /// <c>Total</c> is on every row rather than beside the list, because a
+    /// screen draws one bar per placeholder and a bar needs both numbers.
+    /// <c>Examples</c> is capped at <see cref="ExampleSize"/>: enough to go
+    /// and open a row, and deliberately not the list.
+    /// </remarks>
+    private sealed record PlaceholderCoverage(
+        string Placeholder, int Missing, int Total, IReadOnlyList<string> Examples);
+
     /// <summary>
-    /// Whether some recipients would get a placeholder instead of a value, as
-    /// a sentence, or null.
+    /// The same fact counted twice: by placeholder, and by person.
+    /// </summary>
+    /// <remarks>
+    /// <c>Affected</c> is people rather than placeholders, and it is not the
+    /// sum of the rows — somebody with neither name on file is two rows and
+    /// one person. Both come out of one traversal because they are one
+    /// question, and two traversals are two chances to disagree about what
+    /// "would receive the blank itself" means.
+    /// </remarks>
+    private sealed record Coverage(
+        IReadOnlyList<PlaceholderCoverage> Placeholders, int Affected);
+
+    /// <summary>
+    /// Which recipients would get a placeholder instead of a value, per
+    /// placeholder and in total.
     /// </summary>
     /// <remarks>
     /// Different from <see cref="Unfillable"/>, and both are needed. That one
@@ -719,26 +812,74 @@ public static class CampaignEndpoints
     /// whether every person in it actually has one — a row that was autosaved
     /// before somebody typed their name has an email and no first name, and a
     /// template greeting them would reach them as "Hi {{firstName}},".
+    /// <para>
+    /// Every placeholder the template uses gets a row, including the ones
+    /// nobody is missing. Zero is the answer to "did anything go wrong with
+    /// this one", and a list that only carried the failures could not be told
+    /// apart from a list that had not been checked.
+    /// </para>
+    /// <para>
+    /// Addresses are counted and then dropped: the loop keeps at most
+    /// <see cref="ExampleSize"/> of them per placeholder, so a ten-thousand
+    /// person segment never assembles ten thousand addresses in memory to
+    /// report a number.
+    /// </para>
     /// </remarks>
-    private static string? Missing(
+    private static Coverage Covered(
         EmailTemplate? template, IReadOnlyList<SegmentMember> members)
     {
-        if (template is null || members.Count == 0)
+        if (template is null)
         {
-            return null;
+            return new Coverage([], 0);
         }
 
         var wanted = TemplateRenderer.PlaceholdersIn(template);
-        var blank = 0;
+        var counts = wanted.ToDictionary(p => p, _ => 0, StringComparer.Ordinal);
+        var examples = wanted.ToDictionary(
+            p => p, _ => new List<string>(), StringComparer.Ordinal);
+        var affected = 0;
 
         foreach (var member in members)
         {
-            var values = Values(member);
-            if (wanted.Any(p => !values.ContainsKey(p)))
+            var unfilled = MergeFields.Unfilled(wanted, member);
+            if (unfilled.Count == 0)
             {
-                blank++;
+                continue;
+            }
+
+            affected++;
+
+            foreach (var placeholder in unfilled)
+            {
+                counts[placeholder]++;
+
+                if (examples[placeholder].Count < ExampleSize)
+                {
+                    examples[placeholder].Add(member.Email);
+                }
             }
         }
+
+        var rows = wanted
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .Select(p => new PlaceholderCoverage(p, counts[p], members.Count, examples[p]))
+            .ToList();
+
+        return new Coverage(rows, affected);
+    }
+
+    /// <summary>
+    /// Whether some recipients would get a placeholder instead of a value, as
+    /// a sentence, or null.
+    /// </summary>
+    /// <remarks>
+    /// The sentence <see cref="Send"/> refuses with and <see cref="Preview"/>
+    /// warns with, off the same count, so the preview cannot say a campaign is
+    /// fine and the send disagree.
+    /// </remarks>
+    private static string? Missing(Coverage coverage)
+    {
+        var blank = coverage.Affected;
 
         return blank == 0
             ? null
@@ -749,6 +890,81 @@ public static class CampaignEndpoints
                 + "Use a template that does not fill anything in, or a segment "
                 + "where everybody has a name on file.",
                 blank);
+    }
+
+    // -------------------------------------------------------------- showing ---
+
+    /// <summary>
+    /// A few of these recipients' messages, actually rendered.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="TemplateRenderer.Render"/> with
+    /// <see cref="MergeFields.Values"/>, which is the same call
+    /// <see cref="Send"/> makes and not a second one that agrees today. A
+    /// preview that rendered differently from the send would be worse than no
+    /// preview, because somebody would read it and believe it.
+    /// <para>
+    /// A recipient with a gap goes first when the segment has one. That is the
+    /// message worth reading — the other <see cref="RenderSize"/> minus one
+    /// show what most people receive, and the one at the top shows the
+    /// "Hi {{firstName}}," somebody is about to send. The rest are taken in
+    /// segment order rather than sampled, so calling this twice on an
+    /// unchanged segment shows the same messages twice.
+    /// </para>
+    /// <para>
+    /// Nothing here is logged. These are somebody's name and address inside a
+    /// body, which is exactly what <c>Redaction.SensitiveKeys</c> exists to
+    /// keep out of a log line, and the only reader is the person who asked.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyList<object> Rendered(
+        EmailTemplate? template, IReadOnlyList<SegmentMember> members)
+    {
+        if (template is null || members.Count == 0)
+        {
+            return [];
+        }
+
+        var wanted = TemplateRenderer.PlaceholdersIn(template);
+        var chosen = new List<SegmentMember>();
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (members.FirstOrDefault(m => MergeFields.Unfilled(wanted, m).Count > 0) is { } gapped)
+        {
+            chosen.Add(gapped);
+            taken.Add(gapped.Email);
+        }
+
+        foreach (var member in members)
+        {
+            if (chosen.Count == RenderSize)
+            {
+                break;
+            }
+
+            if (taken.Add(member.Email))
+            {
+                chosen.Add(member);
+            }
+        }
+
+        return chosen.Select(member =>
+        {
+            var rendered = TemplateRenderer.Render(template, MergeFields.Values(member));
+
+            return (object)new
+            {
+                email = member.Email,
+                subject = rendered.Subject,
+                html = rendered.BodyHtml,
+                text = rendered.BodyText,
+
+                // Named on the render as well as counted in the coverage, so a
+                // screen showing one message can mark the hole in it without
+                // cross-referencing a list beside it.
+                unfilled = MergeFields.Unfilled(wanted, member),
+            };
+        }).ToList();
     }
 
     // -------------------------------------------------------------- shaping ---
