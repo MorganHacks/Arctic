@@ -207,7 +207,7 @@ public sealed class PostgresApplicantStore(NpgsqlDataSource dataSource) : IAppli
     /// ILIKE rather than lower() on both sides: it is the same comparison and
     /// it says what it is doing. Neither can use an index with a leading
     /// wildcard, so there is nothing to lose by the readable one — see
-    /// 0015_applicant_list.sql for why that is acceptable and what the fix is
+    /// 0016_applicant_list.sql for why that is acceptable and what the fix is
     /// when it stops being.
     /// </para>
     /// </remarks>
