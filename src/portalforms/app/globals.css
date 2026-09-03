@@ -27,10 +27,25 @@ body {
   background: var(--sunken);
   color: var(--ink);
   font-family: var(--font-inter), var(--body);
-  font-size: 16px;
+  font-size: var(--step0);
   line-height: 1.55;
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Room for the bar at the bottom, whenever the browser scrolls something into
+ * view by itself.
+ *
+ * Tabbing forward through a form lands on the next box and the browser scrolls
+ * just far enough to put it at the very edge — which on this page is underneath
+ * the sticky Submit bar. Somebody using a keyboard then types into a field they
+ * cannot see. The top inset is the same courtesy for shift-tabbing back up
+ * past the step heading.
+ */
+html {
+  scroll-padding-top: 1rem;
+  scroll-padding-bottom: 7rem;
 }
 
 a {
@@ -43,25 +58,37 @@ a {
   max-width: 40rem;
   margin: 0 auto;
 
-  /* The bottom padding clears the sticky submit bar, and the safe-area inset
-     clears the home indicator on a phone with no bezel. Without the second one
-     the button sits under the swipe gesture and every other press is a
-     dismissed page rather than a submitted form. */
-  padding: 1.25rem 1rem calc(3rem + env(safe-area-inset-bottom, 0px));
+  /* No padding under the last thing on the page, because the last thing on the
+     page is the submit bar and it carries its own — including the safe-area
+     inset that clears the home indicator on a phone with no bezel. Space here
+     as well would leave the bar hovering an inch off the bottom at the end of
+     the scroll, which is exactly how a fixture stops looking like one. */
+  padding: 1.25rem 1rem 0;
 }
 
 @media (min-width: 40rem) {
   .page {
-    padding: 2.5rem 1.5rem 4rem;
+    padding: 2.5rem 1.5rem 0;
   }
 }
 
+/*
+ * The form's name, and the rule under it.
+ *
+ * The rule is doing a job rather than decorating: on a phone the name of the
+ * form and the name of the first step are two serif lines a few millimetres
+ * apart, and without something between them they read as one heading with a
+ * subtitle. It is --line-soft rather than --line so it separates without
+ * competing with the cards below it.
+ */
 .masthead {
   margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .wordmark {
-  font-size: 0.75rem;
+  font-size: var(--step-2);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--faint);
@@ -70,16 +97,20 @@ a {
 
 h1 {
   font-family: var(--display);
-  font-size: 1.65rem;
+  font-size: var(--step2);
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.01em;
   margin: 0;
+
+  /* A form's name is somebody else's text and can be any length without a
+     space in it. It wraps rather than widening the page. */
+  overflow-wrap: anywhere;
 }
 
 @media (min-width: 40rem) {
   h1 {
-    font-size: 2rem;
+    font-size: var(--step3);
   }
 }
 
@@ -113,8 +144,18 @@ h1 {
   /* A label, a hint or an option is somebody else's text and can be any length
      without a space in it. It wraps rather than widening the page. */
   overflow-wrap: anywhere;
+
+  transition: border-color 140ms ease-out;
 }
 
+/*
+ * Which card is being worked on.
+ *
+ * The card the cursor is in is bordered a shade darker than the rest. Not
+ * coloured — being answered is not a warning and not the thing to do next — but
+ * on a screen of near-identical boxes it is what tells somebody using a
+ * keyboard which one their typing is going into.
+ */
 .question:focus-within {
   border-color: var(--muted);
 }
@@ -156,7 +197,7 @@ fieldset.question > legend + * {
 .optional,
 .needed {
   display: block;
-  font-size: 0.8rem;
+  font-size: var(--step-1);
   font-weight: 400;
   color: var(--faint);
   margin-top: 0.1rem;
@@ -178,7 +219,7 @@ fieldset.question > legend + * {
 
 .help {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--step-1);
   margin: 0 0 0.6rem;
 }
 
@@ -195,7 +236,7 @@ fieldset.question > legend + * {
  */
 .counter {
   color: var(--faint);
-  font-size: 0.8125rem;
+  font-size: var(--step-2);
   font-variant-numeric: tabular-nums;
   text-align: right;
   margin: 0.35rem 0 0;
@@ -214,7 +255,7 @@ fieldset.question > legend + * {
 
 .tally-count {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--step-1);
   font-variant-numeric: tabular-nums;
   margin: 0 0 0.4rem;
 }
@@ -250,8 +291,62 @@ fieldset.question > legend + * {
   margin-bottom: 1.25rem;
 }
 
-.step .tally-track {
+/*
+ * The steps, as steps.
+ *
+ * One segment per step rather than one bar filled to a fraction. A form in
+ * steps has a small whole number of them and the useful question is "how many
+ * more screens is this", which a segmented track answers by being counted. A
+ * continuous bar answers "roughly what proportion", which is the question
+ * nobody standing on a pavement is asking.
+ *
+ * It reuses the track's colours so it is visibly the same object as the
+ * `n of m answered` bar on a one-page form, measuring a different thing. Both
+ * are uncoloured for the reason at the top of this file: progress is neither a
+ * warning nor the thing to do next.
+ */
+.step-track {
+  display: flex;
+  gap: 0.25rem;
   margin-bottom: 0.9rem;
+}
+
+.step-track span {
+  flex: 1 1 0;
+  height: 0.3rem;
+  border-radius: var(--radius);
+  background: var(--line);
+
+  /* Slow enough to be seen as the same bar moving rather than a new one
+     appearing, and short enough that nobody waits for it. */
+  transition: background-color 220ms ease-out;
+}
+
+.step-track span.on {
+  background: var(--muted);
+}
+
+/*
+ * The step's questions, arriving.
+ *
+ * A short fade and a few millimetres of travel, in the direction the page
+ * already scrolls. Enough to say "this is new content, not the same screen
+ * with different words in it", which is the thing a swap of every question at
+ * once otherwise fails to say. Nothing slides sideways and nothing bounces: an
+ * applicant is often anxious and the page should not add to it.
+ *
+ * `prefers-reduced-motion` is honoured by the blanket rule in the token file,
+ * which cuts every animation on the page to nothing.
+ */
+.step-body {
+  animation: step-in 220ms ease-out both;
+}
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
 }
 
 /*
@@ -264,7 +359,7 @@ fieldset.question > legend + * {
  */
 .step-title {
   font-family: var(--display);
-  font-size: 1.25rem;
+  font-size: var(--step1);
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
@@ -278,7 +373,7 @@ fieldset.question > legend + * {
 
 @media (min-width: 40rem) {
   .step-title {
-    font-size: 1.4rem;
+    font-size: var(--step2);
   }
 }
 
@@ -294,7 +389,7 @@ fieldset.question > legend + * {
 .step-of {
   display: block;
   font-family: var(--font-inter), var(--body);
-  font-size: 0.75rem;
+  font-size: var(--step-2);
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -305,7 +400,7 @@ fieldset.question > legend + * {
 
 .step-help {
   color: var(--muted);
-  font-size: 0.9375rem;
+  font-size: var(--step-1);
   margin: 0.45rem 0 0;
 }
 
@@ -325,13 +420,26 @@ select,
 textarea {
   width: 100%;
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--step0);
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 0.65rem 0.7rem;
-  min-height: 2.75rem;
+  padding: 0.7rem 0.75rem;
+
+  /*
+   * 48px, not the 44px minimum.
+   *
+   * The minimum is what a thumb can hit sitting still. This form is filled in
+   * standing up, one-handed, walking between buildings, and the few pixels
+   * over the floor are the difference between the box below and the box
+   * meant.
+   */
+  min-height: 3rem;
+
+  /* Nothing here moves. The border colour changing under a thumb is the only
+     acknowledgement a phone gives that a box was reached. */
+  transition: border-color 120ms ease-out;
 }
 
 textarea {
@@ -361,19 +469,68 @@ textarea.wrong {
 .choices {
   display: flex;
   flex-direction: column;
+  gap: 0.4rem;
 }
 
+/*
+ * Each option is a box.
+ *
+ * Rules between rows were cheaper and were wrong on a phone: the target was
+ * the row but nothing drew where the row ended, so a thumb aimed at the words
+ * and a near miss selected the option below. A bordered box says where to
+ * press without anybody having to work it out, and it is the same shape as
+ * every other control on the page.
+ */
 .choice {
   display: flex;
   gap: 0.65rem;
   align-items: flex-start;
-  padding: 0.55rem 0.15rem;
+  padding: 0.7rem 0.75rem;
   cursor: pointer;
-  min-height: 2.75rem;
+  min-height: 3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  transition:
+    border-color 120ms ease-out,
+    background-color 120ms ease-out;
 }
 
-.choice + .choice {
-  border-top: 1px solid var(--line-soft);
+@media (hover: hover) {
+  .choice:hover {
+    border-color: var(--muted);
+  }
+}
+
+/*
+ * The chosen one.
+ *
+ * The accent, which on this page means the thing to do next — and a choice
+ * somebody has made is exactly that, because it is what the Next button is now
+ * going to carry forward. It is also already the colour of the radio's own
+ * dot, set by `accent-color` below, so the box agreeing with the control
+ * inside it adds no meaning that was not already there.
+ *
+ * `:has` rather than a class, so nothing in React has to know which option is
+ * selected — the checked input is the single source of that, and a second copy
+ * in state is a second copy that can disagree. A browser without `:has` simply
+ * shows the native dot, which is what it showed before.
+ */
+.choice:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/*
+ * The ring goes round the whole box, not the radio.
+ *
+ * The outline the token file puts on `:focus-visible` lands on a control the
+ * size of a grain of rice sitting inside a box the width of the screen.
+ * Somebody tabbing down a list of eight options could not see where they were.
+ */
+.choice:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .choice input {
@@ -453,7 +610,7 @@ textarea.wrong {
   justify-content: space-between;
   margin: 0.75rem 0 0;
   padding: 0.6rem 0.7rem;
-  font-size: 0.9375rem;
+  font-size: var(--step-1);
   background: var(--sunken);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -469,7 +626,7 @@ textarea.wrong {
 
 button.quiet {
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--step-1);
   color: var(--muted);
   cursor: pointer;
   background: none;
@@ -489,7 +646,7 @@ button.quiet:hover {
 .wrong-note {
   display: block;
   color: var(--stop);
-  font-size: 0.875rem;
+  font-size: var(--step-1);
   margin-top: 0.5rem;
 }
 
@@ -505,10 +662,6 @@ button.quiet:hover {
  * Empty it takes no space at all, so a form nobody has submitted yet does not
  * begin with a gap where a complaint might one day go.
  */
-.summary:empty {
-  display: none;
-}
-
 .summary {
   border: 1px solid var(--stop);
   background: var(--stop-soft);
@@ -517,6 +670,42 @@ button.quiet:hover {
   padding: 0.85rem 1rem;
   margin-bottom: 1rem;
   scroll-margin-top: 1rem;
+}
+
+/*
+ * Emptied of its box rather than hidden, and the difference is the whole
+ * reason the element is rendered from the first paint.
+ *
+ * `display: none` takes an element out of the accessibility tree entirely, so
+ * un-hiding it is indistinguishable from inserting it — which is precisely the
+ * case a live region is least likely to survive. Zeroing the box instead
+ * leaves the region present and observed from the first render, and the first
+ * refusal changes only its contents.
+ */
+.summary:empty {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+}
+
+/*
+ * Arriving.
+ *
+ * The list of problems is the one thing on this page that appears where
+ * nothing was, above content that has not moved. A short fade is what stops it
+ * reading as though the page had jumped; anything longer would be a page
+ * withholding bad news somebody is already waiting for.
+ */
+.summary:not(:empty) {
+  animation: summary-in 180ms ease-out both;
+}
+
+@keyframes summary-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
 }
 
 .summary-lede {
@@ -530,7 +719,7 @@ button.quiet:hover {
 }
 
 .summary li {
-  font-size: 0.9375rem;
+  font-size: var(--step-1);
   padding: 0.15rem 0;
 }
 
@@ -543,20 +732,45 @@ button.quiet:hover {
 
 /* Submitting ----------------------------------------------------------- */
 
+/*
+ * The bar, and why it is a bar.
+ *
+ * It used to be a gradient fading the page out behind the button, which read
+ * as the page having no bottom. A rule and a solid ground says instead that
+ * this strip is a fixture and the questions scroll under it — which is what a
+ * thumb needs to believe before it will stop hunting for the button.
+ *
+ * The negative margins take it past the page's own padding so it reaches both
+ * edges of the phone. The safe-area inset is on the padding rather than the
+ * page below, because it is this bar that has to clear the home indicator: a
+ * button under the swipe gesture turns every other press into a dismissed page
+ * rather than a submitted form.
+ */
 .submit {
   position: sticky;
   bottom: 0;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  padding: 1rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(to bottom, transparent, var(--sunken) 45%);
+  margin: 0 -1rem;
+  padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  background: var(--sunken);
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 40rem) {
+  .submit {
+    margin: 0 -1.5rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
 }
 
 button[type="submit"] {
   width: 100%;
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--step0);
   font-weight: 600;
   cursor: pointer;
   min-height: 3rem;
@@ -565,6 +779,17 @@ button[type="submit"] {
   border-radius: var(--radius);
   background: var(--accent);
   color: var(--accent-ink);
+
+  /* The only movement on the page, and it is under the thumb that caused it.
+     A phone gives no other acknowledgement that a press landed, and on a slow
+     connection the gap between pressing and anything happening is long enough
+     for somebody to press again. */
+  transition: transform 90ms ease-out;
+}
+
+button[type="submit"]:active:not(:disabled),
+.back:active {
+  transform: scale(0.99);
 }
 
 /* In the bar it shares a row with Back and takes whatever is left, rather than
@@ -595,7 +820,7 @@ button[type="submit"]:disabled {
 .back {
   flex: 0 1 auto;
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--step0);
   font-weight: 500;
   cursor: pointer;
   min-height: 3rem;
@@ -604,6 +829,9 @@ button[type="submit"]:disabled {
   border-radius: var(--radius);
   background: var(--raised);
   color: var(--ink);
+  transition:
+    border-color 120ms ease-out,
+    transform 90ms ease-out;
 }
 
 .back:hover {
@@ -612,7 +840,7 @@ button[type="submit"]:disabled {
 
 .footnote {
   color: var(--faint);
-  font-size: 0.8125rem;
+  font-size: var(--step-2);
   text-align: center;
   margin: 0.75rem 0 0;
 }
