@@ -673,8 +673,14 @@ public class CampaignTests(ApplicationsDatabase db)
                 Request(HttpMethod.Get, "/admin/templates/placeholders", cookie))))
             .GetProperty("placeholders").EnumerateArray().ToList();
 
+        // Every column of applications.applications a message may fill itself
+        // in from, in the order the table declares them. Asserted in full
+        // rather than by count: the list is what an author is offered, and a
+        // name appearing here that the send cannot fill is the one failure
+        // this whole surface exists to remove.
         Assert.Equal(
-            ["email", "firstName", "lastName"],
+            ["email", "firstName", "lastName", "school", "levelOfStudy",
+             "graduationYear", "firstTimeHacker", "shirtSize", "country"],
             listed.Select(p => p.GetProperty("name").GetString()));
 
         // A name with nothing beside it is a name somebody has to guess at.
@@ -698,7 +704,101 @@ public class CampaignTests(ApplicationsDatabase db)
         var applicants = Id(await Body(await Create(cookie, InStatus(eventId, "accepted"))));
 
         Assert.Equal(["email"], await PlaceholdersOn(addresses, cookie));
-        Assert.Equal(["email", "firstName", "lastName"], await PlaceholdersOn(applicants, cookie));
+
+        Assert.Equal(
+            ["email", "firstName", "lastName", "school", "levelOfStudy",
+             "graduationYear", "firstTimeHacker", "shirtSize", "country"],
+            await PlaceholdersOn(applicants, cookie));
+    }
+
+    [Fact]
+    public async Task A_placeholder_with_no_column_behind_it_is_refused_at_the_first_chance()
+    {
+        // The catalogue comes off the columns applications.applications
+        // actually has, so a name nobody can fill is a name nobody is offered
+        // — and this is the line under that, for the template somebody typed
+        // the placeholder into by hand. Refused at draft rather than at send:
+        // being told on Tuesday by the screen you are typing into beats being
+        // told on Thursday by the approver who could not send it.
+        var (_, drafting) = await Comms();
+        var eventId = await db.AddEventAsync();
+        await Applicant(eventId, Unique("unfillable"), "accepted");
+
+        var key = await TemplateWith(
+            "Placeholder", "<p>Hello {{nickname}}.</p>", "Hello {{nickname}}.");
+
+        var refused = await Create(drafting, InStatus(eventId, "accepted"), key);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+
+        // Named, because the useful thing to say is which one is wrong.
+        Assert.Contains(
+            "{{nickname}}",
+            (await Body(refused)).GetProperty("error").GetString()!,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_column_fills_in_the_way_its_type_reads()
+    {
+        // The chain end to end for the placeholders that are not text: the
+        // resolver selects the column because it is declared mergeable, and
+        // the value is rendered as a sentence wants it rather than as .NET
+        // stringifies it. "True" is not a word an email has ever contained,
+        // and a year through a thousands separator is "2,027".
+        var (_, cookie) = await Comms();
+        var eventId = await db.AddEventAsync();
+        var recipient = Unique("typed");
+        await Applicant(eventId, recipient, "accepted");
+        await Answered(recipient, graduationYear: 2027, firstTimeHacker: true, shirtSize: "M");
+
+        var key = await TemplateWith(
+            "Placeholder",
+            "<p>{{school}} {{graduationYear}} {{firstTimeHacker}} {{shirtSize}}</p>",
+            "{{school}} {{graduationYear}} {{firstTimeHacker}} {{shirtSize}}");
+
+        var id = Id(await Body(await Create(cookie, InStatus(eventId, "accepted"), key)));
+
+        var render = (await Body(await Preview(id, cookie)))
+            .GetProperty("renders").EnumerateArray().Single();
+
+        Assert.Equal(
+            "Morgan State University 2027 yes M", render.GetProperty("text").GetString());
+
+        Assert.Empty(render.GetProperty("unfilled").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task A_column_nobody_answered_is_reported_rather_than_left_blank()
+    {
+        // The gap check, on a placeholder that is not one of the original
+        // three. graduation_year is nullable and this applicant left it, so
+        // the year is not a value the send has — and saying so before it goes
+        // out is the whole reason the coverage list exists.
+        var (_, cookie) = await Comms();
+        var eventId = await db.AddEventAsync();
+        var recipient = Unique("no-year");
+        await Applicant(eventId, recipient, "accepted");
+
+        var key = await TemplateWith(
+            "Placeholder", "<p>Class of {{graduationYear}}.</p>", "Class of {{graduationYear}}.");
+
+        var id = Id(await Body(await Create(cookie, InStatus(eventId, "accepted"), key)));
+        var preview = await Body(await Preview(id, cookie));
+
+        var year = CoverageOf(preview, "graduationYear");
+        Assert.Equal(1, year.GetProperty("missing").GetInt32());
+        Assert.Equal(1, year.GetProperty("total").GetInt32());
+
+        Assert.Contains(
+            preview.GetProperty("problems").EnumerateArray().Select(p => p.GetString()),
+            p => p!.Contains("would receive the blank itself", StringComparison.Ordinal));
+
+        // Left standing rather than emptied, so it reads as a mistake.
+        Assert.Contains(
+            "{{graduationYear}}",
+            preview.GetProperty("renders").EnumerateArray().Single()
+                   .GetProperty("text").GetString()!,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -976,6 +1076,32 @@ public class CampaignTests(ApplicationsDatabase db)
         cmd.Parameters.AddWithValue("eventId", eventId);
         cmd.Parameters.AddWithValue("email", email);
         cmd.Parameters.AddWithValue("status", status);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Fills the answers a bare application leaves blank.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Applicant"/> because these are exactly the
+    /// columns <c>submitted_applications_are_complete</c> does not require —
+    /// which is why a placeholder reading one of them can come back empty for
+    /// somebody, and why only the tests about that fill them in.
+    /// </remarks>
+    private async Task Answered(
+        string email, int graduationYear, bool firstTimeHacker, string shirtSize)
+    {
+        await using var cmd = db.DataSource.CreateCommand("""
+            UPDATE applications.applications
+               SET graduation_year = @year,
+                   first_time_hacker = @first,
+                   shirt_size = @size
+             WHERE email = @email
+            """);
+        cmd.Parameters.AddWithValue("year", graduationYear);
+        cmd.Parameters.AddWithValue("first", firstTimeHacker);
+        cmd.Parameters.AddWithValue("size", shirtSize);
+        cmd.Parameters.Add(new NpgsqlParameter("email", NpgsqlDbType.Text) { Value = email });
         await cmd.ExecuteNonQueryAsync();
     }
 

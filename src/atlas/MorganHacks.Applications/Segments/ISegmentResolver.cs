@@ -8,14 +8,27 @@ namespace MorganHacks.Applications.Segments;
 /// knows — which is the normal case for <see cref="Segment.Addresses"/>, where
 /// the recipient is a mentor or a sponsor rather than an applicant.
 /// <para>
-/// The names ride along because a template may greet somebody by name and
-/// rendering happens once, at queue time, against the values that were true
-/// then. Nothing else about the person comes out of here: a segment is a list
-/// of who to mail, not a way to read an application.
+/// <see cref="Fields"/> is what a template may fill itself in from, keyed by
+/// column name and holding the value as the column holds it — a
+/// <see cref="string"/>, an <see cref="int"/> or a <see cref="bool"/>, or null
+/// where the applicant left it blank. It rides along because rendering happens
+/// once, at queue time, against the values that were true then. Deciding how
+/// each of them reads is the mail's job and not this one's.
+/// </para>
+/// <para>
+/// Still not a way to read an application: the only columns in here are the
+/// ones <see cref="ApplicantColumns.Mergeable"/> names, and the resolver does
+/// not select the others.
+/// </para>
+/// <para>
+/// <see cref="Email"/> is also in <see cref="Fields"/>, and is a property of
+/// its own because it is what the message is addressed to, deduped on and
+/// suppressed by — none of which is a merge concern, and all of which would
+/// otherwise be a dictionary lookup that can miss.
 /// </para>
 /// </remarks>
 public sealed record SegmentMember(
-    Guid? PersonId, string Email, string? FirstName, string? LastName);
+    Guid? PersonId, string Email, IReadOnlyDictionary<string, object?> Fields);
 
 /// <summary>
 /// What a segment resolves to, and whether it was too big to.

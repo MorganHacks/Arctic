@@ -227,7 +227,7 @@ public static partial class TemplateEndpoints
     /// find out from a send that refuses. The list is
     /// <see cref="MergeFields"/>, which is the same list
     /// <see cref="CampaignEndpoints"/> renders a broadcast from — offering a
-    /// fourth name here would be offering a template that gets written,
+    /// name not on it here would be offering a template that gets written,
     /// reviewed, and then refused by the send.
     /// <para>
     /// Reads no template and takes no key, because a placeholder resolves the

@@ -472,9 +472,10 @@ public static class CampaignEndpoints
     /// The same list <see cref="TemplateEndpoints"/> gives, narrowed to what
     /// this segment carries, so an editor opened from a campaign offers
     /// <c>{{firstName}}</c> only where there is a first name to put in it.
-    /// Both come off <see cref="MergeFields"/>, which is also what the send
-    /// renders with — an editor offering a fourth placeholder would be
-    /// offering a template that refuses at send.
+    /// Both come off <see cref="MergeFields"/>, which is derived from the
+    /// columns <c>applications.applications</c> actually has and is also what
+    /// the send renders with — an editor offering a name that is not on it
+    /// would be offering a template that refuses at send.
     /// <para>
     /// Reads nothing but the campaign's own row. The segment is not resolved:
     /// which fields a segment can fill is a property of its shape rather than
