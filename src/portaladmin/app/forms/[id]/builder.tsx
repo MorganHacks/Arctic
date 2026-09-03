@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldType, FormField, FormProblem, VersionRow } from "@/lib/api";
 import { publishForm, saveDraft } from "../actions";
-import { TYPES, blankField } from "./fields";
+import { TYPES, blankField, copyOf } from "./fields";
 import { Preview } from "./preview";
 import { Question } from "./question";
 
@@ -62,6 +62,15 @@ export function Builder({
    */
   const attempt = useRef(0);
 
+  /**
+   * The edit number already on disk.
+   *
+   * Saving by hand and publishing both write immediately, which leaves a
+   * debounce timer already running with nothing left to say. Without this it
+   * fires anyway and writes the same questions a second time.
+   */
+  const written = useRef(0);
+
   const locked = useMemo(() => new Set(lockedKeys), [lockedKeys]);
 
   /**
@@ -85,6 +94,7 @@ export function Builder({
   const write = useCallback(
     async (next: FormField[]) => {
       const mine = (attempt.current += 1);
+      written.current = edits;
       setStatus("saving");
 
       const result = await saveDraft(formId, next);
@@ -100,7 +110,7 @@ export function Builder({
       setNotice(result.error ?? null);
       return result;
     },
-    [formId],
+    [formId, edits],
   );
 
   useEffect(() => {
@@ -108,7 +118,16 @@ export function Builder({
       return;
     }
 
-    const timer = setTimeout(() => void write(fields), DEBOUNCE_MS);
+    const timer = setTimeout(() => {
+      // Read at the moment it fires rather than when it was set, because
+      // what has been written may have changed in between.
+      if (written.current === edits) {
+        return;
+      }
+
+      void write(fields);
+    }, DEBOUNCE_MS);
+
     return () => clearTimeout(timer);
   }, [edits, fields, canManage, write]);
 
@@ -139,6 +158,15 @@ export function Builder({
 
   const remove = (index: number) =>
     change((current) => current.filter((_, i) => i !== index));
+
+  // Straight after the one it came from, which is where somebody making a
+  // third variant of the same question is already looking.
+  const duplicate = (index: number) =>
+    change((current) => [
+      ...current.slice(0, index + 1),
+      copyOf(current[index]),
+      ...current.slice(index + 1),
+    ]);
 
   const add = () => change((current) => [...current, blankField(adding)]);
 
@@ -206,14 +234,27 @@ export function Builder({
         <span className="grow" />
 
         {canManage ? (
-          <button
-            type="button"
-            className="button primary"
-            disabled={publishing}
-            onClick={publish}
-          >
-            {publishing ? "Publishing…" : "Publish"}
-          </button>
+          <>
+            {/* The debounce covers the ordinary case; this covers the one it
+                cannot. A save that failed leaves nothing to press, and
+                "Not saved" with no way to try again is worse than no bar at
+                all. */}
+            <button
+              type="button"
+              disabled={status === "saving" || publishing}
+              onClick={() => void write(fields)}
+            >
+              Save now
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              disabled={publishing}
+              onClick={publish}
+            >
+              {publishing ? "Publishing…" : "Publish"}
+            </button>
+          </>
         ) : (
           <span className="meta">
             You do not have <code>forms.manage</code>, so this is read-only.
@@ -259,6 +300,7 @@ export function Builder({
                 disabled={!canManage}
                 onChange={(changes) => patch(index, changes)}
                 onMove={(delta) => move(index, delta)}
+                onDuplicate={() => duplicate(index)}
                 onRemove={() => remove(index)}
               />
             ))}
