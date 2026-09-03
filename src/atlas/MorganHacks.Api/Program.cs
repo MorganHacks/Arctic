@@ -8,6 +8,7 @@ using MorganHacks.Applications.Forms;
 using MorganHacks.Applications.Data;
 using MorganHacks.Applications.Services;
 using MorganHacks.Applications.Storage;
+using MorganHacks.Applications.Segments;
 using MorganHacks.Audit;
 using MorganHacks.Identity;
 using MorganHacks.Identity.Services;
@@ -81,6 +82,18 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddAuditTrail();
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
+
+// The broadcast side of the same schema. Separate from MessageQueue on
+// purpose: one queues a single message on the path of somebody signing in,
+// the other queues several hundred because an organizer decided to mail
+// everybody, and they have opposite risks.
+builder.Services.AddSingleton<CampaignStore>();
+
+// Who a segment currently means. In Applications because it reads
+// applications.*, and re-run on every preview and every send because the
+// answer is different every day of registration week — which is why the
+// resolved list is frozen into notify.messages rather than kept here.
+builder.Services.AddSingleton<ISegmentResolver, PostgresSegmentResolver>();
 
 // The public forms site reads one and writes the other. Both are stateless
 // over the shared data source, so a singleton each.
@@ -269,6 +282,7 @@ app.MapAuditTrail();
 app.MapFormsAdmin();
 app.MapFormResponses();
 app.MapApplicants();
+app.MapCampaigns();
 app.MapSesWebhook();
 
 // Only here. Deployed environments are Staging or Production, set explicitly on
