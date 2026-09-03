@@ -62,7 +62,12 @@ public class FormStoreTests(ApplicationsDatabase db) : IClassFixture<Application
         // A half-published form is not a state worth writing recovery code for.
         var form = await ApplicationFormAsync();
         var draft = await Store.DraftAsync(form.Id, null);
-        await Store.SaveDraftAsync(form.Id, [.. draft.Fields.Where(f => f.Key != "phone")]);
+
+        // Two questions filed under one key. The second's answer lands on top
+        // of the first's, and nothing about the form looks wrong while it
+        // happens — which is why this one is refused rather than warned about.
+        var phone = draft.Fields.Single(f => f.Key == "phone");
+        await Store.SaveDraftAsync(form.Id, [.. draft.Fields, phone with { Label = "Mobile" }]);
 
         var refused = await Assert.ThrowsAsync<FormNotPublishableException>(
             () => Store.PublishAsync(form.Id, null));

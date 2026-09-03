@@ -1,22 +1,28 @@
 namespace MorganHacks.Applications.Forms;
 
 /// <summary>
-/// The questions MLH affiliation requires, and their exact wording.
+/// The questions a new application form starts out with.
 /// </summary>
 /// <remarks>
-/// Every new form starts with these and cannot be published without them. The
-/// failure this prevents is somebody tidying the form the week before launch
-/// and quietly removing an obligation — discovered at the export, when there is
-/// no way to ask several hundred people again.
+/// A starting point and nothing more. Nothing here is enforced after the draft
+/// is created: the registration team may reword any of it, reorder it, or take
+/// it off the form entirely, and neither a save nor a publish will argue. What
+/// this buys is that an author opens a new application form and finds the
+/// ordinary questions already written rather than an empty page.
 /// <para>
-/// The two required agreements store timestamps rather than booleans. "They
-/// agreed" is weaker evidence than "they agreed at 14:03 on the 12th, against
-/// form version 3", and this is a legal agreement we may have to show.
+/// The set and its wording came from MLH's affiliation requirements, which is
+/// why the keys and columns are shaped the way they are and why the two
+/// agreements are worded so precisely. That obligation is now the registration
+/// team's to keep rather than this code's to impose.
+/// </para>
+/// <para>
+/// The two agreements store timestamps rather than booleans. "They agreed" is
+/// weaker evidence than "they agreed at 14:03 on the 12th, against form version
+/// 3", and this is a legal agreement we may have to show.
 /// </para>
 /// </remarks>
-public static class MlhFields
+public static class StartingQuestions
 {
-    /// <summary>MLH's required wording. Not ours to reword.</summary>
     public const string CodeOfConductLabel =
         "I have read and agree to the MLH Code of Conduct.";
 
@@ -36,7 +42,10 @@ public static class MlhFields
         // First because everything else hangs off it. `applications.email` is
         // NOT NULL and the dedupe index is built on it, so a form that does
         // not ask for an address cannot create an applicant at all — and it is
-        // also the only way to tell somebody they got in.
+        // also the only way to tell somebody they got in. Removable like
+        // anything else here, and the submit path answers with a sentence
+        // rather than a crash when somebody does, but it is the one question
+        // on this list worth thinking twice about.
         Column("email", FieldType.Email, "Email", required: true),
 
         Column("first_name", FieldType.ShortText, "First name", required: true),
@@ -52,7 +61,6 @@ public static class MlhFields
             Type = FieldType.Select,
             Label = "Current level of study",
             Required = true,
-            Locked = true,
             Storage = AnswerStorage.Column,
             Column = "level_of_study",
             Options =
@@ -71,8 +79,9 @@ public static class MlhFields
             ],
         },
 
-        // Required. An application cannot be submitted without them, which the
-        // completeness constraint enforces independently of anything the form does.
+        // Required as they start out. An application cannot be submitted
+        // without them, which the completeness constraint enforces
+        // independently of anything the form says.
         Agreement("mlh_coc_agreed_at", CodeOfConductLabel, required: true),
         Agreement("mlh_data_sharing_at", DataSharingLabel, required: true),
 
@@ -84,15 +93,10 @@ public static class MlhFields
             Type = FieldType.Consent,
             Label = MarketingLabel,
             Required = false,
-            Locked = true,
             Storage = AnswerStorage.Column,
             Column = "mlh_marketing_opt_in",
         },
     ];
-
-    /// <summary>The keys a form must contain before it can be published.</summary>
-    public static IReadOnlySet<string> RequiredKeys { get; } =
-        All.Where(f => f.Required).Select(f => f.Key).ToHashSet();
 
     private static FormField Column(
         string key, FieldType type, string label, bool required) => new()
@@ -101,7 +105,6 @@ public static class MlhFields
             Type = type,
             Label = label,
             Required = required,
-            Locked = true,
             Storage = AnswerStorage.Column,
             Column = key,
         };
@@ -112,7 +115,6 @@ public static class MlhFields
         Type = FieldType.Consent,
         Label = label,
         Required = required,
-        Locked = true,
         Storage = AnswerStorage.Column,
         Column = key,
     };

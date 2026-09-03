@@ -140,17 +140,6 @@ public sealed record FormField
     /// <summary>Which column, when this answer is stored as one.</summary>
     public string? Column { get; init; }
 
-    /// <summary>
-    /// Whether the registration team may remove or reword this question.
-    /// </summary>
-    /// <remarks>
-    /// MLH affiliation mandates eight fields and two agreements. Locking them in
-    /// the builder is how that obligation survives a well-meaning tidy-up the
-    /// week before launch — the alternative is finding out at the export, when
-    /// it is far too late to ask anybody again.
-    /// </remarks>
-    public bool Locked { get; init; }
-
     public int? MinLength { get; init; }
     public int? MaxLength { get; init; }
     public decimal? Min { get; init; }

@@ -136,16 +136,11 @@ public static class AdminFormEndpoints
     /// </summary>
     /// <remarks>
     /// Asking for the draft creates one if none exists, seeded from whatever
-    /// is published or from MLH's questions. That happens on a GET, which is
-    /// not something to do lightly — but the alternative is a builder that
-    /// shows nothing until somebody presses a button whose only honest label
-    /// would be "start editing", and the whole screen is that button.
-    /// <para>
-    /// <c>locked</c> ships as its own list rather than being inferred from the
-    /// flag on each field. The flag says what this draft happens to record;
-    /// the list says what the server will enforce on save, and those are the
-    /// same thing only when nothing has gone wrong.
-    /// </para>
+    /// is published or from <see cref="StartingQuestions"/>. That happens on a
+    /// GET, which is not something to do lightly — but the alternative is a
+    /// builder that shows nothing until somebody presses a button whose only
+    /// honest label would be "start editing", and the whole screen is that
+    /// button.
     /// </remarks>
     private static async Task<IResult> GetDraft(
         Guid id, HttpContext http, IFormStore forms, CancellationToken ct)
@@ -176,8 +171,6 @@ public static class AdminFormEndpoints
                 version = published.Version,
                 publishedAt = published.PublishedAt,
             },
-            locked = LockedFields.Keys.OrderBy(k => k),
-
             // The statuses an audience can be built from, so the builder
             // offers the real set rather than asking somebody to type one.
             // Ships with the draft for the same reason the event list ships
@@ -282,9 +275,10 @@ public static class AdminFormEndpoints
     /// a per-question patch protocol would need an ordering and a conflict
     /// story neither this screen nor its one editor at a time has.
     /// <para>
-    /// Every save goes through <see cref="LockedFields.Reconcile"/> first. The
-    /// builder disables the controls on MLH's questions, but a disabled input
-    /// is a suggestion — this is the part that holds.
+    /// Stored as sent, apart from the keys. What a question asks, whether it
+    /// is required and whether it is on the form at all are the author's
+    /// decisions; <see cref="DraftKeys"/> is the one part of a draft that is
+    /// not, because a key is the address answers are already filed under.
     /// </para>
     /// </remarks>
     private static async Task<IResult> SaveDraft(
@@ -306,30 +300,29 @@ public static class AdminFormEndpoints
             return Results.NotFound(new { error = "No such form." });
         }
 
-        var reconciled = LockedFields.Reconcile(request.Fields, form.IsApplication);
-        if (reconciled.Fields is null)
+        var unusable = DraftKeys.Check(request.Fields);
+        if (unusable.Count > 0)
         {
-            return Problems(
-                "This draft could not be saved.", reconciled.Problems);
+            return Problems("This draft could not be saved.", unusable);
         }
 
         // Makes sure there is a draft row to write into. Without it a save
         // against a form nobody has opened updates nothing and answers 204,
         // which looks exactly like success.
         await forms.DraftAsync(id, http.PersonId(), ct);
-        await forms.SaveDraftAsync(id, reconciled.Fields, ct);
+        await forms.SaveDraftAsync(id, request.Fields, ct);
 
         log.LogInformation(
             "Draft saved. {actor} {form} {questions} {event}",
-            http.PersonId(), id, reconciled.Fields.Count, Events.FormDraftSaved);
+            http.PersonId(), id, request.Fields.Count, Events.FormDraftSaved);
 
         // The problems the draft still has, so the builder can show them as it
         // goes without waiting for a refused publish. Advisory: publishing
         // checks again, in the store, inside the same transaction that writes.
         return Results.Ok(new
         {
-            saved = reconciled.Fields.Count,
-            problems = FormValidation.Check(reconciled.Fields, form.IsApplication).Select(Describe),
+            saved = request.Fields.Count,
+            problems = FormValidation.Check(request.Fields).Select(Describe),
         });
     }
 

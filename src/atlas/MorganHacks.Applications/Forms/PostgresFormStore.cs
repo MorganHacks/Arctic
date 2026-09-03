@@ -169,7 +169,12 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
         }
 
         var published = await PublishedAsync(formId, ct);
-        var seed = published?.Fields ?? MlhFields.All;
+        // A new form starts from the questions in StartingQuestions rather
+        // than from nothing. They are only a starting point — every one of
+        // them is editable from the moment the draft exists — but an author
+        // who opens an empty page has to write ten ordinary questions before
+        // reaching the one they came to add.
+        var seed = published?.Fields ?? StartingQuestions.All;
 
         const string insert = """
             INSERT INTO applications.form_versions
@@ -211,13 +216,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     {
         var draft = await DraftAsync(formId, actorId, ct);
 
-        // Read rather than taken on trust from the caller. Publishing is the
-        // moment the obligations either apply or do not, and a kind passed in
-        // by whoever called this is a kind that can be wrong.
-        var form = await ByIdAsync(formId, ct)
-            ?? throw new InvalidOperationException($"No form {formId}.");
-
-        var problems = FormValidation.Check(draft.Fields, form.IsApplication);
+        var problems = FormValidation.Check(draft.Fields);
         if (problems.Count > 0)
         {
             // Refused before anything is written. A half-published form is not

@@ -112,8 +112,8 @@ function Break({ field, page }: { field: FormField; page: number }) {
 
 function Asked({ field }: { field: FormField }) {
   // An agreement is a tick box with the question as its label, not a question
-  // with a tick box under it. Rendering it the ordinary way puts MLH's sixty
-  // words in a heading and an unlabelled checkbox beneath.
+  // with a tick box under it. Rendering it the ordinary way puts a sixty-word
+  // agreement in a heading and an unlabelled checkbox beneath.
   if (field.type === "consent") {
     return (
       <div className={styles.asked}>

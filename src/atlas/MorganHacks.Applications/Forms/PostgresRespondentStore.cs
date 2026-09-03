@@ -134,8 +134,8 @@ public sealed class PostgresRespondentStore(NpgsqlDataSource dataSource) : IResp
     /// </item>
     /// <item>
     /// The promoted columns, keyed by column name. That is the convention
-    /// <see cref="MlhFields"/> uses — every one of its questions has a key
-    /// equal to the column it writes to — and it is what makes a school or a
+    /// <see cref="StartingQuestions"/> uses — every one of its questions has a
+    /// key equal to the column it writes to — and it is what makes a school or a
     /// shirt size prefill on a form whose author never saw the application.
     /// A question routed at a column under some other key does not prefill
     /// from it, which is the honest answer: two different keys are two

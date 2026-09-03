@@ -24,8 +24,8 @@ export function NewForm({ eventId }: { eventId: string }) {
       <div className={styles.newFormHead}>
         <h2>New form</h2>
         <p className={styles.newFormNote}>
-          An application form starts with MLH&rsquo;s required questions already
-          on it, and there can only be one per event.
+          An application form starts with a standard set of questions, and there
+          can only be one per event.
         </p>
       </div>
 

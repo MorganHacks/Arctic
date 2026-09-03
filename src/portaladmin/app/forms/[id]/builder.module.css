@@ -246,7 +246,7 @@ button.toolbarButton {
   }
 }
 
-.lockNotice {
+.startingNote {
   margin: 0 0 0.75rem;
   color: var(--muted);
   font-size: var(--step-1);
@@ -263,12 +263,26 @@ button.toolbarButton {
 
 /* One question --------------------------------------------------------- */
 
+/*
+ * The transform transition is the second half of the reorder animation in
+ * builder.tsx: that code puts a card back at the position it moved from and
+ * then lets go, and this is what carries it the rest of the way. Under 200ms,
+ * and eased so it leaves quickly and arrives gently rather than sliding at one
+ * speed.
+ *
+ * Reduced motion is not handled here. The blanket rule in libs/ui/tokens.css
+ * collapses every transition-duration on the page, this one included, which
+ * leaves the card arriving in place with no travel — the behaviour this screen
+ * had before the animation existed. Written as a transition rather than as a
+ * keyframe animation partly for that: the same rule cannot switch off a
+ * looping animation without naming it.
+ */
 .card {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--raised);
   padding: 0.75rem 0.9rem 0.65rem;
-  transition: border-color 150ms ease;
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms ease;
 }
 
 .card:focus-within {
@@ -279,29 +293,6 @@ button.toolbarButton {
    a form with six problems still reads as a form. */
 .flagged {
   border-left: 2px solid var(--stop);
-}
-
-/*
- * A card that has just been moved.
- *
- * Reordering by button gives no sense of travel: the list simply differs from
- * the one that was there a frame ago, and on a form of twenty questions it is
- * genuinely hard to see which one went where. The card lands rather than
- * teleports — one short settle, and then it is furniture again.
- */
-.settling {
-  animation: settle 240ms ease-out;
-}
-
-@keyframes settle {
-  from {
-    transform: translateY(-3px);
-    border-color: var(--accent);
-  }
-  to {
-    transform: translateY(0);
-    border-color: var(--line);
-  }
 }
 
 .cardHead {
@@ -344,31 +335,6 @@ button.toolbarButton {
   font-size: var(--step-1);
   padding: 0.15rem 0.4rem;
   max-width: 9rem;
-}
-
-/*
- * What an answer is filed under.
- *
- * Shown because it is the column header in an export and the property name in
- * the stored answer, and somebody will eventually have to match one to the
- * other. Quiet but never hidden — a key revealed only on hover is a key a
- * keyboard cannot find, and this is the string somebody is squinting at when
- * a spreadsheet does not line up.
- */
-.key {
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: var(--step-2);
-}
-
-/* The shared pill is an inline-block, which drops a padlock a pixel below the
-   word beside it. Laid out rather than left to the baseline — and with the
-   element in the selector, so this beats the shared rule whichever order the
-   two stylesheets come out in. */
-span.lockPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
 }
 
 .tools {
@@ -414,47 +380,7 @@ span.lockPill {
   background: transparent;
 }
 
-/* Locked ---------------------------------------------------------------- */
-
-/*
- * Why the controls are missing, beside the question they are missing from.
- *
- * Boxed rather than set as a caption, because a locked question is not a
- * broken one and the difference has to be legible without reading: the notice
- * is the frame around a thing that is deliberately inert.
- */
-.lockNote {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin: 0.6rem 0 0;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  background: var(--sunken);
-  color: var(--muted);
-  font-size: var(--step-1);
-}
-
-.lockNote svg {
-  flex: none;
-  margin-top: 0.15rem;
-  color: var(--warn);
-}
-
-/* MLH's wording, shown as text because it is not ours to edit. Set at reading
-   size rather than in a disabled input: a sixty-word agreement squeezed into a
-   one-line box is unreadable, and being unable to read it is how it stops
-   being checked. */
-.lockedLabel {
-  margin: 0.55rem 0 0;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  background: var(--sunken);
-}
-
-/* The editable half ----------------------------------------------------- */
+/* The wording ----------------------------------------------------------- */
 
 .fields {
   display: grid;
@@ -469,6 +395,24 @@ span.lockPill {
 
 .field input {
   width: 100%;
+}
+
+/*
+ * The question's wording, in a box that can hold it.
+ *
+ * A textarea rather than a one-line input because the agreements an
+ * application form starts with run to sixty words, and those are editable now.
+ * Squeezed into a single line an agreement is unreadable, and being unable to
+ * read it is how it stops being checked before it goes in front of several
+ * hundred people. Two rows by default and resizable down the page only, so
+ * dragging one cannot break the two-column grid it sits in.
+ */
+.label {
+  width: 100%;
+  resize: vertical;
+  min-height: 2.6rem;
+  font: inherit;
+  line-height: 1.4;
 }
 
 .options {
@@ -611,12 +555,14 @@ div.problemsPanel {
  * a four-page form that is four things read to answer a question that should
  * have been answerable at a glance.
  */
+/* The same travel a question gets. A page break is reordered by the same two
+   buttons and moves through the same list, so it has to move the same way. */
 .break {
   border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
   background: var(--sunken);
   padding: 0.75rem 0.9rem 0.65rem;
-  transition: border-color 150ms ease;
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms ease;
 }
 
 .break:focus-within {

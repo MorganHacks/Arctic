@@ -9,7 +9,7 @@
 export function NoForms({ event }: { event: string }) {
   return (
     <div className="empty">
-      No forms on {event} yet. The application form starts with MLH&rsquo;s
+      No forms on {event} yet. An application form starts with a standard set of
       questions already on it.
     </div>
   );

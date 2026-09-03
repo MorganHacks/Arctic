@@ -1,7 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { FieldType, FormField, FormProblem, VersionRow } from "@/lib/api";
 import { publishForm, saveDraft } from "../actions";
 import { Audience } from "./audience";
@@ -14,8 +21,6 @@ import { Question } from "./question";
 /** How long to wait after the last keystroke before writing. */
 const DEBOUNCE_MS = 700;
 
-/** How long a card that has just moved is marked as having moved. */
-const SETTLE_MS = 260;
 
 /**
  * What the bar says about the work.
@@ -32,7 +37,6 @@ export function Builder({
   formId,
   formKind,
   initialFields,
-  lockedKeys,
   statuses,
   requiresSignIn,
   eligibleStatuses,
@@ -45,7 +49,6 @@ export function Builder({
   /** Which kind of form this is, which decides whether it can have an audience. */
   formKind: string;
   initialFields: FormField[];
-  lockedKeys: string[];
 
   /** Every application status, for the audience panel to offer. */
   statuses: string[];
@@ -62,15 +65,30 @@ export function Builder({
   const [notice, setNotice] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
+  /** The list of question cards, for measuring one against its next position. */
+  const list = useRef<HTMLOListElement>(null);
+
   /**
-   * The question that has just been moved, if the movement was recent.
+   * Where each card was before the reorder that is about to be rendered.
    *
-   * Reordering by button gives no sense of travel — the list simply differs
-   * from the one that was there a frame ago — and on a form of twenty
-   * questions it is genuinely hard to see which card went where. Held by key
-   * rather than by index, because the index is the thing that just changed.
+   * Filled in by `move` and emptied by the layout effect that reads it, so it
+   * is non-empty for exactly the one render that follows a reorder. An edit
+   * that is not a reorder never fills it and therefore never animates: a card
+   * that grows because somebody added an option pushes its neighbours down,
+   * and sliding them for that would be motion attached to typing.
    */
-  const [settled, setSettled] = useState<string | null>(null);
+  const before = useRef(new Map<string, number>());
+
+  /**
+   * The button that caused the reorder.
+   *
+   * Reordering has to be repeatable from a keyboard without hunting for the
+   * button again, and the card being moved through the list is the card the
+   * focus is sitting in. React moves the existing row rather than rebuilding
+   * it, which keeps the focus by itself in every browser we have tried; this
+   * puts it back if one ever does not.
+   */
+  const pressed = useRef<HTMLElement | null>(null);
 
   /**
    * Counts edits rather than tracking a boolean.
@@ -99,26 +117,6 @@ export function Builder({
    * fires anyway and writes the same questions a second time.
    */
   const written = useRef(0);
-
-  const locked = useMemo(() => new Set(lockedKeys), [lockedKeys]);
-
-  /**
-   * The questions as the screen should draw them.
-   *
-   * The lock flag comes from the server's list rather than from the flag on
-   * the field. They agree in every ordinary case; when they do not, the
-   * server's answer is the one that decides what a save is allowed to do, and
-   * a screen showing the other would offer a delete button that cannot work.
-   */
-  const shown = useMemo(
-    () =>
-      fields.map((field) =>
-        field.locked === locked.has(field.key)
-          ? field
-          : { ...field, locked: locked.has(field.key) },
-      ),
-    [fields, locked],
-  );
 
   const write = useCallback(
     async (next: FormField[]) => {
@@ -161,20 +159,71 @@ export function Builder({
   }, [edits, fields, canManage, write]);
 
   /*
-   * The settle mark is taken off again.
+   * The card travels to its new place instead of appearing in it.
    *
-   * Left on, a second press on the same button would not re-run the animation
-   * — the class never changed — so the second move of a card would be the one
-   * with no motion on it at all.
+   * Reordering by button gives no sense of travel: the list simply differs
+   * from the one that was there a frame ago, and on a form of twenty questions
+   * it is genuinely hard to see which card went where and which one it swapped
+   * with. Both cards move, because both of them did.
+   *
+   * The standard four steps. `move` measured every card before changing the
+   * order; by the time this runs the browser has laid the new order out but
+   * has not painted it, so each card is put back at the offset it came from
+   * with the transition suppressed, the offsets are flushed in one read, and
+   * then they are dropped and the stylesheet's transition carries the card
+   * home. A layout effect rather than an ordinary one for exactly that reason
+   * — after paint, the jump has already been seen.
+   *
+   * Nothing here consults prefers-reduced-motion. The travel is a CSS
+   * transition on `.card`, so the blanket rule in libs/ui/tokens.css collapses
+   * its duration and the card arrives in place, which is the same thing this
+   * did before the animation existed.
    */
-  useEffect(() => {
-    if (settled === null) {
+  useLayoutEffect(() => {
+    const was = before.current;
+    if (was.size === 0) {
       return;
     }
 
-    const timer = setTimeout(() => setSettled(null), SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [settled]);
+    before.current = new Map();
+
+    const moved: HTMLElement[] = [];
+    for (const card of list.current?.children ?? []) {
+      if (!(card instanceof HTMLElement)) {
+        continue;
+      }
+
+      const from = was.get(card.dataset.key ?? "");
+      const shift = from === undefined ? 0 : from - card.getBoundingClientRect().top;
+      if (shift === 0) {
+        continue;
+      }
+
+      card.style.transition = "none";
+      card.style.transform = `translateY(${shift}px)`;
+      moved.push(card);
+    }
+
+    if (moved.length > 0) {
+      // One forced reflow for the whole list rather than one per card. This
+      // read is what makes the offsets above the transition's starting point
+      // instead of a style change the browser coalesces away.
+      void list.current?.offsetHeight;
+
+      for (const card of moved) {
+        card.style.transition = "";
+        card.style.transform = "";
+      }
+    }
+
+    // Only ever a no-op in the browsers we have: React moves the row rather
+    // than rebuilding it, so the focus went with it.
+    const button = pressed.current;
+    pressed.current = null;
+    if (button?.isConnected && document.activeElement !== button) {
+      button.focus();
+    }
+  }, [fields]);
 
   /** Every mutation goes through here, so nothing can change without saving. */
   const change = useCallback((next: (current: FormField[]) => FormField[]) => {
@@ -195,7 +244,20 @@ export function Builder({
       return;
     }
 
-    setSettled(fields[index].key);
+    // Measured before the order changes, which is the whole trick: after this
+    // returns, React writes the new order and the layout effect above has the
+    // two numbers it needs to put each card back where it started.
+    const was = new Map<string, number>();
+    for (const card of list.current?.children ?? []) {
+      if (card instanceof HTMLElement && card.dataset.key) {
+        was.set(card.dataset.key, card.getBoundingClientRect().top);
+      }
+    }
+
+    before.current = was;
+    pressed.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
     change((current) => {
       const next = [...current];
       [next[index], next[to]] = [next[to], next[index]];
@@ -285,15 +347,13 @@ export function Builder({
   // that read as a question having gone missing.
   const ordinals: number[] = [];
   let asked = 0;
-  for (const field of shown) {
+  for (const field of fields) {
     if (field.type !== "section") {
       asked += 1;
     }
 
     ordinals.push(asked);
   }
-
-  const anyLocked = shown.some((field) => field.locked);
 
   return (
     <>
@@ -354,32 +414,28 @@ export function Builder({
 
       <div className={styles.pane}>
         <div>
-          {/* Said once, here, rather than under each of the ten locked
-              questions an application form starts with. Somebody needs to know
-              why the controls are missing; they do not need to be told ten
-              times on one screen. And a survey carries none, so on one this
-              paragraph is a warning about something that is not on the page. */}
-          {anyLocked ? (
-            <p className={styles.lockNotice}>
-              Questions marked <span className="pill sensitive">Locked</span> are
-              required by MLH affiliation, in their wording. The API refuses to
-              drop or reword one, not just this screen — the alternative is
-              finding out at the export, when there is no way to ask several
-              hundred people again.
+          {/* On an application form only, because a survey starts empty and
+              there is nothing on it this describes. The questions on a new one
+              look official enough that somebody would otherwise leave a
+              question they do not want, so the point of the line is that they
+              do not have to. */}
+          {formKind === "application" ? (
+            <p className={styles.startingNote}>
+              An application form starts with a standard set of questions. Edit
+              or remove any of them.
             </p>
           ) : null}
 
-          <ol className={styles.list}>
-            {shown.map((field, index) => (
+          <ol className={styles.list} ref={list}>
+            {fields.map((field, index) => (
               <Question
                 key={field.key}
                 field={field}
                 index={index}
                 ordinal={ordinals[index]}
-                count={shown.length}
+                count={fields.length}
                 problems={byKey.get(field.key) ?? []}
                 disabled={!canManage}
-                settling={settled === field.key}
                 onChange={(changes) => patch(index, changes)}
                 onMove={(delta) => move(index, delta)}
                 onDuplicate={() => duplicate(index)}
@@ -435,7 +491,7 @@ export function Builder({
         </div>
 
         <aside className={styles.side}>
-          <Preview fields={shown} formName={formName} />
+          <Preview fields={fields} formName={formName} />
 
           <Audience
             formId={formId}
