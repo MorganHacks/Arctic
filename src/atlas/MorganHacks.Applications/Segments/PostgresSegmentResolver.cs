@@ -17,12 +17,12 @@ public sealed class PostgresSegmentResolver(NpgsqlDataSource dataSource) : ISegm
 {
     public Task<ResolvedSegment> ResolveAsync(
         Segment segment, CancellationToken ct = default) => segment switch
-    {
-        Segment.InStatus s => InStatusAsync(s, ct),
-        Segment.FormRespondents s => RespondentsAsync(s, ct),
-        Segment.Addresses s => Task.FromResult(Addresses(s)),
-        _ => throw new ArgumentOutOfRangeException(nameof(segment), segment, null),
-    };
+        {
+            Segment.InStatus s => InStatusAsync(s, ct),
+            Segment.FormRespondents s => RespondentsAsync(s, ct),
+            Segment.Addresses s => Task.FromResult(Addresses(s)),
+            _ => throw new ArgumentOutOfRangeException(nameof(segment), segment, null),
+        };
 
     /// <summary>
     /// Everyone on one event whose application is in one of these states.

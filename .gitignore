@@ -32,3 +32,6 @@ context.md
 # one embeds a git repo inside the repo — clones then get an empty directory
 # and no way to fill it.
 .claude/worktrees/
+
+# Logs from deploy/local/dev.sh.
+.local-logs/
