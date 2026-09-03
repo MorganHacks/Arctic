@@ -87,8 +87,11 @@ export async function readCampaigns(): Promise<ListRead> {
     return { ok: false, status: response.status, error: whyRead(response.status) };
   }
 
-  const { items } = (await response.json()) as { items: CampaignRow[] };
-  return { ok: true, items, mocked: false };
+  // The API calls it campaigns, not items. This screen called it items,
+  // nothing typed the boundary between them, and the page threw on undefined
+  // the first time it was opened against a real API.
+  const { campaigns } = (await response.json()) as { campaigns: CampaignRow[] };
+  return { ok: true, items: campaigns ?? [], mocked: false };
 }
 
 /** One campaign, with its template and its segment. */
@@ -111,8 +114,9 @@ export async function readCampaign(id: string): Promise<OneRead> {
     return { ok: false, status: response.status, error: whyRead(response.status) };
   }
 
-  const campaign = (await response.json()) as Campaign;
-  return { ok: true, campaign, mocked: false };
+  // Wrapped, alongside the message counts and the sample.
+  const body = (await response.json()) as { campaign: Campaign };
+  return { ok: true, campaign: body.campaign, mocked: false };
 }
 
 /** Starts a campaign as a draft. Nothing is sent by creating one. */
@@ -224,12 +228,22 @@ async function change(id: string, verb: "send" | "cancel"): Promise<Changed> {
     };
   }
 
+  // The API answers with queued -- how many messages were written -- rather
+  // than recipientCount. They are the same number and it used the clearer
+  // name; reading the wrong one showed "sent to 0 recipients" after a send
+  // that had just written several hundred rows.
   const body = (await response.json()) as {
     status: CampaignStatus;
+    queued?: number;
+    suppressed?: number;
     recipientCount?: number;
   };
 
-  return { ok: true, status: body.status, recipientCount: body.recipientCount ?? 0 };
+  return {
+    ok: true,
+    status: body.status,
+    recipientCount: body.queued ?? body.recipientCount ?? 0,
+  };
 }
 
 /**
