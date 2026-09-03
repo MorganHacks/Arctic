@@ -56,6 +56,17 @@ export function asText(value: unknown, field: FormField | null): string {
     return value ? "Yes" : "No";
   }
 
+  // An agreement does not come back as true. Most consent questions store the
+  // moment the box was ticked — mlh_coc_agreed_at holds a timestamp — because
+  // for a code of conduct, when somebody agreed is the part that matters later.
+  // A few store a plain boolean instead, caught above. Anything else present on
+  // a consent question means the box was ticked, whatever shape it arrived in;
+  // rendering the raw timestamp puts an ISO string in a column headed "I have
+  // read the code of conduct", which is not what anybody is scanning for.
+  if (field?.type === "consent") {
+    return "Yes";
+  }
+
   if (Array.isArray(value)) {
     return value
       .map((entry) =>
@@ -97,10 +108,16 @@ export function AnswerCell({
 
   const text = asText(value, field);
 
+  // The tooltip carries the underlying value where the cell has simplified it.
+  // "Yes" is the right thing to scan a column of; the moment somebody agreed is
+  // the thing to reach for when MLH asks, and it should not need a database.
+  const title =
+    field?.type === "consent" && typeof value === "string" ? value : text;
+
   return (
     <span
       className={numeric(field) ? styles.numeric : undefined}
-      title={text}
+      title={title}
     >
       {text}
     </span>

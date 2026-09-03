@@ -95,6 +95,17 @@ export default async function FormBuilder({
             <span className="meta"> editing v{draft.version}</span>
           </p>
         </div>
+
+        {/* The other half of the pair the responses screen already builds.
+            Without this the two halves of a form are only reachable through
+            the list, which is a detour on every trip between building a form
+            and reading what it collected. */}
+        <div className="tabs">
+          <span className="tab on">Questions</span>
+          <Link href={`/forms/${form.id}/responses`} className="tab">
+            Responses
+          </Link>
+        </div>
       </div>
 
       <Builder
