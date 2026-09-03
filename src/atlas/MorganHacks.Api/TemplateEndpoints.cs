@@ -85,6 +85,13 @@ public static partial class TemplateEndpoints
         templates.MapPost("/preview", Preview)
                  .RequirePermission(Permission.EmailManageTemplates);
 
+        // Ahead of GET /{key} for real this time: a literal segment beats a
+        // route parameter in ASP.NET's matcher, so this would win wherever it
+        // sat, but a reader should not have to know that to be sure there is
+        // no template called "placeholders".
+        templates.MapGet("/placeholders", Placeholders)
+                 .RequirePermission(Permission.EmailManageTemplates);
+
         templates.MapGet("/{key}", One)
                  .RequirePermission(Permission.EmailManageTemplates);
 
@@ -176,6 +183,29 @@ public static partial class TemplateEndpoints
             ? Results.NotFound(new { error = NoSuchTemplate })
             : Results.Ok(Detail(template));
     }
+
+    /// <summary>
+    /// Every <c>{{placeholder}}</c> that resolves. Requires
+    /// <c>email.manage_templates</c>.
+    /// </summary>
+    /// <remarks>
+    /// So the editor can offer them rather than leaving an author to guess and
+    /// find out from a send that refuses. The list is
+    /// <see cref="MergeFields"/>, which is the same list
+    /// <see cref="CampaignEndpoints"/> renders a broadcast from — offering a
+    /// fourth name here would be offering a template that gets written,
+    /// reviewed, and then refused by the send.
+    /// <para>
+    /// Reads no template and takes no key, because a placeholder resolves the
+    /// same way in every template. Narrowing to one campaign's segment is
+    /// <see cref="CampaignEndpoints"/>' route, where the segment is.
+    /// </para>
+    /// </remarks>
+    private static IResult Placeholders() => Results.Ok(new
+    {
+        placeholders = MergeFields.All
+            .Select(field => new { name = field.Name, description = field.Description }),
+    });
 
     // ------------------------------------------------------------- writing ---
 

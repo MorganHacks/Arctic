@@ -497,6 +497,239 @@ public class CampaignTests(ApplicationsDatabase db)
         Assert.Equal(2, second.GetProperty("recipientCount").GetInt32());
     }
 
+    // -------------------------------------------------------- what goes out ---
+
+    [Fact]
+    public async Task Preview_names_the_placeholder_nobody_can_fill_and_who()
+    {
+        // The whole point of the coverage list: "twelve people have no first
+        // name" while somebody can still go and fix twelve rows, rather than
+        // an approver being refused on Thursday.
+        var (_, cookie) = await Comms();
+        var eventId = await db.AddEventAsync();
+        var named = Unique("a-named");
+        var blank = Unique("z-blank");
+
+        await Applicant(eventId, named, "accepted");
+        await Nameless(eventId, blank);
+
+        var key = await TemplateWith(
+            "{{firstName}} placeholder", "<p>{{firstName}} {{email}}</p>",
+            "{{firstName}} {{email}}");
+
+        var id = Id(await Body(await Create(
+            cookie, InStatus(eventId, "accepted", "incomplete"), key)));
+
+        var preview = await Body(await Preview(id, cookie));
+
+        var firstName = CoverageOf(preview, "firstName");
+        Assert.Equal(1, firstName.GetProperty("missing").GetInt32());
+        Assert.Equal(2, firstName.GetProperty("total").GetInt32());
+        Assert.Equal(
+            [blank],
+            firstName.GetProperty("examples").EnumerateArray().Select(e => e.GetString()));
+
+        // Green as well as red. Everybody has an address, and a screen that
+        // could only draw failures could not tell that from unchecked.
+        var email = CoverageOf(preview, "email");
+        Assert.Equal(0, email.GetProperty("missing").GetInt32());
+        Assert.Equal(2, email.GetProperty("total").GetInt32());
+        Assert.Empty(email.GetProperty("examples").EnumerateArray());
+
+        // Only what the template asks for. lastName is fillable and unused.
+        Assert.Equal(2, preview.GetProperty("placeholderCoverage").GetArrayLength());
+
+        // Advisory here, and the same sentence the send refuses with.
+        Assert.Contains(
+            preview.GetProperty("problems").EnumerateArray().Select(p => p.GetString()),
+            p => p!.Contains("would receive the blank itself", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_template_everybody_can_fill_reports_nothing_missing()
+    {
+        var (_, cookie) = await Comms();
+        var eventId = await db.AddEventAsync();
+        await Applicant(eventId, Unique("filled"), "accepted");
+
+        var key = await TemplateWith(
+            "{{firstName}} placeholder", "<p>{{firstName}}</p>", "{{firstName}}");
+
+        var id = Id(await Body(await Create(cookie, InStatus(eventId, "accepted"), key)));
+        var preview = await Body(await Preview(id, cookie));
+
+        var firstName = CoverageOf(preview, "firstName");
+        Assert.Equal(0, firstName.GetProperty("missing").GetInt32());
+        Assert.Equal(1, firstName.GetProperty("total").GetInt32());
+        Assert.Empty(preview.GetProperty("problems").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task A_previewed_message_is_the_message_that_gets_sent()
+    {
+        // A preview that renders differently from the send is worse than no
+        // preview, because somebody reads it and believes it. Asserted against
+        // the frozen row rather than against a second render in the test, so
+        // this fails if either side ever grows its own rendering path.
+        var (_, drafting) = await Comms();
+        var (_, sending) = await Comms();
+        var eventId = await db.AddEventAsync();
+        var recipient = Unique("read-it");
+        await Applicant(eventId, recipient, "accepted");
+
+        var key = await TemplateWith(
+            "{{firstName}} placeholder", "<p>{{firstName}} at {{email}}</p>",
+            "{{firstName}} at {{email}}");
+
+        var id = Id(await Body(await Create(drafting, InStatus(eventId, "accepted"), key)));
+
+        var render = (await Body(await Preview(id, drafting)))
+            .GetProperty("renders").EnumerateArray().Single();
+
+        Assert.Equal(recipient, render.GetProperty("email").GetString());
+        Assert.Empty(render.GetProperty("unfilled").EnumerateArray());
+
+        // Filled rather than left standing, which is the thing being read.
+        Assert.Contains("Ada", render.GetProperty("subject").GetString()!, StringComparison.Ordinal);
+
+        await Send(id, sending);
+        var sent = await RenderedIn(id, recipient);
+
+        Assert.Equal(sent.Subject, render.GetProperty("subject").GetString());
+        Assert.Equal(sent.Html, render.GetProperty("html").GetString());
+        Assert.Equal(sent.Text, render.GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public async Task Preview_renders_a_few_and_the_one_worth_reading_first()
+    {
+        // "Some, not all if it's a lot", and the some is chosen rather than
+        // taken off the top: five people whose names are on file would preview
+        // as three fine messages beside a warning nobody can see the shape of.
+        var (_, cookie) = await Comms();
+        var eventId = await db.AddEventAsync();
+
+        for (var i = 0; i < 5; i++)
+        {
+            await Applicant(eventId, Unique($"a{i}-named"), "accepted");
+        }
+
+        // Sorts last, so it is only first in the renders because it has a gap.
+        var blank = Unique("z-blank");
+        await Nameless(eventId, blank);
+
+        var key = await TemplateWith(
+            "{{firstName}} placeholder", "<p>{{firstName}}</p>", "{{firstName}}");
+
+        var id = Id(await Body(await Create(
+            cookie, InStatus(eventId, "accepted", "incomplete"), key)));
+
+        var preview = await Body(await Preview(id, cookie));
+        var renders = preview.GetProperty("renders").EnumerateArray().ToList();
+
+        Assert.Equal(6, preview.GetProperty("recipientCount").GetInt32());
+        Assert.Equal(3, renders.Count);
+
+        Assert.Equal(blank, renders[0].GetProperty("email").GetString());
+        Assert.Equal(
+            ["firstName"],
+            renders[0].GetProperty("unfilled").EnumerateArray().Select(e => e.GetString()));
+
+        // Left standing rather than emptied, which is how somebody sees it.
+        Assert.Contains(
+            "{{firstName}}", renders[0].GetProperty("html").GetString()!,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Preview_still_writes_nothing_now_that_it_renders()
+    {
+        var (_, cookie) = await Comms();
+        var eventId = await db.AddEventAsync();
+        await Applicant(eventId, Unique("untouched"), "accepted");
+
+        var key = await TemplateWith(
+            "{{firstName}} placeholder", "<p>{{firstName}}</p>", "{{firstName}}");
+
+        var id = Id(await Body(await Create(cookie, InStatus(eventId, "accepted"), key)));
+
+        Assert.Equal(HttpStatusCode.OK, (await Preview(id, cookie)).StatusCode);
+        Assert.Equal(0, await MessageCount(id));
+
+        var campaign = await Body(await Client().SendAsync(
+            Request(HttpMethod.Get, $"/admin/campaigns/{id}", cookie)));
+
+        Assert.Equal("draft", campaign.GetProperty("campaign").GetProperty("status").GetString());
+    }
+
+    // ------------------------------------------------------- placeholders ---
+
+    [Fact]
+    public async Task The_editor_is_offered_exactly_what_the_send_can_fill()
+    {
+        var (_, cookie) = await Comms();
+
+        var listed = (await Body(await Client().SendAsync(
+                Request(HttpMethod.Get, "/admin/templates/placeholders", cookie))))
+            .GetProperty("placeholders").EnumerateArray().ToList();
+
+        Assert.Equal(
+            ["email", "firstName", "lastName"],
+            listed.Select(p => p.GetProperty("name").GetString()));
+
+        // A name with nothing beside it is a name somebody has to guess at.
+        Assert.All(listed, p =>
+            Assert.False(string.IsNullOrWhiteSpace(p.GetProperty("description").GetString())));
+    }
+
+    [Fact]
+    public async Task A_list_of_addresses_is_offered_only_the_address()
+    {
+        // The narrowing that matters: these recipients are sponsors and
+        // mentors this system has never heard of, so a name offered here is a
+        // template that gets written and then refused at send.
+        var (_, cookie) = await Comms();
+        var eventId = await db.AddEventAsync();
+        await Applicant(eventId, Unique("ignored"), "accepted");
+
+        var addresses = Id(await Body(await Create(
+            cookie, new { type = "explicitList", emails = new[] { Unique("sponsor") } })));
+
+        var applicants = Id(await Body(await Create(cookie, InStatus(eventId, "accepted"))));
+
+        Assert.Equal(["email"], await PlaceholdersOn(addresses, cookie));
+        Assert.Equal(["email", "firstName", "lastName"], await PlaceholdersOn(applicants, cookie));
+    }
+
+    [Fact]
+    public async Task Reading_the_stats_does_not_reveal_a_rendered_message()
+    {
+        // email.view_stats answers "did that go out". A rendered body carries
+        // the template and somebody's name and address, and it belongs with
+        // drafting the way the sample already does.
+        var (_, drafting) = await Comms();
+        var eventId = await db.AddEventAsync();
+        var recipient = Unique("unrendered");
+        await Applicant(eventId, recipient, "accepted");
+
+        var key = await TemplateWith(
+            "{{firstName}} placeholder", "<p>{{firstName}}</p>", "{{firstName}}");
+
+        var id = Id(await Body(await Create(drafting, InStatus(eventId, "accepted"), key)));
+
+        var reader = await db.AddPersonAsync(Unique("stats-only"));
+        await db.GrantAsync(reader, "email.view_stats");
+        var cookie = await SignIn(reader);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Preview(id, cookie)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(
+            Request(HttpMethod.Get, $"/admin/campaigns/{id}/placeholders", cookie))).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(
+            Request(HttpMethod.Get, "/admin/templates/placeholders", cookie))).StatusCode);
+    }
+
     // ------------------------------------------------------------ cancelling ---
 
     [Fact]
@@ -576,13 +809,25 @@ public class CampaignTests(ApplicationsDatabase db)
     private static object InStatus(Guid eventId, params string[] statuses) =>
         new { type = "applicationStatus", eventId, statuses };
 
-    private async Task<HttpResponseMessage> Create(string cookie, object segment) =>
+    private async Task<HttpResponseMessage> Create(
+        string cookie, object segment, string? templateKey = null) =>
         await Client().SendAsync(Request(HttpMethod.Post, "/admin/campaigns", cookie, new
         {
             name = "A campaign",
-            templateKey = await Template(),
+            templateKey = templateKey ?? await Template(),
             segment,
         }));
+
+    private Task<HttpResponseMessage> Preview(Guid id, string cookie) =>
+        Client().SendAsync(Request(HttpMethod.Post, $"/admin/campaigns/{id}/preview", cookie));
+
+    private async Task<IEnumerable<string?>> PlaceholdersOn(Guid id, string cookie) =>
+        (await Body(await Client().SendAsync(
+                Request(HttpMethod.Get, $"/admin/campaigns/{id}/placeholders", cookie))))
+        .GetProperty("placeholders")
+        .EnumerateArray()
+        .Select(p => p.GetProperty("name").GetString())
+        .ToList();
 
     private Task<HttpResponseMessage> Send(Guid id, string cookie) =>
         Client().SendAsync(Request(HttpMethod.Post, $"/admin/campaigns/{id}/send", cookie));
@@ -636,6 +881,77 @@ public class CampaignTests(ApplicationsDatabase db)
 
         return _templateKey = key;
     }
+
+    /// <summary>
+    /// A broadcast template that asks for something to be filled in.
+    /// </summary>
+    /// <remarks>
+    /// Not cached, unlike <see cref="Template"/>: these differ per test in
+    /// exactly the placeholders they ask for, which is the thing being tested.
+    /// The copy is nonsense for the same reason the shared one's is.
+    /// </remarks>
+    private async Task<string> TemplateWith(string subject, string html, string text)
+    {
+        var key = $"test-blanks-{Guid.NewGuid():N}";
+        await using var cmd = db.DataSource.CreateCommand("""
+            INSERT INTO notify.templates
+                (key, kind, subject, body_html, body_text, from_local, from_domain)
+            VALUES (@key, 'broadcast', @subject, @html, @text, 'news',
+                    'news.example.invalid')
+            """);
+        cmd.Parameters.AddWithValue("key", key);
+        cmd.Parameters.AddWithValue("subject", subject);
+        cmd.Parameters.AddWithValue("html", html);
+        cmd.Parameters.AddWithValue("text", text);
+        await cmd.ExecuteNonQueryAsync();
+
+        return key;
+    }
+
+    /// <summary>
+    /// An application with an address on it and no name.
+    /// </summary>
+    /// <remarks>
+    /// The row the whole placeholder-gap feature exists for: the form
+    /// autosaves, so somebody who opened it and typed nothing but their email
+    /// is already in the table. <c>incomplete</c> rather than a real status
+    /// because <c>submitted_applications_are_complete</c> is what stops this
+    /// shape existing anywhere else — which is the point, and the reason this
+    /// is not a hand-built double.
+    /// </remarks>
+    private async Task Nameless(Guid eventId, string email)
+    {
+        await using var cmd = db.DataSource.CreateCommand("""
+            INSERT INTO applications.applications (event_id, email, status)
+            VALUES (@eventId, @email, 'incomplete')
+            """);
+        cmd.Parameters.AddWithValue("eventId", eventId);
+        cmd.Parameters.AddWithValue("email", email);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>What the send actually froze onto one person's row.</summary>
+    private async Task<(string Subject, string Html, string Text)> RenderedIn(
+        Guid campaignId, string email)
+    {
+        await using var cmd = db.DataSource.CreateCommand("""
+            SELECT rendered_subject, rendered_body_html, rendered_body_text
+              FROM notify.messages
+             WHERE campaign_id = @id AND to_email = @email
+            """);
+        cmd.Parameters.AddWithValue("id", campaignId);
+        cmd.Parameters.Add(new NpgsqlParameter("email", NpgsqlDbType.Text) { Value = email });
+
+        await using var reader = await cmd.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        return (reader.GetString(0), reader.GetString(1), reader.GetString(2));
+    }
+
+    /// <summary>One placeholder's row out of a preview's coverage.</summary>
+    private static JsonElement CoverageOf(JsonElement preview, string placeholder) =>
+        preview.GetProperty("placeholderCoverage")
+               .EnumerateArray()
+               .Single(row => row.GetProperty("placeholder").GetString() == placeholder);
 
     /// <summary>
     /// An application complete enough for the schema to accept a real status.
