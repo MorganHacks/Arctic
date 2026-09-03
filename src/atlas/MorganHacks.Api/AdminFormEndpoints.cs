@@ -107,7 +107,7 @@ public static class AdminFormEndpoints
                 closesAt = form.ClosesAt,
                 published = published is not null,
                 publishedVersion = published?.Version,
-                questions = published?.Fields.Count,
+                questions = published is null ? (int?)null : Questions(published.Fields),
             });
         }
 
@@ -191,7 +191,7 @@ public static class AdminFormEndpoints
             {
                 version = v.Version,
                 status = v.Status,
-                questions = v.Fields.Count,
+                questions = Questions(v.Fields),
                 createdAt = v.CreatedAt,
                 publishedAt = v.PublishedAt,
             }),
@@ -349,14 +349,14 @@ public static class AdminFormEndpoints
 
         log.LogInformation(
             "Form published. {actor} {form} {version} {questions} {event}",
-            http.PersonId(), id, published.Version, published.Fields.Count,
+            http.PersonId(), id, published.Version, Questions(published.Fields),
             Events.FormPublished);
 
         return Results.Ok(new
         {
             version = published.Version,
             publishedAt = published.PublishedAt,
-            questions = published.Fields.Count,
+            questions = Questions(published.Fields),
         });
     }
 
@@ -377,6 +377,18 @@ public static class AdminFormEndpoints
             error = summary,
             problems = problems.Select(Describe),
         });
+
+    /// <summary>
+    /// How many questions a version actually asks.
+    /// </summary>
+    /// <remarks>
+    /// Not the length of the array. A page break sits in the same list and is
+    /// not something anybody answers, so counting one would make "12 questions"
+    /// on the forms list a number that does not match what an applicant is
+    /// asked — and this number is read precisely to check that it does.
+    /// </remarks>
+    private static int Questions(IReadOnlyList<FormField> fields) =>
+        fields.Count(f => f.Type != FieldType.Section);
 
     private static object Describe(FormProblem problem) => new
     {

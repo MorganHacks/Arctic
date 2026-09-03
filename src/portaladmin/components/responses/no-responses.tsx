@@ -25,6 +25,11 @@ export function NoResponses({
   publishedVersion: number | null;
   fields: FormField[];
 }) {
+  // Page breaks left out. This list is a preview of the columns this table will
+  // have, and a page heading is neither a column nor a question somebody can
+  // notice is missing.
+  const questions = fields.filter((field) => field.type !== "section");
+
   return (
     <div className={styles.nothing}>
       <h2>No responses yet</h2>
@@ -40,13 +45,13 @@ export function NoResponses({
         <Link href={`/forms/${formId}`}>Edit the questions</Link>
       </p>
 
-      {fields.length === 0 ? (
+      {questions.length === 0 ? (
         <p className={styles.note}>This form has no questions yet.</p>
       ) : (
         <>
           <p className={styles.note}>Questions on this form</p>
           <ul className={styles.waiting}>
-            {fields.map((field) => (
+            {questions.map((field) => (
               <li key={field.key}>
                 {field.label.trim() === "" ? (
                   <code>{field.key}</code>

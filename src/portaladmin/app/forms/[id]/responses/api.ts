@@ -254,6 +254,12 @@ function exampleAnswer(field: FormField, index: number): unknown {
     case "file":
       return undefined;
 
+    // A page break is never answered, and the fixtures have to say the same
+    // thing the API does — a mock that invents an answer under a section's key
+    // is a mock that makes the screen look right for the wrong reason.
+    case "section":
+      return undefined;
+
     case "consent":
       return true;
 

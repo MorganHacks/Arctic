@@ -15,12 +15,16 @@ export type Column =
   | { kind: "retired"; key: string; label: string; field: null };
 
 /**
- * A file question is not a column.
+ * The two field types that are not a column.
  *
- * The answer to it is the resume, which has its own column and its own
- * permission. A second column holding the same filename would be furniture.
+ * A file question's answer is the resume, which has its own column and its own
+ * permission — a second column holding the same filename would be furniture.
+ *
+ * A page break is not a question at all. Nobody answered it and nothing is
+ * stored under its key, so a column for it would be empty in every row under a
+ * heading nobody was ever asked.
  */
-const NOT_A_COLUMN = new Set(["file"]);
+const NOT_A_COLUMN = new Set(["file", "section"]);
 
 /**
  * The columns for a set of loaded responses.
@@ -47,11 +51,18 @@ export function columnsFor(
   const known = new Set<string>();
 
   for (const field of fields) {
-    known.add(field.key);
-
     if (NOT_A_COLUMN.has(field.type)) {
+      // Not counted as known either, which is what makes the awkward case
+      // work: a question turned into a page break keeps its key, and the
+      // answers already given to it are still filed under it. They lose their
+      // labelled column and become retired ones, which is exactly what they
+      // are — and the alternative is a set of answers that is on nobody's
+      // screen. A file question's key is never in the answers at all, so this
+      // costs it nothing.
       continue;
     }
+
+    known.add(field.key);
 
     asked.push({
       kind: "asked",
@@ -88,15 +99,21 @@ export function columnsFor(
  * response holds that the form no longer asks. Unlike the table this is per
  * response, because "what else did this person tell us" is a question about
  * one submission.
+ *
+ * Page breaks are dropped. The panel shows every question without an answer as
+ * "Not answered", and a page break has no answer and never will — leaving one
+ * in would put a heading on the screen under a complaint that nobody filled it
+ * in.
  */
 export function askedAndRetired(
   fields: FormField[],
   item: ResponseItem,
 ): { asked: FormField[]; retired: string[] } {
-  const known = new Set(fields.map((field) => field.key));
+  const asked = fields.filter((field) => field.type !== "section");
+  const known = new Set(asked.map((field) => field.key));
 
   return {
-    asked: fields,
+    asked,
     retired: Object.keys(item.answers)
       .filter((key) => !known.has(key))
       .sort(),

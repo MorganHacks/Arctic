@@ -72,6 +72,13 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
 
     private static string Unique(string prefix) => $"{prefix}-{Guid.NewGuid():N}@morgan.edu";
 
+    private static FormField PageBreak(string key, string label = "Page two") => new()
+    {
+        Key = key,
+        Type = FieldType.Section,
+        Label = label,
+    };
+
     private async Task<T?> ColumnAsync<T>(Guid applicationId, string column)
     {
         await using var cmd = db.DataSource.CreateCommand(
@@ -435,5 +442,63 @@ public class FormSubmissionTests(ApplicationsDatabase db) : IClassFixture<Applic
             Answers(Unique("several"), ("phone", null), ("school", null), ("age", "old")));
 
         Assert.Equal(3, problems.Count);
+    }
+
+    // --------------------------------------------------------- page breaks ---
+
+    [Fact]
+    public void A_page_break_is_never_an_unanswered_required_question()
+    {
+        // The failure that would take the whole form down. A section has no
+        // answer and never will, so reading one as an unanswered question
+        // refuses every submission to every form that has been split into
+        // pages — and it fails for all of them at once, on the day
+        // registration opens.
+        //
+        // Required is set here on purpose. Publishing refuses a required
+        // section, but if one ever reached a live version, submitting still has
+        // to work: the rule is that a section is not answerable, not that it is
+        // answerable whenever the flag happens to be false.
+        List<FormField> fields =
+            [.. MlhFields.All, PageBreak("section_about") with { Required = true }];
+
+        Assert.Empty(SubmissionValidation.Check(fields, Answers(Unique("paged"))));
+    }
+
+    [Fact]
+    public async Task Nothing_is_ever_stored_under_a_page_breaks_key()
+    {
+        // The endpoint is unauthenticated and a caller can post any key it
+        // likes. A string arriving under a section's key looks answered to
+        // every check that does not know better, and would land in responses as
+        // a value nobody was ever asked for.
+        var (form, version) = await PublishedAsync(PageBreak("section_about"));
+
+        var id = await Submissions.SubmitApplicationAsync(
+            form, version, Answers(Unique("posted"), ("section_about", "not an answer")));
+
+        Assert.Null(await ResponseAsync(id, "section_about"));
+    }
+
+    [Fact]
+    public async Task A_form_split_into_pages_still_takes_a_submission()
+    {
+        // End to end against the database, because the two checks above pass in
+        // isolation and the thing worth knowing is whether an application
+        // actually lands.
+        var (form, version) = await PublishedAsync(
+            PageBreak("section_about"),
+            new FormField
+            {
+                Key = "why_apply",
+                Type = FieldType.Paragraph,
+                Label = "Why do you want to come?",
+                Required = true,
+            });
+
+        var id = await Submissions.SubmitApplicationAsync(
+            form, version, Answers(Unique("split"), ("why_apply", "To build something.")));
+
+        Assert.Equal("To build something.", await ResponseAsync(id, "why_apply"));
     }
 }

@@ -36,10 +36,18 @@ public class FormEndpointTests(ApplicationsDatabase db)
     private PostgresFormStore Forms => new(db.DataSource);
 
     private async Task<Form> PublishedAsync(
-        string kind = "application", DateTimeOffset? closesAt = null)
+        string kind = "application",
+        DateTimeOffset? closesAt = null,
+        IReadOnlyList<FormField>? extra = null)
     {
         var form = await Forms.CreateAsync(await db.AddEventAsync(), "Application", kind, null);
-        await Forms.DraftAsync(form.Id, null);
+        var draft = await Forms.DraftAsync(form.Id, null);
+
+        if (extra is { Count: > 0 })
+        {
+            await Forms.SaveDraftAsync(form.Id, [.. draft.Fields, .. extra]);
+        }
+
         await Forms.PublishAsync(form.Id, null);
 
         if (closesAt is not null)
@@ -146,6 +154,44 @@ public class FormEndpointTests(ApplicationsDatabase db)
         Assert.Contains(
             level.GetProperty("options").EnumerateArray(),
             o => o.GetProperty("value").GetString() == "undergraduate-3y");
+    }
+
+    [Fact]
+    public async Task A_page_break_reaches_the_page_as_a_field_it_can_recognise()
+    {
+        // The contract the public form is built against. A page break arrives
+        // in the same array as the questions, in the position the author put
+        // it, spelled "section" — the page switches on that string to decide
+        // where one page ends, and if this endpoint spelled it any other way
+        // every form would silently collapse back into one long page.
+        //
+        // Never answered, so it carries no options and is never required. Both
+        // are asserted rather than assumed: the page reads them, and a required
+        // page break would be a page nobody can get past.
+        var form = await PublishedAsync(extra:
+        [
+            new FormField
+            {
+                Key = "section_about",
+                Type = FieldType.Section,
+                Label = "Page two",
+                Help = "What this page covers.",
+            },
+        ]);
+
+        var body = await _app.CreateClient().GetFromJsonAsync<JsonElement>($"/forms/{form.Code}");
+        var fields = body.GetProperty("fields").EnumerateArray().ToList();
+        var section = fields.Single(f => f.GetProperty("key").GetString() == "section_about");
+
+        Assert.Equal("section", section.GetProperty("type").GetString());
+        Assert.Equal("Page two", section.GetProperty("label").GetString());
+        Assert.Equal("What this page covers.", section.GetProperty("help").GetString());
+        Assert.False(section.GetProperty("required").GetBoolean());
+        Assert.Empty(section.GetProperty("options").EnumerateArray());
+
+        // Last, because it was appended. Order is the whole of what decides
+        // which questions land on which page.
+        Assert.Equal("section_about", fields[^1].GetProperty("key").GetString());
     }
 
     [Fact]

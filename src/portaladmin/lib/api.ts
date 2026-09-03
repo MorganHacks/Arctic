@@ -88,12 +88,16 @@ export async function apiWrite(
 }
 
 /**
- * The question types the form can ask.
+ * The question types the form can ask, and the one type that is not a question.
  *
  * The names are the enum's, camel-cased on the way out by atlas. Not a copy of
  * a list that lives elsewhere in TypeScript — the API is the only place these
  * exist, and a field whose type does not round-trip is one that renders as an
  * empty box in front of applicants.
+ *
+ * `section` is a page break carrying the heading of the page it opens. It sits
+ * in the same array as the questions and is never answered, so every screen
+ * that walks the fields expecting an answer has to step over it.
  */
 export type FieldType =
   | "shortText"
@@ -106,17 +110,23 @@ export type FieldType =
   | "radio"
   | "checkboxes"
   | "consent"
-  | "file";
+  | "file"
+  | "section";
 
 export type FieldOption = { value: string; label: string };
 
 /**
- * One question, exactly as it is stored.
+ * One question, exactly as it is stored — or one page break.
  *
  * Sent back whole on every save, including the properties the builder never
  * shows — `storage`, `column`, the length bounds. Dropping what this screen
  * does not edit would mean the first autosave quietly rewriting how MLH's
  * answers are filed.
+ *
+ * On a `section`, `label` is the page's heading and `help` is its description.
+ * `required` and `options` are not ignored there but refused: the API will not
+ * publish a page break that sets either, which is why the editor does not offer
+ * them.
  */
 export type FormField = {
   key: string;
