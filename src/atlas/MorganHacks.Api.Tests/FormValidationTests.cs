@@ -55,6 +55,80 @@ public class FormValidationTests
     }
 
     [Fact]
+    public void The_MLH_questions_do_not_collide_with_each_other()
+    {
+        // Several MLH fields store in columns, and this check would be
+        // worthless if the required set tripped it. It also caught a mistake in
+        // the test below, which reached for 'email' without noticing MLH had
+        // already claimed it.
+        Assert.DoesNotContain(
+            FormValidation.Check(ValidForm()),
+            p => p.Message.Contains("stores in the column"));
+    }
+
+    [Fact]
+    public void Two_questions_cannot_store_in_the_same_column()
+    {
+        // The duplicate-key failure one level down, and harder to spot: these
+        // two questions have different keys, look unrelated on the form, and
+        // land on top of each other in the table. Whoever reads the export sees
+        // one answer where two people gave two, with nothing marking the loss.
+        var fields = ValidForm();
+        fields.Add(new FormField
+        {
+            Key = "shirt",
+            Type = FieldType.Select,
+            Label = "What size shirt?",
+            Options = [new FieldOption("m", "Medium")],
+            Storage = AnswerStorage.Column,
+            Column = "shirt_size",
+        });
+        fields.Add(new FormField
+        {
+            Key = "tee",
+            Type = FieldType.Select,
+            Label = "Pick a shirt",
+            Options = [new FieldOption("l", "Large")],
+            Storage = AnswerStorage.Column,
+            Column = "shirt_size",
+        });
+
+        var problems = FormValidation.Check(fields);
+
+        // Both are named, because either one moving fixes it and the person
+        // reading this has no way to know which one is the mistake.
+        Assert.Contains(problems, p => p.FieldKey == "shirt");
+        Assert.Contains(problems, p => p.FieldKey == "tee");
+        Assert.False(FormValidation.CanPublish(fields));
+    }
+
+    [Fact]
+    public void Two_questions_may_store_in_different_columns()
+    {
+        // The guard against a check that simply refuses column storage.
+        var fields = ValidForm();
+        fields.Add(new FormField
+        {
+            Key = "shirt",
+            Type = FieldType.Select,
+            Label = "What size shirt?",
+            Options = [new FieldOption("m", "Medium")],
+            Storage = AnswerStorage.Column,
+            Column = "shirt_size",
+        });
+        fields.Add(new FormField
+        {
+            Key = "dietary",
+            Type = FieldType.Paragraph,
+            Label = "Anything we should know about food?",
+            Storage = AnswerStorage.Column,
+            Column = "dietary_notes",
+        });
+
+        Assert.True(FormValidation.CanPublish(fields));
+    }
+
+    [Fact]
     public void A_choice_question_needs_something_to_choose_from()
     {
         var fields = ValidForm();

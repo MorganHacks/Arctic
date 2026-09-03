@@ -41,6 +41,29 @@ public static class FormValidation
                 duplicate.Key));
         }
 
+        // The same failure as a duplicate key, one level down. Two questions
+        // can hold different keys and still be pointed at one column, and then
+        // the second answer lands on top of the first with nothing to show for
+        // it — not in the form, not in the export, not until somebody notices a
+        // person's answer is somebody else's.
+        var collisions = fields
+            .Where(f => f.Storage == AnswerStorage.Column
+                && !string.IsNullOrWhiteSpace(f.Column))
+            .GroupBy(f => f.Column!, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1);
+
+        foreach (var collision in collisions)
+        {
+            foreach (var field in collision)
+            {
+                problems.Add(new FormProblem(
+                    $"\"{Shorten(field.Label)}\" stores in the column "
+                    + $"'{collision.Key}', and so does another question. "
+                    + "One of them has to move.",
+                    field.Key));
+            }
+        }
+
         var present = fields.Select(f => f.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var required in MlhFields.RequiredKeys.Where(k => !present.Contains(k)))
         {
