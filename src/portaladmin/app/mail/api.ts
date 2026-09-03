@@ -1,5 +1,14 @@
-import { apiFetch, type FormsView } from "@/lib/api";
-import type { Campaign, CampaignRow, CampaignStatus, EventChoice, FormChoice, Preview, Segment } from "@/components/mail/types";
+import { apiFetch, currentPerson, type FormsView } from "@/lib/api";
+import type {
+  Campaign,
+  CampaignRow,
+  CampaignStatus,
+  EventChoice,
+  FormChoice,
+  MessageProgress,
+  Preview,
+  Segment,
+} from "@/components/mail/types";
 import type { TemplateRow } from "@/components/templates/types";
 import { readTemplates } from "@/app/templates/api";
 
@@ -16,7 +25,23 @@ export type ListRead =
   | { ok: false; status: number; error: string };
 
 export type OneRead =
-  | { ok: true; campaign: Campaign; mocked: boolean }
+  | {
+      ok: true;
+      campaign: Campaign;
+
+      /** Null on a draft, which has written no messages. */
+      messages: MessageProgress | null;
+
+      /**
+       * The frozen list, a corner of it. Null when this person cannot read
+       * addresses — the API checks `email.manage_templates` for the sample
+       * separately from `email.view_stats` for the numbers, and a screen that
+       * showed an empty list instead of nothing would be reporting that the
+       * campaign reached nobody.
+       */
+      sample: string[] | null;
+      mocked: boolean;
+    }
   | { ok: false; status: number; error: string };
 
 export type Created = { ok: true; id: string } | { ok: false; error: string };
@@ -62,6 +87,54 @@ function whyWrite(status: number): string {
   return "That did not work.";
 }
 
+/**
+ * A campaign exactly as the API describes one.
+ *
+ * Written out rather than assumed, because the two shapes had drifted: the API
+ * has never sent `sentAt`, which is the field these screens read to fill the
+ * "Sent" column, so every campaign that had gone out was rendering an em dash.
+ * It sends `queuedAt` and `completedAt` instead, and which of those a reader
+ * means by "sent" is a question this file answers once.
+ */
+type Described = {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  templateKey?: string | null;
+  templateKind?: string | null;
+  segment?: Segment | null;
+  recipientCount: number;
+  createdBy?: string | null;
+  approvedBy?: string | null;
+  queuedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+};
+
+/**
+ * When it went, from the two stamps the API keeps.
+ *
+ * `completedAt` where the sender has finished with it, `queuedAt` where it is
+ * still working through the queue. Both are the moment a reader means by "this
+ * left", and preferring the later of them means a campaign half-way through a
+ * send reads as having started rather than as not having happened.
+ */
+function received(row: Described): Campaign {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    recipientCount: row.recipientCount,
+    createdAt: row.createdAt,
+    sentAt: row.completedAt ?? row.queuedAt ?? null,
+    templateKey: row.templateKey ?? null,
+    templateKind: row.templateKind ?? null,
+    segment: row.segment ?? null,
+    createdBy: row.createdBy ?? null,
+    approvedBy: row.approvedBy ?? null,
+  };
+}
+
 /** The API's own sentence about a refusal, where it gave one. */
 async function said(response: Response, fallback: string): Promise<string> {
   try {
@@ -92,8 +165,8 @@ export async function readCampaigns(): Promise<ListRead> {
   // The API calls it campaigns, not items. This screen called it items,
   // nothing typed the boundary between them, and the page threw on undefined
   // the first time it was opened against a real API.
-  const { campaigns } = (await response.json()) as { campaigns: CampaignRow[] };
-  return { ok: true, items: campaigns ?? [], mocked: false };
+  const { campaigns } = (await response.json()) as { campaigns: Described[] };
+  return { ok: true, items: (campaigns ?? []).map(received), mocked: false };
 }
 
 /** One campaign, with its template and its segment. */
@@ -106,9 +179,16 @@ export async function readCampaign(id: string): Promise<OneRead> {
   }
 
   if (response.status === 404 && EXAMPLES) {
-    const campaign = exampleOne(id);
-    if (campaign) {
-      return { ok: true, campaign, mocked: true };
+    const stored = exampleOne(id);
+    if (stored) {
+      const campaign = asSeenBy(stored, (await currentPerson())?.personId ?? null);
+      return {
+        ok: true,
+        campaign,
+        messages: exampleProgress(campaign),
+        sample: campaign.status === "draft" ? null : exampleAddresses(8),
+        mocked: true,
+      };
     }
   }
 
@@ -116,9 +196,23 @@ export async function readCampaign(id: string): Promise<OneRead> {
     return { ok: false, status: response.status, error: whyRead(response.status) };
   }
 
-  // Wrapped, alongside the message counts and the sample.
-  const body = (await response.json()) as { campaign: Campaign };
-  return { ok: true, campaign: body.campaign, mocked: false };
+  // Wrapped, alongside the message counts and the sample. Both were being
+  // thrown away here: the counts are the only account of what actually
+  // happened to a send, and the sample is the only answer left to "who did we
+  // mail" once the segment has moved on.
+  const body = (await response.json()) as {
+    campaign: Described;
+    messages?: MessageProgress | null;
+    sample?: string[] | null;
+  };
+
+  return {
+    ok: true,
+    campaign: received(body.campaign),
+    messages: body.messages ?? null,
+    sample: body.sample ?? null,
+    mocked: false,
+  };
 }
 
 /** Starts a campaign as a draft. Nothing is sent by creating one. */
@@ -217,7 +311,7 @@ async function change(id: string, verb: "send" | "cancel"): Promise<Changed> {
   }
 
   if (response.status === 404 && EXAMPLES) {
-    const changed = exampleChange(id, verb);
+    const changed = exampleChange(id, verb, (await currentPerson())?.personId ?? null);
     if (changed) {
       return changed;
     }
@@ -345,6 +439,38 @@ const EXAMPLES =
 /** Fixed, so the same page renders the same way on the server and the client. */
 const EXAMPLE_NOW = Date.UTC(2026, 8, 1, 15, 20);
 
+/** Somebody else. Every example but one was drafted by this person. */
+const EXAMPLE_AUTHOR = "a41e94ab-0000-4000-8000-000000000001";
+
+/** The second name on an example that has gone out. */
+const EXAMPLE_APPROVER = "b38f29cd-0000-4000-8000-000000000002";
+
+/**
+ * Stands in for whoever is reading, and is swapped for their real id on the
+ * way out. A fixture cannot know the signed-in person at the time it is
+ * written, and the two-person refusal is only visible when it does.
+ */
+const EXAMPLE_SELF = "example-self";
+
+/**
+ * The API's sentence when the author tries to send their own campaign.
+ *
+ * Copied from CampaignEndpoints.Send rather than written here. The screen
+ * shows the API's wording in every other refusal, and an example that read
+ * differently from the real thing would be teaching the wrong sentence to the
+ * people who see it first.
+ */
+const EXAMPLE_SELF_SEND_REFUSAL =
+  "A broadcast has to be sent by somebody other than the person who wrote it. " +
+  "Ask another organizer with broadcast permission to send this one.";
+
+/** Fills the reader's own id in where a fixture could only leave a placeholder. */
+function asSeenBy(campaign: Campaign, me: string | null): Campaign {
+  return campaign.createdBy === EXAMPLE_SELF
+    ? { ...campaign, createdBy: me ?? EXAMPLE_SELF }
+    : campaign;
+}
+
 function exampleStamp(minutesAgo: number): string {
   return new Date(EXAMPLE_NOW - minutesAgo * 60_000).toISOString();
 }
@@ -370,10 +496,34 @@ function seed(): void {
       createdAt: exampleStamp(90),
       sentAt: null,
       templateKey: "example_template",
+      templateKind: "broadcast",
+      createdBy: EXAMPLE_AUTHOR,
+      approvedBy: null,
       segment: {
         type: "applicationStatus",
         eventId: "00000000-0000-0000-0000-000000000000",
         statuses: ["accepted"],
+      } as Segment,
+    },
+    {
+      // The state the brief calls the one that will confuse people first: a
+      // draft whose author is whoever is reading it. Every other example can
+      // be sent; this one is refused, in the API's own words, and it exists so
+      // that refusal can be looked at before somebody meets it for real.
+      id: "example-yours",
+      name: "Example campaign (drafted by you)",
+      status: "draft" as const,
+      recipientCount: 0,
+      createdAt: exampleStamp(20),
+      sentAt: null,
+      templateKey: "example_template",
+      templateKind: "broadcast",
+      createdBy: EXAMPLE_SELF,
+      approvedBy: null,
+      segment: {
+        type: "applicationStatus",
+        eventId: "00000000-0000-0000-0000-000000000000",
+        statuses: ["waitlisted"],
       } as Segment,
     },
     {
@@ -382,8 +532,11 @@ function seed(): void {
       status: "queued" as const,
       recipientCount: 342,
       createdAt: exampleStamp(240),
-      sentAt: null,
+      sentAt: exampleStamp(200),
       templateKey: "example_template",
+      templateKind: "broadcast",
+      createdBy: EXAMPLE_AUTHOR,
+      approvedBy: EXAMPLE_APPROVER,
       segment: {
         type: "applicationStatus",
         eventId: "00000000-0000-0000-0000-000000000000",
@@ -398,6 +551,9 @@ function seed(): void {
       createdAt: exampleStamp(4_320),
       sentAt: exampleStamp(4_280),
       templateKey: "example_template",
+      templateKind: "broadcast",
+      createdBy: EXAMPLE_AUTHOR,
+      approvedBy: EXAMPLE_APPROVER,
       segment: {
         type: "explicitList",
         emails: exampleAddresses(118),
@@ -406,6 +562,42 @@ function seed(): void {
   ]) {
     examples.set(campaign.id, campaign);
   }
+}
+
+/**
+ * How far through the queue an example campaign is.
+ *
+ * Derived from its status rather than stored, so the numbers agree with the
+ * pill beside them. A draft has written no messages at all, which is why it
+ * gets null instead of a row of noughts.
+ */
+function exampleProgress(campaign: Campaign): MessageProgress | null {
+  if (campaign.status === "draft") {
+    return null;
+  }
+
+  const total = campaign.recipientCount;
+
+  if (campaign.status === "queued" || campaign.status === "sending") {
+    const gone = Math.floor(total * 0.4);
+    return {
+      total,
+      pending: total - gone,
+      gone,
+      byStatus: { pending: total - gone, sent: gone },
+    };
+  }
+
+  if (campaign.status === "sent") {
+    return {
+      total,
+      pending: 0,
+      gone: total,
+      byStatus: { delivered: total - 2, bounced: 2 },
+    };
+  }
+
+  return { total, pending: 0, gone: 0, byStatus: { suppressed: total } };
 }
 
 function exampleAddresses(count: number): string[] {
@@ -465,26 +657,62 @@ function examplePreview(id: string): Preview | null {
   }
 
   const segment = campaign.segment;
-  const recipientCount =
+  const segmentSize =
     segment.type === "explicitList"
       ? segment.emails.length
       : segment.type === "formRespondents"
         ? 47
         : 20 + segment.statuses.join().length * 17;
 
+  /*
+   * A few of them held back, because a preview where matched and sendable are
+   * always the same number never shows the sentence the whole panel is for —
+   * "412 matched, 400 will be sent, 12 suppressed" — and that is the one a
+   * reviewer needs to look at.
+   *
+   * The reasons are the four the suppressions table's check constraint allows,
+   * written as it stores them.
+   */
+  const byReason: Record<string, number> = {};
+  const suppressedCount = Math.min(segmentSize, 12);
+
+  if (suppressedCount > 0) {
+    byReason.unsubscribed = Math.ceil(suppressedCount / 2);
+    byReason.hard_bounce = Math.floor(suppressedCount / 3);
+    byReason.complaint =
+      suppressedCount - byReason.unsubscribed - byReason.hard_bounce;
+  }
+
+  const recipientCount = segmentSize - suppressedCount;
+
   return {
     recipientCount,
+    segmentSize,
+    suppressedCount,
+    suppressedByReason: byReason,
     sample: exampleAddresses(Math.min(recipientCount, 8)),
+    problems: [],
   };
 }
 
-function exampleChange(id: string, verb: "send" | "cancel"): Changed | null {
+function exampleChange(
+  id: string,
+  verb: "send" | "cancel",
+  me: string | null,
+): Changed | null {
   const campaign = exampleOne(id);
   if (!campaign) {
     return null;
   }
 
   if (verb === "send") {
+    // The refusal the real API gives, given here for the same reason: the
+    // person pressing this wrote the campaign, and the fixture would be
+    // useless if it were the one example where that was allowed.
+    if (campaign.createdBy === EXAMPLE_SELF && me !== null) {
+      return { ok: false, error: EXAMPLE_SELF_SEND_REFUSAL };
+    }
+
     const preview = examplePreview(id);
     const recipientCount = preview?.recipientCount ?? 0;
 

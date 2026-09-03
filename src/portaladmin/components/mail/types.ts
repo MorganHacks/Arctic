@@ -53,10 +53,42 @@ export type Segment =
   | { type: "formRespondents"; formId: string }
   | { type: "explicitList"; emails: string[] };
 
-/** One campaign, with the two fields the list does not carry. */
+/**
+ * One campaign, with the fields the list does not carry.
+ *
+ * `createdBy` and `approvedBy` are the two names on it, and they are the
+ * reason this screen can say anything about the approval rule before somebody
+ * presses a button: the API refuses a send whose actor is the author, and the
+ * only way to know that in advance is to compare these against who is signed
+ * in.
+ */
 export type Campaign = CampaignRow & {
   templateKey?: string | null;
+
+  /** `broadcast` or `transactional`, as the API names it. */
+  templateKind?: string | null;
   segment?: Segment | null;
+
+  /** The person who drafted it. Never the person allowed to send it. */
+  createdBy?: string | null;
+
+  /** The second name, once there is one. */
+  approvedBy?: string | null;
+};
+
+/**
+ * What happened to the messages a campaign wrote.
+ *
+ * Only meaningful once it has left draft, and the only honest answer to "who
+ * has actually been mailed" while a send is in progress. `gone` is everything
+ * that has left this system whatever the provider did with it next, which is
+ * the number that decides whether cancelling is still worth anything.
+ */
+export type MessageProgress = {
+  total: number;
+  pending: number;
+  gone: number;
+  byStatus: Record<string, number>;
 };
 
 /**
@@ -83,6 +115,27 @@ export type Preview = {
    */
   segmentSize?: number;
   suppressedCount?: number;
+
+  /**
+   * Why the suppressed ones were suppressed, counted by reason.
+   *
+   * The keys are the API's own words for a suppression and are shown as it
+   * writes them. A screen that translated "bounce" into a friendlier sentence
+   * would be maintaining a second, worse copy of a list the sender owns, and
+   * the twelve people behind these numbers have to be findable by the name the
+   * system actually recorded.
+   */
+  suppressedByReason?: Record<string, number>;
+
+  /**
+   * Everything the API thinks is wrong with this campaign, in its own
+   * sentences.
+   *
+   * Advisory at preview and fatal at send: a template that greets people by a
+   * name the segment does not carry is refused by the send, and the person
+   * reading this screen is the last one who can still fix it.
+   */
+  problems?: string[];
 };
 
 /** A form somebody could have answered, for the segment picker. */
