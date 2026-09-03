@@ -23,6 +23,7 @@ export function Shell({
           <Link href="/people">People</Link>
           <Link href="/forms">Forms</Link>
           <Link href="/applicants">Applicants</Link>
+          <Link href="/mail">Mail</Link>
           <Link href="/audit">Audit</Link>
         </nav>
         {/* The person id rather than their address. Everything else in this

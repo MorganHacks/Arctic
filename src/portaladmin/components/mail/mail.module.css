@@ -1,0 +1,153 @@
+/*
+ * The mail screens.
+ *
+ * A module rather than more rules in the console's shared stylesheet: nothing
+ * here is used by another screen, and globals.css is edited by everybody.
+ *
+ * Every colour is a token from libs/ui/tokens.css. Not one hex, and very
+ * little colour at all — the palette's rule is that colour carries meaning or
+ * it is absent, and on this screen the things that carry meaning are whether a
+ * campaign has gone out and whether the button in front of you sends it.
+ */
+
+/* The campaign's name, and the way back to the list. */
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* What the campaign is, before what it would do. */
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+/*
+ * The recipient count.
+ *
+ * Set large because it is the number somebody is being asked to agree to, and
+ * a figure that decides whether nine people or four hundred get an email
+ * should not be the same size as the label next to it.
+ */
+.headline {
+  font-size: var(--step3);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+/* The addresses the send resolved to. Mono, because these are read character
+   by character to check they are the right people. */
+.sample {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--line-soft);
+  columns: 2;
+  column-gap: 1.5rem;
+}
+
+@media (max-width: 40rem) {
+  .sample {
+    columns: 1;
+  }
+}
+
+.sample li {
+  break-inside: avoid;
+  padding: 0.15rem 0;
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  overflow-wrap: anywhere;
+}
+
+/* The row of buttons under a preview, and the row that confirms one. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+/*
+ * What has already happened to this campaign.
+ *
+ * A ruled edge rather than a filled panel, and the only three colours on these
+ * screens: it went out, it is going out, or it did not. Everything else — the
+ * name, the segment, the template — is the same weight it was before, because
+ * none of it changed.
+ */
+.outcome {
+  padding-left: 0.85rem;
+  border-left: 2px solid var(--line);
+}
+
+.outcome.done {
+  border-left-color: var(--ok);
+}
+
+.outcome.running {
+  border-left-color: var(--warn);
+}
+
+.outcome.stopped {
+  border-left-color: var(--stop);
+}
+
+.outcome p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+/* The segment's own controls, revealed by the segment that needs them. */
+.segment {
+  margin-top: 0.9rem;
+}
+
+.segment textarea {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  width: 100%;
+  min-height: 7rem;
+  resize: vertical;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.6rem;
+}
+
+.wide {
+  width: 100%;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
