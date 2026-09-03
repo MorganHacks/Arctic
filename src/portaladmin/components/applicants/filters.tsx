@@ -1,6 +1,6 @@
 import Link from "next/link";
 import styles from "./applicants.module.css";
-import { STATUSES, label } from "./status";
+import { STATUSES, figureClass, label } from "./status";
 import type { EventSummary, Status } from "./types";
 
 /**
@@ -45,9 +45,9 @@ export function Filters({
 
   return (
     <>
-      <form method="get" action="/applicants" className="filters">
+      <form method="get" action="/applicants" className={styles.controls}>
         {events.length > 1 ? (
-          <div>
+          <div className={styles.field}>
             <label htmlFor="event">Event</label>
             <select id="event" name="event" defaultValue={chosen.id}>
               {events.map((event) => (
@@ -61,7 +61,7 @@ export function Filters({
           <input type="hidden" name="event" value={chosen.id} />
         )}
 
-        <div className="grow">
+        <div className={`${styles.field} ${styles.search}`}>
           <label htmlFor="q">Search</label>
           <input
             id="q"
@@ -69,7 +69,6 @@ export function Filters({
             type="search"
             placeholder="Name or email"
             defaultValue={q}
-            style={{ width: "100%" }}
           />
         </div>
 
@@ -86,6 +85,13 @@ export function Filters({
         ) : null}
       </form>
 
+      {/*
+        One strip of counts, doing two jobs at once.
+        Read down it and you know where the event is; press one and the list
+        below narrows to it. The mockup drew this twice — once above a row of
+        saved views and once below — and a number that appears twice on one
+        screen is a number a reader has to check against itself.
+      */}
       <ul className={styles.tallies}>
         <li>
           <Link
@@ -94,8 +100,10 @@ export function Filters({
               statuses.length === 0 ? `${styles.tally} ${styles.on}` : styles.tally
             }
           >
-            All
-            <span className={styles.count}>{total(counts)}</span>
+            <span className={styles.tallyLabel}>All</span>
+            <span className={`${styles.tallyCount} ${styles.figureUndecided}`}>
+              {total(counts)}
+            </span>
           </Link>
         </li>
 
@@ -106,12 +114,21 @@ export function Filters({
                 would mean reading two lists and merging them by eye. */}
             <Link
               href={to(chosen.id, q, toggle(statuses, status))}
-              className={
-                chose.has(status) ? `${styles.tally} ${styles.on}` : styles.tally
-              }
+              className={[
+                styles.tally,
+                // The one rule on the strip, where nothing has been decided
+                // yet ends and an outcome begins. It is the division a reader
+                // acts on, so it is the one that is drawn.
+                status === "accepted" ? styles.divide : "",
+                chose.has(status) ? styles.on : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
             >
-              {label(status)}
-              <span className={styles.count}>{counts[status] ?? 0}</span>
+              <span className={styles.tallyLabel}>{label(status)}</span>
+              <span className={`${styles.tallyCount} ${figureClass(status)}`}>
+                {counts[status] ?? 0}
+              </span>
             </Link>
           </li>
         ))}

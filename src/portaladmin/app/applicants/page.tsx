@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ApplicantsTable } from "@/components/applicants/applicants-table";
 import { Filters } from "@/components/applicants/filters";
 import { STATUSES } from "@/components/applicants/status";
+import styles from "@/components/applicants/applicants.module.css";
 import type { Status } from "@/components/applicants/types";
 import { currentPerson } from "@/lib/api";
 import { Shell } from "../shell";
@@ -73,7 +74,13 @@ export default async function Applicants({
 
   return (
     <Shell personId={person.personId}>
-      <h1>Applicants</h1>
+      {/* Which event this is, beside the heading rather than inside the filter
+          bar. It is not a filter — it is what the whole screen is about, and
+          every count under it is a count about this one event. */}
+      <div className={styles.head}>
+        <h1>Applicants</h1>
+        <p className={styles.scope}>{chosen.name}</p>
+      </div>
 
       <Filters
         events={events}

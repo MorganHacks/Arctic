@@ -6,6 +6,9 @@ import styles from "./applicants.module.css";
 import { StatusPill, stamp } from "./status";
 import type { ApplicantRow, PageResult } from "./types";
 
+/** How many placeholder rows stand in for a page on its way. */
+const WAITING = 3;
+
 /**
  * Every loaded applicant, one to a row.
  *
@@ -122,20 +125,54 @@ export function ApplicantsTable({
                 </td>
               </tr>
             ))}
+
+            {/*
+              Rows that have been asked for and have not arrived.
+              Rows rather than a spinner, and the height of the real ones, so
+              the table does not jump under the reader's cursor when the page
+              lands. They are hidden from the accessibility tree: a screen
+              reader announcing three empty rows would be describing furniture,
+              and the button already says it is loading.
+            */}
+            {loading
+              ? Array.from({ length: WAITING }, (_, index) => (
+                  <tr key={`waiting-${index}`} className={styles.pending} aria-hidden>
+                    <td className={styles.who}>
+                      <span />
+                    </td>
+                    <td>
+                      <span />
+                    </td>
+                    <td>
+                      <span />
+                    </td>
+                    <td>
+                      <span />
+                    </td>
+                    <td>
+                      <span />
+                    </td>
+                    <td>
+                      <span />
+                    </td>
+                  </tr>
+                ))
+              : null}
           </tbody>
         </table>
       </div>
 
       <div className={styles.foot}>
+        <div className={styles.loaded}>
+          <span className={styles.note}>{items.length} loaded</span>
+          {failed ? <span className={styles.failed}>{failed}</span> : null}
+        </div>
+
         {cursor !== null ? (
           <button type="button" onClick={more} disabled={loading}>
             {loading ? "Loading…" : "Load more"}
           </button>
         ) : null}
-
-        <span className={styles.note}>{items.length} loaded</span>
-
-        {failed ? <span className={styles.failed}>{failed}</span> : null}
       </div>
     </>
   );
