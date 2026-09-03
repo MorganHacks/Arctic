@@ -1,20 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  apiFetch,
-  currentPerson,
-  type FormsView,
-} from "@/lib/api";
+import { apiFetch, currentPerson, type FormsView } from "@/lib/api";
+import { FormsTable } from "@/components/formslist/forms-table";
+import { NoForms } from "@/components/formslist/no-forms";
 import { Shell } from "../shell";
 import { NewForm } from "./new-form";
 
 /**
  * The forms on one event.
  *
- * Two things are on every row because they are the two questions somebody
- * opens this screen to answer: what is the link, and is it live. A form that
- * has never been published is not broken — somebody is still writing it — so
- * that reads as a state rather than a warning.
+ * The screen answers three questions and nothing else: what is the link, is it
+ * live, and where do I go to edit it. Anything a form has that is not one of
+ * those belongs in the builder, which is one press away on every row.
  */
 export default async function Forms({
   searchParams,
@@ -54,8 +51,8 @@ export default async function Forms({
   const { events, chosen, forms } = (await response.json()) as FormsView;
 
   // Cosmetic. The API refuses the write whether or not this panel rendered, so
-  // hiding it is a courtesy to somebody who cannot use it rather than a
-  // control over anything.
+  // hiding it is a courtesy to somebody who cannot use it rather than a control
+  // over anything.
   const mine = person.permissions;
 
   if (!chosen) {
@@ -102,47 +99,16 @@ export default async function Forms({
       {mine.has("forms.manage") ? <NewForm eventId={chosen.id} /> : null}
 
       {forms.length === 0 ? (
-        <div className="empty">
-          No forms on {chosen.name} yet. The application form starts with MLH&rsquo;s
-          questions already on it.
-        </div>
+        <NoForms event={chosen.name} />
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Form</th>
-              <th>Kind</th>
-              <th>Code</th>
-              <th>Status</th>
-              <th>Questions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {forms.map((form) => (
-              <tr key={form.id}>
-                <td>
-                  <Link href={`/forms/${form.id}`}>{form.name}</Link>
-                </td>
-                <td>{form.kind}</td>
-                <td>
-                  {/* The thing people read aloud at a club meeting and write
-                      on a whiteboard, so it is set in mono and left alone. */}
-                  <code>{form.code}</code>
-                </td>
-                <td>
-                  {form.published ? (
-                    <span className="pill active">
-                      Live · v{form.publishedVersion}
-                    </span>
-                  ) : (
-                    <span className="pill lapsed">Draft only</span>
-                  )}
-                </td>
-                <td>{form.questions ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        /*
+         * The clock is read once, here, and handed down.
+         *
+         * A form that closes while this page is being rendered would otherwise
+         * be able to come out Live in one row's reckoning and Closed in the
+         * next, which is a bug nobody would ever reproduce.
+         */
+        <FormsTable forms={forms} now={Date.now()} />
       )}
     </Shell>
   );
