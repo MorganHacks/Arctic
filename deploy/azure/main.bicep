@@ -66,6 +66,14 @@ param publicBaseUrl string = ''
 param postgresVersion string = '18'
 
 @description('''
+Shared secret the front ends send so their forwarded client address is
+believed. Without it every caller is bucketed as Vercel, which is a coarser
+rate limit rather than none.
+''')
+@secure()
+param proxySecret string = ''
+
+@description('''
 Replicas of the web-facing services kept warm rather than asleep.
 
 Zero costs almost nothing and answers the first request after an idle spell a
@@ -202,6 +210,7 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     googleRedirectUri: googleRedirectUri
     publicBaseUrl: publicBaseUrl
     warmReplicas: warmReplicas
+    proxySecret: proxySecret
     pullIdentityId: pullIdentity.outputs.id
     pullIdentityClientId: pullIdentity.outputs.clientId
     tags: commonTags
