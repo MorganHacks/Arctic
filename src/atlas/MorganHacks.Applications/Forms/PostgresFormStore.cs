@@ -142,6 +142,51 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
         return await reader.ReadAsync(ct) ? ReadForm(reader) : null;
     }
 
+    /// <summary>Takes a live form down, leaving everything it collected.</summary>
+    /// <remarks>
+    /// Retires the published version and puts nothing in its place, which is the
+    /// same move publishing makes minus the second half. Nothing is deleted: the
+    /// retired version still describes the questions its answers were given to,
+    /// so the responses screen keeps working for a form nobody can fill in any
+    /// more. Answers outlive the form that asked for them, which is the point.
+    /// <para>
+    /// Returns false when there was nothing published, so a second press is a
+    /// no-op rather than an error.
+    /// </para>
+    /// </remarks>
+    public async Task<bool> UnpublishAsync(Guid formId, CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand(
+            "UPDATE applications.form_versions SET status = 'retired' "
+            + "WHERE form_id = @formId AND status = 'published'");
+
+        cmd.Parameters.AddWithValue("formId", formId);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    /// <summary>When the form stops accepting answers on its own.</summary>
+    /// <remarks>
+    /// Null clears it, which is a form that stays open until somebody takes it
+    /// down. The instant is stored as given; what timezone a person meant when
+    /// they typed it is the console's problem, not this one's, and it is settled
+    /// before the value arrives here.
+    /// </remarks>
+    public async Task<Form?> SaveScheduleAsync(
+        Guid formId,
+        DateTimeOffset? closesAt,
+        CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand(
+            "UPDATE applications.forms SET closes_at = @closesAt "
+            + $"WHERE id = @id RETURNING {FormColumns}");
+
+        cmd.Parameters.AddWithValue("id", formId);
+        cmd.Parameters.AddWithValue("closesAt", (object?)closesAt ?? DBNull.Value);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? ReadForm(reader) : null;
+    }
+
     public async Task<FormVersion?> PublishedAsync(Guid formId, CancellationToken ct = default)
     {
         await using var cmd = dataSource.CreateCommand(
