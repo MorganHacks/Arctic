@@ -1,0 +1,326 @@
+/*
+ * The responses screen.
+ *
+ * A module rather than more rules in globals.css. Nothing here is reused by
+ * another screen, and the console's shared stylesheet is edited by everybody —
+ * a class named `.table` in it would collide with the next person's.
+ *
+ * Every colour is a token from libs/ui/tokens.css. Not one hex, and almost no
+ * colour at all: the rule the palette is built on is that colour carries
+ * meaning or it is absent, and a table somebody scans for an hour is the exact
+ * place where a decorative tint would cost the reader the ability to trust the
+ * ones that mean something.
+ */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/*
+ * The table scrolls, the page does not.
+ *
+ * A form of twenty questions is twenty-three columns, and there is no width of
+ * screen that fixes that. The choice is between the page scrolling sideways —
+ * which takes the navigation and every other control with it — and the table
+ * scrolling inside its own box, which keeps everything else still.
+ *
+ * Bounded vertically for the same reason. With a height the header can stick
+ * to the top of it and the date can stick to the left of it, and a reader
+ * three hundred rows down still knows which column is which.
+ */
+.scroll {
+  overflow: auto;
+  max-height: min(70vh, 44rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  overscroll-behavior: contain;
+}
+
+.table {
+  /* Wider than its container when it needs to be. The global rule sets tables
+     to 100%, which inside a scrolling box means squeezing twenty columns into
+     the viewport instead of scrolling them. */
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--raised);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The one column that is always in view. Which response a row is stays
+   readable no matter how far right somebody has scrolled. */
+.when {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--raised);
+  border-right: 1px solid var(--line-soft);
+}
+
+.table thead .when {
+  z-index: 3;
+}
+
+/* Repainted on hover because a sticky cell has its own background and the
+   shared row-hover rule would otherwise stop at its edge. */
+.row:hover .when {
+  background: var(--sunken);
+}
+
+.row.selected td,
+.row.selected .when {
+  background: var(--accent-soft);
+}
+
+.row {
+  cursor: pointer;
+}
+
+/*
+ * The button that opens a response.
+ *
+ * A real button rather than a click handler on the row, so the whole table can
+ * be walked with a keyboard. The row stays clickable for a mouse; the two do
+ * the same thing.
+ */
+.open {
+  font: inherit;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.open:hover {
+  text-decoration: underline;
+}
+
+/* Answers are one line in the table however long they are. A row that grows to
+   fit a five-hundred-word answer makes the fifty rows around it unreadable,
+   and the whole answer is one click away in the panel. */
+.cell {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.version {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* An unanswered question. Quiet on purpose: on an optional question this is
+   the common case, and a hundred coloured dashes would drown the things that
+   are worth noticing. */
+.blank {
+  color: var(--faint);
+}
+
+/* A column for a question the form no longer asks. Set in mono because the key
+   is all that is left of it — the label was deleted with the question. */
+.retired {
+  font-family: var(--mono);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.failed {
+  color: var(--stop);
+  font-size: 0.85rem;
+}
+
+/* One response, in full ------------------------------------------------ */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: color-mix(in oklab, var(--ink) 30%, transparent);
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 11;
+  width: min(38rem, 100%);
+  overflow-y: auto;
+  background: var(--raised);
+  border-left: 1px solid var(--line);
+  padding: 1.25rem 1.4rem 2.5rem;
+}
+
+.panelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.5rem;
+}
+
+.panelHead h2 {
+  margin: 0;
+}
+
+.stamp {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  margin: 0.15rem 0 0;
+}
+
+.qa {
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.qa:last-child {
+  border-bottom: none;
+}
+
+.question {
+  margin: 0 0 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* The key rather than a label, for a question that no longer exists. */
+.questionKey {
+  font-family: var(--mono);
+}
+
+.answer {
+  margin: 0;
+  /* Line breaks somebody typed are kept. A long answer reflowed into one block
+     is one nobody finishes. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.numericAnswer {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.unanswered {
+  margin: 0;
+  color: var(--faint);
+}
+
+.ticked {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.section {
+  margin: 1.25rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.resume {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.filename {
+  overflow-wrap: anywhere;
+}
+
+/* Nothing here yet ----------------------------------------------------- */
+
+.nothing {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  padding: 2rem 1.75rem;
+  max-width: 42rem;
+}
+
+.nothing h2 {
+  margin: 0 0 0.5rem;
+}
+
+.nothing p {
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+  max-width: 34rem;
+}
+
+.waiting {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--line-soft);
+  columns: 2;
+  column-gap: 1.5rem;
+}
+
+@media (max-width: 40rem) {
+  .waiting {
+    columns: 1;
+  }
+}
+
+.waiting li {
+  break-inside: avoid;
+  padding: 0.2rem 0;
+  font-size: 0.9rem;
+}
