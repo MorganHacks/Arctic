@@ -66,6 +66,18 @@ param publicBaseUrl string = ''
 param postgresVersion string = '18'
 
 @description('''
+Replicas of the web-facing services kept warm rather than asleep.
+
+Zero costs almost nothing and answers the first request after an idle spell a
+few seconds late. One removes that delay and costs roughly thirty dollars a
+month more. Set it to one while registration is open and for the event
+weekend; leave it at zero the rest of the year.
+''')
+@minValue(0)
+@maxValue(3)
+param warmReplicas int = 0
+
+@description('''
 False on the first pass. The registry has to exist and hold the images before
 the migration job can be created — Container Apps validates that the image is
 really there — so pass one is the registry alone.
@@ -189,6 +201,7 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     googleClientSecret: googleClientSecret
     googleRedirectUri: googleRedirectUri
     publicBaseUrl: publicBaseUrl
+    warmReplicas: warmReplicas
     pullIdentityId: pullIdentity.outputs.id
     pullIdentityClientId: pullIdentity.outputs.clientId
     tags: commonTags
