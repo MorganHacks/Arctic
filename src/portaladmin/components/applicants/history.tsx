@@ -1,5 +1,5 @@
 import styles from "./applicants.module.css";
-import { StatusPill, stamp } from "./status";
+import { StatusPill, markClass, stamp } from "./status";
 import type { Step } from "./types";
 
 /**
@@ -25,9 +25,13 @@ export function History({ steps }: { steps: Step[] }) {
   }
 
   return (
+    // Drawn as a rail with a mark against each step, because this is read as a
+    // sequence and a list of separate rows is read as a set of unrelated
+    // facts. The mark takes the colour of the status the step arrived at, so
+    // the trail carries the same four families as the pills beside it.
     <ul className={styles.trail}>
       {steps.map((step, index) => (
-        <li key={`${step.at}-${index}`}>
+        <li key={`${step.at}-${index}`} className={markClass(step.to)}>
           <div className={styles.step}>
             {step.from ? (
               <>

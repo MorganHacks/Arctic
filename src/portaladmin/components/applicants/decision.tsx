@@ -29,15 +29,35 @@ import type { Status } from "./types";
 export function Decision({
   id,
   allowedNext,
+  canDecide,
 }: {
   id: string;
   allowedNext: Status[];
+
+  /**
+   * Whether this reader holds `applications.decide`.
+   *
+   * `allowedNext` does not answer this and should not: it describes the
+   * application, not the reader, and the same lifecycle is true whoever is
+   * looking at it. Two different reasons for there being no button — the
+   * record has nowhere to go, and this person may not move it — need two
+   * different sentences, and only one of them is worth asking an admin about.
+   */
+  canDecide: boolean;
 }) {
   const [state, submit, pending] = useActionState(changeStatus, {});
 
+  if (!canDecide) {
+    return (
+      <p className={styles.refusal}>
+        You do not have <code>applications.decide</code>. Ask an admin.
+      </p>
+    );
+  }
+
   if (allowedNext.length === 0) {
     return (
-      <p className="meta">
+      <p className={styles.terminal}>
         Nowhere left to go. Reversing this would be a new application rather
         than an edit, so that the history keeps saying what happened.
       </p>
@@ -50,7 +70,7 @@ export function Decision({
 
       <div>
         <label htmlFor="status">Move to</label>
-        <select id="status" name="status" defaultValue="" style={{ width: "100%" }}>
+        <select id="status" name="status" defaultValue="">
           <option value="" disabled>
             Pick a status
           </option>
