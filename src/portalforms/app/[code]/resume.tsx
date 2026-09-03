@@ -193,13 +193,18 @@ export function ResumeField({
         name={field.key}
         type="file"
         accept="application/pdf,.pdf"
-        aria-describedby={describedBy}
+        /* The limits are part of the question, not a note beside it. Somebody
+           hearing the page has to be told what will be accepted before they go
+           looking for a file, not after one has been refused. */
+        aria-describedby={[describedBy, `${id}-limits`].filter(Boolean).join(" ")}
         aria-invalid={wrong || undefined}
         className={wrong ? "wrong" : undefined}
         onChange={(e) => pick(e.target.files?.[0])}
       />
 
-      <p className="help">PDF, up to 5 MB.</p>
+      <p className="help" id={`${id}-limits`}>
+        PDF, up to 5 MB.
+      </p>
 
       {state.phase === "uploading" ? (
         <Progress name={state.name} sent={state.sent} total={state.total} />

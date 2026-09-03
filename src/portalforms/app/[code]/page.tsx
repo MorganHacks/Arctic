@@ -47,8 +47,22 @@ export default async function FormPage({ params }: Props) {
     return <NoForm />;
   }
 
-  if (!form.open || !form.fields) {
+  /*
+   * Closed and empty are separate answers, and conflating them told somebody
+   * with a live link that the deadline had passed.
+   *
+   * A form that is open answers with its questions. One that is open and has
+   * none is not a form anybody can fill in, which is the same thing an
+   * unpublished form is from out here — so it gets the same page, for the same
+   * reason: nothing about which codes are real should be inferable from what
+   * this page says.
+   */
+  if (!form.open) {
     return <Closed name={form.name} closedAt={form.closesAt} />;
+  }
+
+  if (!form.fields || form.fields.length === 0) {
+    return <NoForm />;
   }
 
   return (

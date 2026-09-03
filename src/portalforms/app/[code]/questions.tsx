@@ -1,34 +1,63 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Field } from "@/lib/api";
-import { ResumeField, type Resume } from "./resume";
+import {
+  answered,
+  check,
+  payload,
+  shorten,
+  type Answer,
+  type Answers,
+  type Problems,
+} from "./answers";
+import { Question, fieldId } from "./field";
 
-/** What one question's answer looks like while it is being filled in. */
-type Answer = string | string[] | boolean | Resume;
-
-type Answers = Record<string, Answer | undefined>;
-type Problems = Record<string, string>;
+/**
+ * A form long enough that somebody wants to know how far through it they are.
+ *
+ * Below this the count is furniture: a five-question survey is a screen and a
+ * half, and telling somebody they are two questions into it says nothing they
+ * cannot see.
+ */
+const LONG_FORM = 8;
 
 /**
  * The form, and everything that happens when somebody submits it.
  *
  * The checks in here are a courtesy, not the rule. They save a round trip and
  * put each message next to the box it belongs to, which on a phone is the
- * difference between fixing one field and scrolling a long page hunting for
- * it. The API validates the same things against the published version, and
- * that is the check that decides anything — this file is deleteable in the
- * sense that removing it would make the form worse, not unsafe.
+ * difference between fixing one field and scrolling a long page hunting for it.
+ * The API validates the same things against the published version, and that is
+ * the check that decides anything — this file is deleteable in the sense that
+ * removing it would make the form worse, not unsafe.
+ *
+ * Nothing here ever clears an answer. Every failure path — a refused
+ * submission, a dropped connection, a file that would not upload — leaves what
+ * somebody typed exactly where they typed it, because the one unforgivable
+ * thing a form can do is make a person write it out twice.
  */
 export function Questions({ code, fields }: { code: string; fields: Field[] }) {
   const router = useRouter();
   const form = useRef<HTMLFormElement>(null);
+  const summary = useRef<HTMLDivElement>(null);
 
   const [answers, setAnswers] = useState<Answers>({});
   const [problems, setProblems] = useState<Problems>({});
   const [banner, setBanner] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  /*
+   * Bumped every time a submission is refused.
+   *
+   * The summary has to take focus on each attempt, including the second one
+   * that fails the same way. Watching the problems themselves would move focus
+   * on the first refusal and then sit silent while somebody pressed Submit
+   * again and nothing appeared to happen.
+   */
+  const [attempt, setAttempt] = useState(0);
 
   /*
    * Which questions are still uploading something.
@@ -40,6 +69,42 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
    */
   const [uploading, setUploading] = useState<string[]>([]);
   const busy = uploading.length > 0;
+
+  const listed = useMemo(
+    () => fields.filter((field) => field.key in problems),
+    [fields, problems],
+  );
+
+  const done = fields.filter((field) => answered(field, answers[field.key])).length;
+  const started = done > 0 || Object.keys(answers).length > 0;
+
+  /*
+   * A part-filled form is worth a browser's own "are you sure" and nothing
+   * more. There is no server-side draft yet — nothing here knows who is coming
+   * back — so a closed tab is genuinely lost, and the one protection available
+   * is the one the browser already offers.
+   *
+   * The wording is the browser's, deliberately. Every browser ignores whatever
+   * a page tries to put in it.
+   */
+  useEffect(() => {
+    if (!started || sent) {
+      return;
+    }
+
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [started, sent]);
+
+  // Focus goes to the list of problems rather than to the first of them. Six
+  // complaints and a cursor in the first box reads as one complaint; the list
+  // is the only thing that says how much is left to fix.
+  useEffect(() => {
+    if (attempt > 0) {
+      summary.current?.focus();
+    }
+  }, [attempt]);
 
   function setBusy(key: string, isBusy: boolean) {
     setUploading((current) =>
@@ -67,15 +132,19 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
   }
 
   /**
-   * Puts the cursor on the first thing that is wrong.
+   * Puts the cursor on one question.
    *
    * On a phone the failing question is usually off-screen, and a form that
    * refuses to submit without visibly saying why is one people give up on.
    */
   function goTo(key: string) {
-    const field = form.current?.querySelector<HTMLElement>(`[data-key="${key}"]`);
-    field?.scrollIntoView({ block: "center", behavior: "smooth" });
-    field?.querySelector<HTMLElement>("input, select, textarea")?.focus();
+    const question = form.current?.querySelector<HTMLElement>(
+      `[data-key="${CSS.escape(key)}"]`,
+    );
+
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    question?.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+    question?.querySelector<HTMLElement>("input, select, textarea")?.focus();
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -85,6 +154,9 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
       return;
     }
 
+    // Every question, every time. Stopping at the first would send somebody
+    // back down the form once per mistake, and on a phone each trip is a
+    // scroll through everything they already got right.
     const found: Problems = {};
     for (const field of fields) {
       const problem = check(field, answers[field.key]);
@@ -93,14 +165,14 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
       }
     }
 
-    setProblems(found);
-    const first = fields.find((f) => f.key in found);
-    if (first) {
+    if (Object.keys(found).length > 0) {
+      setProblems(found);
       setBanner(null);
-      goTo(first.key);
+      setAttempt((n) => n + 1);
       return;
     }
 
+    setProblems({});
     setSending(true);
     setBanner(null);
 
@@ -117,6 +189,10 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
       );
 
       if (response.ok) {
+        // Set before navigating, so the unload guard does not ask somebody
+        // whether they meant to leave a form they have just submitted.
+        setSent(true);
+
         // Replaced rather than pushed. Going Back to a form that has already
         // been accepted can only end in a confusing "you have already
         // applied", and there is nothing useful to do with it a second time.
@@ -134,41 +210,85 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
       // form, and a second copy of that knowledge over here would be a worse
       // one that drifts.
       const returned: Problems = {};
+      let loose = false;
+
       for (const problem of body.problems ?? []) {
         if (problem.field) {
           returned[problem.field] = problem.message;
+        } else {
+          loose = true;
         }
       }
 
       setProblems(returned);
 
-      const firstReturned = fields.find((f) => f.key in returned);
-      if (firstReturned) {
-        setBanner(null);
-        goTo(firstReturned.key);
-      } else {
-        setBanner(body.error ?? "That did not go through. Try again.");
-      }
+      // The banner and the list are not alternatives. A refusal can carry both
+      // a sentence about the whole submission and a complaint about one
+      // question, and dropping either leaves somebody without the half that
+      // tells them what to do.
+      const keyed = Object.keys(returned).length > 0;
+      setBanner(keyed && !loose ? null : (body.error ?? "That did not go through. Try again."));
+
+      setAttempt((n) => n + 1);
     } catch {
       setBanner("We could not reach the server. Check your connection and try again.");
+      setAttempt((n) => n + 1);
     } finally {
       setSending(false);
     }
   }
 
   return (
-    <form ref={form} onSubmit={submit} noValidate>
-      {banner ? (
-        <div className="banner" role="alert">
-          <p>{banner}</p>
-        </div>
+    <form ref={form} onSubmit={submit} noValidate aria-busy={sending || undefined}>
+      {fields.length >= LONG_FORM ? (
+        <Progress done={done} total={fields.length} />
       ) : null}
 
-      {fields.map((field) => (
+      {/*
+       * One place that says everything that is wrong, at the top, taking focus
+       * when a submission is refused. It is the pattern a screen reader user
+       * expects and the only one that answers "how much is left" — a cursor
+       * dropped in the first bad box answers "what is wrong here" and nothing
+       * else.
+       */}
+      <div
+        className="summary"
+        ref={summary}
+        tabIndex={-1}
+        role="alert"
+        aria-live="assertive"
+      >
+        {banner ? <p className="summary-lede">{banner}</p> : null}
+
+        {listed.length > 0 ? (
+          <>
+            <p className="summary-lede">Some answers need another look.</p>
+            <ul>
+              {listed.map((field) => (
+                <li key={field.key}>
+                  <a
+                    href={`#${fieldId(field.key)}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      goTo(field.key);
+                    }}
+                  >
+                    {shorten(field.label)}
+                  </a>{" "}
+                  — {problems[field.key]}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </div>
+
+      {fields.map((field, index) => (
         <Question
           key={field.key}
           code={code}
           field={field}
+          index={index + 1}
           answer={answers[field.key]}
           problem={problems[field.key]}
           onChange={set}
@@ -191,419 +311,27 @@ export function Questions({ code, fields }: { code: string; fields: Field[] }) {
 }
 
 /**
- * One question.
+ * How far through the form somebody is.
  *
- * Every type in the builder is rendered here and nowhere else, so adding one
- * is a single place to change — and a type that arrives without a case falls
- * through to a text box rather than to nothing, because a question an
- * applicant cannot answer is worse than a plain one.
+ * A count and a bar, not a percentage on its own. On a thirty-question form the
+ * useful number is how many questions are left, and only a count answers that.
+ *
+ * The bar is decoration over the number and is hidden from a screen reader
+ * accordingly. The count is not a live region: it changes on every keystroke,
+ * and announcing it would talk over the box somebody is typing into.
  */
-function Question({
-  code,
-  field,
-  answer,
-  problem,
-  onChange,
-  onBusy,
-}: {
-  code: string;
-  field: Field;
-  answer: Answer | undefined;
-  problem: string | undefined;
-  onChange: (key: string, value: Answer | undefined) => void;
-  onBusy: (key: string, busy: boolean) => void;
-}) {
-  const id = `q-${field.key}`;
-  const helpId = field.help ? `${id}-help` : undefined;
-  const problemId = problem ? `${id}-problem` : undefined;
-  const describedBy = [helpId, problemId].filter(Boolean).join(" ") || undefined;
-
-  const grouped =
-    field.type === "radio" ||
-    field.type === "checkboxes" ||
-    field.type === "consent";
-
-  const body = (
-    <>
-      {field.help ? (
-        <p className="help" id={helpId}>
-          {field.help}
-        </p>
-      ) : null}
-
-      <Control
-        code={code}
-        field={field}
-        id={id}
-        answer={answer}
-        describedBy={describedBy}
-        wrong={Boolean(problem)}
-        onChange={onChange}
-        onBusy={onBusy}
-      />
-
-      {problem ? (
-        <strong className="wrong-note" id={problemId} role="alert">
-          {problem}
-        </strong>
-      ) : null}
-    </>
-  );
-
-  // A group of radios or checkboxes needs a fieldset and a legend, or a screen
-  // reader announces each option with no idea what the question was.
-  return grouped ? (
-    <fieldset
-      className={`question${problem ? " wrong" : ""}`}
-      data-key={field.key}
-    >
-      <legend>
-        {field.type === "consent" ? "Agreement" : field.label}
-        <Requiredness field={field} />
-      </legend>
-      {body}
-    </fieldset>
-  ) : (
-    <div className={`question${problem ? " wrong" : ""}`} data-key={field.key}>
-      <label className="prompt" htmlFor={id}>
-        {field.label}
-        <Requiredness field={field} />
-      </label>
-      {body}
+function Progress({ done, total }: { done: number; total: number }) {
+  return (
+    <div className="tally">
+      <p className="tally-count">
+        {done} of {total} answered
+      </p>
+      <div className="tally-track" aria-hidden="true">
+        <div
+          className="tally-bar"
+          style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
+        />
+      </div>
     </div>
   );
-}
-
-/**
- * Whether an answer is needed.
- *
- * A word rather than a red asterisk. Being required is not an error, and on a
- * page where --stop means "something went wrong" it must not look like one.
- * Optional questions are marked too, because on a long form the useful thing
- * to know is which ones can be skipped.
- */
-function Requiredness({ field }: { field: Field }) {
-  return field.required ? (
-    <span className="needed">Required</span>
-  ) : (
-    <span className="optional">Optional</span>
-  );
-}
-
-function Control({
-  code,
-  field,
-  id,
-  answer,
-  describedBy,
-  wrong,
-  onChange,
-  onBusy,
-}: {
-  code: string;
-  field: Field;
-  id: string;
-  answer: Answer | undefined;
-  describedBy: string | undefined;
-  wrong: boolean;
-  onChange: (key: string, value: Answer | undefined) => void;
-  onBusy: (key: string, busy: boolean) => void;
-}) {
-  const shared = {
-    id,
-    name: field.key,
-    "aria-describedby": describedBy,
-    "aria-invalid": wrong || undefined,
-    className: wrong ? "wrong" : undefined,
-  };
-
-  const text = typeof answer === "string" ? answer : "";
-
-  switch (field.type) {
-    case "paragraph":
-      return (
-        <textarea
-          {...shared}
-          value={text}
-          maxLength={field.maxLength ?? undefined}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        />
-      );
-
-    case "email":
-      return (
-        <input
-          {...shared}
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          autoCapitalize="none"
-          spellCheck={false}
-          value={text}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        />
-      );
-
-    case "phone":
-      return (
-        <input
-          {...shared}
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          value={text}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        />
-      );
-
-    case "number":
-      return (
-        <input
-          {...shared}
-          type="number"
-          inputMode="numeric"
-          min={field.min ?? undefined}
-          max={field.max ?? undefined}
-          value={text}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        />
-      );
-
-    case "date":
-      return (
-        <input
-          {...shared}
-          type="date"
-          value={text}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        />
-      );
-
-    case "select":
-      return (
-        <select
-          {...shared}
-          value={text}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        >
-          {/* Empty and first, so an untouched dropdown does not silently
-              answer with whichever option happened to be listed first. */}
-          <option value="">Choose one…</option>
-          {field.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      );
-
-    case "radio":
-      return (
-        <>
-          {field.options.map((option, index) => (
-            <label className="choice" key={option.value}>
-              <input
-                type="radio"
-                id={index === 0 ? id : undefined}
-                name={field.key}
-                value={option.value}
-                checked={text === option.value}
-                aria-describedby={describedBy}
-                onChange={() => onChange(field.key, option.value)}
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </>
-      );
-
-    case "checkboxes": {
-      const chosen = Array.isArray(answer) ? answer : [];
-
-      return (
-        <>
-          {field.options.map((option, index) => (
-            <label className="choice" key={option.value}>
-              <input
-                type="checkbox"
-                id={index === 0 ? id : undefined}
-                name={field.key}
-                value={option.value}
-                checked={chosen.includes(option.value)}
-                aria-describedby={describedBy}
-                onChange={(e) =>
-                  onChange(
-                    field.key,
-                    e.target.checked
-                      ? [...chosen, option.value]
-                      : chosen.filter((v) => v !== option.value),
-                  )
-                }
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </>
-      );
-    }
-
-    case "consent":
-      return (
-        <label className="choice agreement">
-          <input
-            {...shared}
-            type="checkbox"
-            checked={answer === true}
-            onChange={(e) => onChange(field.key, e.target.checked)}
-          />
-          {/* The wording is MLH's and is not ours to shorten. It sits beside
-              the tick rather than above it so the two read as one act. */}
-          <span>{field.label}</span>
-        </label>
-      );
-
-    case "file":
-      // The one control that talks to the API before the form is submitted,
-      // so it owns its own state rather than being another branch here.
-      return (
-        <ResumeField
-          field={field}
-          id={id}
-          code={code}
-          describedBy={describedBy}
-          wrong={wrong}
-          value={
-            typeof answer === "object" && !Array.isArray(answer)
-              ? answer
-              : undefined
-          }
-          onChange={onChange}
-          onBusy={onBusy}
-        />
-      );
-
-    default:
-      return (
-        <input
-          {...shared}
-          type="text"
-          maxLength={field.maxLength ?? undefined}
-          value={text}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        />
-      );
-  }
-}
-
-/** Whether there is an answer here at all. Blank is absent, not empty. */
-function answered(field: Field, answer: Answer | undefined): boolean {
-  if (answer === undefined || answer === null) {
-    return false;
-  }
-
-  if (field.type === "consent") {
-    return answer === true;
-  }
-
-  if (Array.isArray(answer)) {
-    return answer.length > 0;
-  }
-
-  // A file is only an answer once its bytes are somewhere. A picked file whose
-  // upload failed is not one — reading it as an answer is how a required
-  // resume question passes with nothing behind it.
-  if (typeof answer === "object") {
-    return answer.upload.length > 0;
-  }
-
-  return String(answer).trim().length > 0;
-}
-
-/**
- * The same rules the API applies, checked early.
- *
- * Kept short deliberately. Anything subtle enough that the two copies could
- * drift belongs on the server alone — a message that appears here and not
- * there is confusing, and one that appears there and not here is merely a
- * round trip.
- */
-function check(field: Field, answer: Answer | undefined): string | null {
-  if (!answered(field, answer)) {
-    if (!field.required) {
-      return null;
-    }
-
-    return field.type === "consent"
-      ? "You have to agree to this to continue."
-      : "This one is needed.";
-  }
-
-  if (typeof answer !== "string") {
-    return null;
-  }
-
-  const value = answer.trim();
-
-  if (field.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-    return "That does not look like an email address.";
-  }
-
-  if (field.type === "number") {
-    const number = Number(value);
-
-    if (!Number.isFinite(number)) {
-      return "This has to be a number.";
-    }
-
-    if (field.min !== null && number < field.min) {
-      return `This cannot be below ${field.min}.`;
-    }
-
-    if (field.max !== null && number > field.max) {
-      return `This cannot be above ${field.max}.`;
-    }
-  }
-
-  if (field.minLength !== null && value.length < field.minLength) {
-    return `Needs at least ${field.minLength} characters.`;
-  }
-
-  if (field.maxLength !== null && value.length > field.maxLength) {
-    return `Has to be under ${field.maxLength} characters.`;
-  }
-
-  return null;
-}
-
-/**
- * What actually gets posted.
- *
- * Only the questions the form asked, and only the ones with something in
- * them. The API ignores anything else anyway — it validates against the
- * version it loaded, not against this list — so this is about sending a clean
- * body rather than about safety.
- */
-function payload(fields: Field[], answers: Answers): Record<string, unknown> {
-  const body: Record<string, unknown> = {};
-
-  for (const field of fields) {
-    const answer = answers[field.key];
-    if (!answered(field, answer)) {
-      continue;
-    }
-
-    if (typeof answer === "string") {
-      body[field.key] = answer.trim();
-    } else if (typeof answer === "object" && !Array.isArray(answer)) {
-      // The upload id and nothing else. The name and the size are held here
-      // to draw the row that says what is attached; the API took both from
-      // the file while it had it, and sending our copies back would be us
-      // describing a file it is already looking at.
-      body[field.key] = { upload: answer.upload };
-    } else {
-      body[field.key] = answer;
-    }
-  }
-
-  return body;
 }

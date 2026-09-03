@@ -28,6 +28,19 @@ The page checks required questions, email shape and number ranges before it
 posts. That is a courtesy: it saves a round trip and puts each message beside
 the box it belongs to.
 
+Every problem is raised at once, in two places. Each message sits under its own
+question, and all of them are also listed at the top of the form — which is the
+part that takes focus when a submission is refused, and the only part that
+answers "how much is left to fix". A cursor dropped in the first bad box answers
+"what is wrong here" and nothing else, and on a thirty-question form that is six
+scrolls to find out there were six problems.
+
+Nothing this side is ever stricter than the API. A rule that refuses an answer
+the server would have accepted is worse than no rule at all, because the person
+it refuses has no way past it — which is why the address check here only looks
+for an `@` between two non-empty halves, and why the character caps are the same
+numbers `SubmissionValidation` applies.
+
 The API validates the same things against the version it loaded itself, and
 that is the check that decides anything. It never reads the question list from
 the request — a field list that arrived with the answers would be a claim

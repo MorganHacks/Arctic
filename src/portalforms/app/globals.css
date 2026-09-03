@@ -42,12 +42,17 @@ a {
 .page {
   max-width: 40rem;
   margin: 0 auto;
-  padding: 1.25rem 1rem 4rem;
+
+  /* The bottom padding clears the sticky submit bar, and the safe-area inset
+     clears the home indicator on a phone with no bezel. Without the second one
+     the button sits under the swipe gesture and every other press is a
+     dismissed page rather than a submitted form. */
+  padding: 1.25rem 1rem calc(3rem + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 40rem) {
   .page {
-    padding: 2.5rem 1.5rem 5rem;
+    padding: 2.5rem 1.5rem 4rem;
   }
 }
 
@@ -99,6 +104,15 @@ h1 {
   border-radius: var(--radius-lg);
   padding: 1rem;
   margin-bottom: 0.75rem;
+
+  /* A question sent to from the list of problems is scrolled to the top of the
+     viewport. Without this its label sits flush against the edge, which reads
+     as having landed one question too far down. */
+  scroll-margin-top: 1rem;
+
+  /* A label, a hint or an option is somebody else's text and can be any length
+     without a space in it. It wraps rather than widening the page. */
+  overflow-wrap: anywhere;
 }
 
 .question:focus-within {
@@ -121,6 +135,24 @@ fieldset.question {
   min-width: 0;
 }
 
+/*
+ * A legend has to sit inside its own card, like every other question's label.
+ *
+ * `display: block` is not enough: a rendered legend is laid out in the
+ * fieldset's border rather than in its content box, so the question wearing a
+ * legend came out with its wording floating above the card while every question
+ * wearing a label had it inside. Floating it puts it back in flow, and the
+ * clear underneath stops the first option wrapping around it.
+ */
+fieldset.question > legend {
+  float: left;
+  width: 100%;
+}
+
+fieldset.question > legend + * {
+  clear: both;
+}
+
 .optional,
 .needed {
   display: block;
@@ -130,10 +162,74 @@ fieldset.question {
   margin-top: 0.1rem;
 }
 
+/*
+ * The question's number.
+ *
+ * Not decoration: on a thirty-question form it is what turns "the one about
+ * dietary requirements" into a place, and it pairs with the count at the top of
+ * the page so that both are measuring the same thing.
+ */
+.ordinal {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  margin-right: 0.5rem;
+}
+
 .help {
   color: var(--muted);
   font-size: 0.875rem;
   margin: 0 0 0.6rem;
+}
+
+/*
+ * How much of a long answer has been used.
+ *
+ * Numerals and a slash, no words. It sits under a box somebody is typing into
+ * and has to be readable without being read, and there is no wording here to
+ * get wrong in a second language.
+ *
+ * It exists because the box no longer stops accepting characters at the limit.
+ * A hard cap silently swallows the end of a pasted paragraph, and somebody who
+ * has pasted their answer has no way of knowing which half arrived.
+ */
+.counter {
+  color: var(--faint);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  margin: 0.35rem 0 0;
+}
+
+/*
+ * How far through the form somebody is.
+ *
+ * Uncoloured on purpose. Progress is not a warning and it is not the thing to
+ * do next, and on a page where colour means one of those two things a coloured
+ * bar here would be a third meaning nobody was told about.
+ */
+.tally {
+  margin-bottom: 1rem;
+}
+
+.tally-count {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 0.4rem;
+}
+
+.tally-track {
+  height: 0.3rem;
+  border-radius: var(--radius);
+  background: var(--line);
+  overflow: hidden;
+}
+
+.tally-bar {
+  height: 100%;
+  background: var(--muted);
+  transition: width 160ms ease-out;
 }
 
 /* Controls ------------------------------------------------------------- */
@@ -183,6 +279,13 @@ textarea.wrong {
  * thumb needs and the label is part of the target rather than a thing to aim
  * beside.
  */
+/* The options of one question, so a fieldset's legend, hint and complaint are
+   not themselves separated by the dividing rules that belong between choices. */
+.choices {
+  display: flex;
+  flex-direction: column;
+}
+
 .choice {
   display: flex;
   gap: 0.65rem;
@@ -313,17 +416,52 @@ button.quiet:hover {
   margin-top: 0.5rem;
 }
 
-.banner {
+/*
+ * Everything that is wrong, in one place, at the top.
+ *
+ * It exists in the markup from the first render rather than appearing on
+ * refusal. A live region that is inserted at the same moment as its own content
+ * is one a screen reader has a good chance of never announcing, and this is the
+ * announcement — the messages against each question are what somebody finds
+ * when they arrive, not how they are told.
+ *
+ * Empty it takes no space at all, so a form nobody has submitted yet does not
+ * begin with a gap where a complaint might one day go.
+ */
+.summary:empty {
+  display: none;
+}
+
+.summary {
   border: 1px solid var(--stop);
   background: var(--stop-soft);
   color: var(--stop);
   border-radius: var(--radius-lg);
   padding: 0.85rem 1rem;
   margin-bottom: 1rem;
+  scroll-margin-top: 1rem;
 }
 
-.banner p {
+.summary-lede {
   margin: 0;
+  font-weight: 600;
+}
+
+.summary ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.summary li {
+  font-size: 0.9375rem;
+  padding: 0.15rem 0;
+}
+
+/* The link inherits the surrounding colour rather than taking the accent. The
+   accent means "the thing to do next" everywhere else on this page, and six of
+   them in a list of complaints would say six next things. */
+.summary a {
+  color: inherit;
 }
 
 /* Submitting ----------------------------------------------------------- */
@@ -331,7 +469,7 @@ button.quiet:hover {
 .submit {
   position: sticky;
   bottom: 0;
-  padding: 1rem 0 0;
+  padding: 1rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(to bottom, transparent, var(--sunken) 45%);
 }
 
