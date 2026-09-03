@@ -15,6 +15,31 @@ namespace MorganHacks.Applications.Segments;
 /// </remarks>
 public sealed class PostgresSegmentResolver(NpgsqlDataSource dataSource) : ISegmentResolver
 {
+    /// <summary>
+    /// The select list every applicant query shares.
+    /// </summary>
+    /// <remarks>
+    /// Built from <see cref="ApplicantColumns.Mergeable"/> rather than typed
+    /// out, so a column becomes readable here by being declared there and by
+    /// nothing else. The two queries below would otherwise be a second and a
+    /// third place to remember, and the failure of forgetting one is an editor
+    /// offering a placeholder that comes out blank for a whole segment.
+    /// <para>
+    /// Interpolated into SQL, which is worth being explicit about: every part
+    /// of this string is a column name from a list declared in code, and a
+    /// test asserts that every one of them is a real column of
+    /// <c>applications.applications</c>. Nothing a caller sends reaches it.
+    /// </para>
+    /// <para>
+    /// Withheld columns are not selected at all. A resume key that is never
+    /// read out of the table cannot end up in a rendered body by accident.
+    /// </para>
+    /// </remarks>
+    private static readonly string Selected = string.Join(
+        ", ",
+        new[] { "a.person_id" }.Concat(
+            ApplicantColumns.Mergeable.Select(column => $"a.{column.Column}")));
+
     public Task<ResolvedSegment> ResolveAsync(
         Segment segment, CancellationToken ct = default) => segment switch
         {
@@ -36,11 +61,11 @@ public sealed class PostgresSegmentResolver(NpgsqlDataSource dataSource) : ISegm
     private async Task<ResolvedSegment> InStatusAsync(
         Segment.InStatus segment, CancellationToken ct)
     {
-        const string sql = """
-            SELECT person_id, email, first_name, last_name
-              FROM applications.applications
-             WHERE event_id = @eventId AND status = ANY(@statuses)
-             ORDER BY email
+        var sql = $"""
+            SELECT {Selected}
+              FROM applications.applications a
+             WHERE a.event_id = @eventId AND a.status = ANY(@statuses)
+             ORDER BY a.email
              LIMIT @limit
             """;
 
@@ -73,8 +98,8 @@ public sealed class PostgresSegmentResolver(NpgsqlDataSource dataSource) : ISegm
     private async Task<ResolvedSegment> RespondentsAsync(
         Segment.FormRespondents segment, CancellationToken ct)
     {
-        const string sql = """
-            SELECT a.person_id, a.email, a.first_name, a.last_name
+        var sql = $"""
+            SELECT {Selected}
               FROM applications.applications a
               JOIN applications.forms f ON f.event_id = a.event_id
              WHERE f.id = @formId
@@ -106,22 +131,56 @@ public sealed class PostgresSegmentResolver(NpgsqlDataSource dataSource) : ISegm
     /// That is the correct answer for a sponsor contact and a small loss for
     /// an applicant somebody happened to paste in.
     /// </para>
+    /// <para>
+    /// An address fills in the one column
+    /// <see cref="ApplicantColumn.OnAddressLists"/> marks and no other, so a
+    /// template greeting a sponsor by name is refused before the send rather
+    /// than mailed with the greeting still standing in it.
+    /// </para>
     /// </remarks>
     private static ResolvedSegment Addresses(Segment.Addresses segment) =>
-        new(segment.Emails.Select(e => new SegmentMember(null, e, null, null)).ToList(),
+        new(segment.Emails.Select(email => new SegmentMember(
+                null,
+                email,
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    [ApplicantColumns.Address.Column] = email,
+                })).ToList(),
             Overflowed: false);
 
+    /// <summary>
+    /// Reads the rows into members, one column of
+    /// <see cref="ApplicantColumns.Mergeable"/> at a time.
+    /// </summary>
+    /// <remarks>
+    /// By ordinal rather than by name, because <see cref="Selected"/> put them
+    /// in this order and reading them back by name would be a second agreement
+    /// to keep. The value is taken as the column holds it — string, int or
+    /// bool — and how each of those reads in a sentence is decided in the mail
+    /// rather than here.
+    /// </remarks>
     private static async Task<ResolvedSegment> ReadAsync(NpgsqlCommand cmd, CancellationToken ct)
     {
         var members = new List<SegmentMember>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
+            var fields = new Dictionary<string, object?>(StringComparer.Ordinal);
+            for (var i = 0; i < ApplicantColumns.Mergeable.Count; i++)
+            {
+                // Offset by one: person_id is the first thing Selected asks for.
+                var ordinal = i + 1;
+                fields[ApplicantColumns.Mergeable[i].Column] =
+                    await reader.IsDBNullAsync(ordinal, ct) ? null : reader.GetValue(ordinal);
+            }
+
             members.Add(new SegmentMember(
                 await reader.IsDBNullAsync(0, ct) ? null : reader.GetGuid(0),
-                reader.GetString(1),
-                await reader.IsDBNullAsync(2, ct) ? null : reader.GetString(2),
-                await reader.IsDBNullAsync(3, ct) ? null : reader.GetString(3)));
+
+                // NOT NULL on the column, so this cast cannot be the thing that
+                // fails; the divergence test is what keeps the column there.
+                (string)fields[ApplicantColumns.Address.Column]!,
+                fields));
         }
 
         if (members.Count > Segment.MaxRecipients)

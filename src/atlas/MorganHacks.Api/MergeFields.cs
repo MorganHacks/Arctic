@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using MorganHacks.Applications.Segments;
 using MorganHacks.Lark.Data.Domain;
 
@@ -22,52 +24,69 @@ namespace MorganHacks.Api;
 /// afternoon.
 /// </para>
 /// <para>
-/// Three, and no more. Every field here is one a template author can rely on
-/// for every recipient of every segment, which is the property that makes a
-/// refusal possible before the send rather than after it. Growing this list is
-/// cheap; growing it by something only some segments carry is how
-/// "Hi {{school}}," reaches four hundred people.
+/// The list itself is not written here. It is
+/// <see cref="ApplicantColumns.Mergeable"/> — the columns
+/// <c>applications.applications</c> actually has — so a placeholder exists
+/// because a column does, and a name nobody can fill cannot be offered because
+/// there is nothing to derive it from. What this file adds is the two things
+/// that are the mail's business rather than the table's: what a column is
+/// called in a template, and how its value reads in a sentence.
+/// </para>
+/// <para>
+/// Derived from a declared list rather than from the live schema. Reading
+/// <c>information_schema</c> on every request would be a query on the editor's
+/// keystroke and, worse, would let a migration change this API without anybody
+/// deciding to. The declaration is checked against the schema by a test
+/// instead, so the two cannot drift and the failure lands in CI rather than in
+/// a send.
 /// </para>
 /// </remarks>
 public static class MergeFields
 {
     /// <summary>
-    /// One placeholder, and where its value comes from.
+    /// One placeholder, and the column behind it.
     /// </summary>
     /// <remarks>
-    /// <see cref="Read"/> is a function rather than a name callers switch on,
-    /// so adding a field is adding a row here and changing nothing else.
-    /// <para>
-    /// <see cref="OnAddressLists"/> is what a typed list of addresses can
-    /// supply, which is an address and nothing else — the recipient there is
-    /// frequently a sponsor contact this system has never heard of, so a
-    /// template that greets people by name cannot be sent to one.
-    /// </para>
+    /// <see cref="Name"/> is derived rather than declared — see
+    /// <see cref="NameFor"/> — so there is no second spelling of a column to
+    /// keep in step with the first.
     /// </remarks>
-    public sealed record MergeField(
-        string Name,
-        string Description,
-        Func<SegmentMember, string?> Read,
-        bool OnAddressLists);
+    public sealed record MergeField(string Name, ApplicantColumn Column)
+    {
+        /// <summary>What the editor shows beside the name.</summary>
+        public string Description => Column.Description;
+
+        /// <summary>Whether a typed list of addresses can fill this.</summary>
+        public bool OnAddressLists => Column.OnAddressLists;
+    }
 
     /// <summary>Every placeholder that resolves, in the order an editor lists them.</summary>
     public static readonly IReadOnlyList<MergeField> All =
-    [
-        new("email",
-            "The address this message is going to.",
-            member => member.Email,
-            OnAddressLists: true),
+        [.. ApplicantColumns.Mergeable.Select(
+            column => new MergeField(NameFor(column.Column), column))];
 
-        new("firstName",
-            "The recipient's first name, as their application has it.",
-            member => member.FirstName,
-            OnAddressLists: false),
+    /// <summary>
+    /// The one place a column name becomes a placeholder name.
+    /// </summary>
+    /// <remarks>
+    /// <c>first_name</c> is <c>{{firstName}}</c> because this says so, and
+    /// there is nowhere else that could say otherwise. A declared name beside
+    /// each column would be a second thing to get right, and the way it goes
+    /// wrong is a placeholder the editor offers under one spelling and the
+    /// send looks up under another.
+    /// </remarks>
+    public static string NameFor(string column)
+    {
+        var parts = column.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        var name = new StringBuilder(parts[0]);
 
-        new("lastName",
-            "The recipient's last name, as their application has it.",
-            member => member.LastName,
-            OnAddressLists: false),
-    ];
+        foreach (var part in parts.Skip(1))
+        {
+            name.Append(char.ToUpperInvariant(part[0])).Append(part, 1, part.Length - 1);
+        }
+
+        return name.ToString();
+    }
 
     /// <summary>
     /// The merge values a segment can supply for one recipient.
@@ -86,7 +105,8 @@ public static class MergeFields
 
         foreach (var field in All)
         {
-            if (field.Read(member) is { } value && !string.IsNullOrWhiteSpace(value))
+            if (member.Fields.TryGetValue(field.Column.Column, out var stored)
+                && Reads(stored, field.Column) is { } value)
             {
                 values[field.Name] = value;
             }
@@ -94,6 +114,43 @@ public static class MergeFields
 
         return values;
     }
+
+    /// <summary>
+    /// How one column's value reads inside a sentence, or null for nothing.
+    /// </summary>
+    /// <remarks>
+    /// Per type, because the defaults are wrong in ways somebody only notices
+    /// after four hundred copies have left: a <c>boolean</c> stringifies as
+    /// "True", which is a word no email has ever contained, and a year through
+    /// a thousands separator is "2,027".
+    /// <para>
+    /// Null is the case that matters, and it covers three things that are the
+    /// same thing to a reader: the column is null, the column is text nobody
+    /// typed into, or the segment did not carry the column at all. All of them
+    /// return null, which keeps the value out of the dictionary, which is what
+    /// <see cref="Unfilled"/> counts and what the preview reports before
+    /// anybody can send it.
+    /// </para>
+    /// <para>
+    /// The throw is unreachable while the divergence test passes: it fires
+    /// only if a column's declared kind stops matching the type the table
+    /// hands back, and that test fails first, in CI, with the column named.
+    /// Throwing rather than rendering something is deliberate all the same —
+    /// the alternative is guessing at a value that goes out under our name.
+    /// </para>
+    /// </remarks>
+    private static string? Reads(object? stored, ApplicantColumn column) =>
+        (column.Kind, stored) switch
+        {
+            (_, null) => null,
+            (ColumnKind.Text, string text) => string.IsNullOrWhiteSpace(text) ? null : text,
+            (ColumnKind.Integer, int number) => number.ToString(CultureInfo.InvariantCulture),
+            (ColumnKind.Boolean, bool yes) => yes ? "yes" : "no",
+            _ => throw new InvalidOperationException(
+                $"applications.applications.{column.Column} is declared "
+                + $"{column.Kind} and came back as "
+                + $"{stored.GetType().Name}."),
+        };
 
     /// <summary>The placeholders a segment can fill for everybody in it.</summary>
     public static IReadOnlySet<string> Fillable(Segment segment) =>
