@@ -264,6 +264,14 @@ app.MapAuditTrail();
 app.MapFormsAdmin();
 app.MapFormResponses();
 app.MapSesWebhook();
+
+// Only here. Deployed environments are Staging or Production, set explicitly on
+// every container, so this route does not exist there rather than existing and
+// refusing — and a route that is absent cannot be reached by a misconfiguration.
+if (app.Environment.IsDevelopment())
+{
+    app.MapDevSignIn();
+}
 app.MapGoogle();
 
 app.Run();
