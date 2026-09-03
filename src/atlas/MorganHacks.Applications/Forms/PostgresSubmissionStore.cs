@@ -89,6 +89,16 @@ public sealed class PostgresSubmissionStore(NpgsqlDataSource dataSource) : ISubm
 
         foreach (var field in version.Fields)
         {
+            // A page break has no answer, so nothing is ever written under its
+            // key. Explicit rather than left to fall out of the checks below:
+            // a caller can post whatever it likes under any key, and a string
+            // sent under a section's would otherwise look answered and land in
+            // responses as a value nobody was asked for.
+            if (field.Type == FieldType.Section)
+            {
+                continue;
+            }
+
             var answered = answers.TryGetValue(field.Key, out var value)
                            && SubmissionValidation.IsAnswered(field, value);
 

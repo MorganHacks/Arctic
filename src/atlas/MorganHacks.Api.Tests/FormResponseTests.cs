@@ -88,6 +88,13 @@ public class FormResponseTests(ApplicationsDatabase db)
         Label = label,
     };
 
+    private static FormField PageBreak(string key, string label = "Page two") => new()
+    {
+        Key = key,
+        Type = FieldType.Section,
+        Label = label,
+    };
+
     /// <summary>A complete set of answers to MLH's questions.</summary>
     private static Dictionary<string, JsonElement> Answers(
         string email, params (string Key, object? Value)[] extra)
@@ -708,6 +715,74 @@ public class FormResponseTests(ApplicationsDatabase db)
         Assert.Contains("A calculator.", csv, StringComparison.Ordinal);
     }
 
+
+    // -------------------------------------------------------- page breaks ---
+
+    [Fact]
+    public async Task A_page_break_is_not_a_column_in_the_export()
+    {
+        // Nobody answered it, so a column for it would be empty in every row of
+        // every export, under a heading that was never a question. The two
+        // questions either side of it still get theirs.
+        var form = await PublishedAsync(
+            Question("why_apply"), PageBreak("section_about"), Question("dietary"));
+
+        await SubmitAsync(form, ("why_apply", "To build something."));
+
+        var exporter = await db.AddPersonAsync(Unique("exporter"));
+        await db.GrantAsync(exporter, "applications.export");
+
+        var csv = await CsvAsync($"/admin/forms/{form.Id}/responses.csv", await SignIn(exporter));
+        var header = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)[0];
+
+        Assert.DoesNotContain("section_about", header, StringComparison.Ordinal);
+        Assert.Contains("\"why_apply\",\"dietary\"", header, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_page_break_is_not_an_unanswered_question_on_a_response()
+    {
+        // The reader's screen walks the form's fields and shows every one
+        // without an answer as "Not answered". A section arriving with the
+        // answers absent is indistinguishable from a question nobody filled in,
+        // so it must not be in the answer set at all — and it is not, because
+        // nothing was ever stored under its key.
+        var form = await PublishedAsync(PageBreak("section_about"), Question("why_apply"));
+        await SubmitAsync(form, ("why_apply", "To build something."));
+
+        var body = await ReadAsync($"/admin/forms/{form.Id}/responses", await ReaderAsync());
+        var answers = body.GetProperty("items")[0].GetProperty("answers");
+
+        Assert.False(answers.TryGetProperty("section_about", out _));
+        Assert.Equal("To build something.", answers.GetProperty("why_apply").GetString());
+    }
+
+    [Fact]
+    public async Task An_answer_given_before_a_question_became_a_page_break_is_not_lost()
+    {
+        // Turning a question into a section keeps its key, so the answers
+        // already given are still filed under it. They stop being a column and
+        // become leftovers, which is the whole reason other_answers exists —
+        // the alternative is silently dropping what somebody wrote from the one
+        // artefact people treat as the record.
+        var form = await PublishedAsync(Question("why_apply"));
+        await SubmitAsync(form, ("why_apply", "To build something."));
+
+        var draft = await Forms.DraftAsync(form.Id, null);
+        await Forms.SaveDraftAsync(
+            form.Id,
+            [.. draft.Fields.Where(f => f.Key != "why_apply"),
+             PageBreak("why_apply", "Page two"),
+             Question("dietary")]);
+        await Forms.PublishAsync(form.Id, null);
+
+        var exporter = await db.AddPersonAsync(Unique("exporter"));
+        await db.GrantAsync(exporter, "applications.export");
+
+        var csv = await CsvAsync($"/admin/forms/{form.Id}/responses.csv", await SignIn(exporter));
+
+        Assert.Contains("To build something.", csv, StringComparison.Ordinal);
+    }
     /// <summary>
     /// An object store that signs anything and stores nothing.
     /// </summary>

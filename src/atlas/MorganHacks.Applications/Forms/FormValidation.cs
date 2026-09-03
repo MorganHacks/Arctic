@@ -81,9 +81,52 @@ public static class FormValidation
 
         foreach (var field in fields)
         {
+            var section = field.Type == FieldType.Section;
+
             if (string.IsNullOrWhiteSpace(field.Label))
             {
-                problems.Add(new FormProblem("This question has no wording.", field.Key));
+                problems.Add(new FormProblem(
+                    section
+                        ? "This page break has no heading."
+                        : "This question has no wording.",
+                    field.Key));
+            }
+
+            if (section)
+            {
+                // Everything that describes an answer is meaningless on a page
+                // break, and refused rather than ignored. Silently dropping
+                // what an author set is how a form ends up not doing what the
+                // screen said it would, and the one that matters most is
+                // Required: a section can never be answered, so a required one
+                // is a question nobody can satisfy. Caught here, it is a
+                // sentence at publish; ignored, it is either a form that
+                // refuses every submission or a rule that only appears to
+                // exist.
+                if (field.Required)
+                {
+                    problems.Add(new FormProblem(
+                        $"\"{Shorten(field.Label)}\" is a page break, so it cannot be required.",
+                        field.Key));
+                }
+
+                if (field.Options.Count > 0)
+                {
+                    problems.Add(new FormProblem(
+                        $"\"{Shorten(field.Label)}\" is a page break, so it cannot have options.",
+                        field.Key));
+                }
+
+                if (field.Storage == AnswerStorage.Column)
+                {
+                    problems.Add(new FormProblem(
+                        $"\"{Shorten(field.Label)}\" is a page break, so it has no answer to "
+                        + "store anywhere.",
+                        field.Key));
+                }
+
+                // Nothing below this applies to something nobody answers.
+                continue;
             }
 
             var needsOptions = field.Type
@@ -129,6 +172,16 @@ public static class FormValidation
                     $"\"{Shorten(field.Label)}\" is an agreement, so it cannot have options.",
                     field.Key));
             }
+        }
+
+        // A form has to ask something. Page breaks are headings, so a form made
+        // only of them — or of nothing at all — publishes a link that collects
+        // nothing, and on an application form there is not even an address to
+        // create an applicant from. It reads as working right up until somebody
+        // asks where the answers went.
+        if (!fields.Any(f => f.Type != FieldType.Section))
+        {
+            problems.Add(new FormProblem("This form does not ask anything yet."));
         }
 
         // One resume, or the upload has nowhere to go: an application holds a

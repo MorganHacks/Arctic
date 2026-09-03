@@ -84,7 +84,13 @@ public sealed class FormQuestions
             var keys = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var field in version.Fields)
             {
-                if (field.Storage != AnswerStorage.Column
+                // A page break is not answered, so it never owns a column
+                // whatever a draft happens to say. Without this a section
+                // pointed at one would claim the mapping ahead of the question
+                // that actually writes there, and every promoted answer in
+                // that column would read back under a heading.
+                if (field.Type == FieldType.Section
+                    || field.Storage != AnswerStorage.Column
                     || !AnswerColumns.TryKindOf(field.Column, out _))
                 {
                     // Either the answer lives in `responses`, or the question

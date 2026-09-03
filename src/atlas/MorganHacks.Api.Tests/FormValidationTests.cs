@@ -21,6 +21,13 @@ public class FormValidationTests
         Label = label,
     };
 
+    private static FormField PageBreak(string key, string label = "Page two") => new()
+    {
+        Key = key,
+        Type = FieldType.Section,
+        Label = label,
+    };
+
     [Fact]
     public void The_starting_form_is_publishable()
     {
@@ -261,5 +268,103 @@ public class FormValidationTests
     {
         // MLH requires it be offered, not that anybody accepts it.
         Assert.False(MlhFields.All.Single(f => f.Key == "mlh_marketing_opt_in").Required);
+    }
+
+
+    // ------------------------------------------------------------ sections ---
+
+    [Fact]
+    public void A_page_break_may_sit_among_the_questions()
+    {
+        // The guard against a check that simply refuses the new type. A form
+        // split into pages is the ordinary case this exists for.
+        var fields = ValidForm();
+        fields.Add(PageBreak("section_about"));
+        fields.Add(Question("why_apply", "Why do you want to come?"));
+
+        Assert.True(FormValidation.CanPublish(fields));
+    }
+
+    [Fact]
+    public void A_page_break_cannot_be_required()
+    {
+        // Nothing is ever answered under it, so a required one is a question
+        // nobody can satisfy. Refused here rather than skipped at submit: an
+        // ignored rule is one the author believes is doing something.
+        var fields = ValidForm();
+        fields.Add(PageBreak("section_about") with { Required = true });
+
+        Assert.Contains(
+            FormValidation.Check(fields),
+            p => p.FieldKey == "section_about" && p.Message.Contains("cannot be required"));
+        Assert.False(FormValidation.CanPublish(fields));
+    }
+
+    [Fact]
+    public void A_page_break_cannot_have_options()
+    {
+        // There is nothing to choose. Options on a heading are a
+        // misunderstanding of what was inserted, the same as options on an
+        // agreement.
+        var fields = ValidForm();
+        fields.Add(PageBreak("section_about") with
+        {
+            Options = [new FieldOption("yes", "Yes")],
+        });
+
+        Assert.Contains(
+            FormValidation.Check(fields),
+            p => p.FieldKey == "section_about" && p.Message.Contains("cannot have options"));
+    }
+
+    [Fact]
+    public void A_page_break_cannot_be_pointed_at_a_column()
+    {
+        // It has no answer, so a column for it would either stay empty forever
+        // or shadow the question that genuinely writes there.
+        var fields = ValidForm();
+        fields.Add(PageBreak("section_about") with
+        {
+            Storage = AnswerStorage.Column,
+            Column = "dietary_notes",
+        });
+
+        Assert.Contains(
+            FormValidation.Check(fields),
+            p => p.FieldKey == "section_about" && p.Message.Contains("no answer to store"));
+    }
+
+    [Fact]
+    public void A_page_break_needs_a_heading()
+    {
+        // The heading is the whole of what the page shows above its questions.
+        // An empty one is a page that opens with nothing on it.
+        var fields = ValidForm();
+        fields.Add(PageBreak("section_about", label: " "));
+
+        Assert.Contains(
+            FormValidation.Check(fields),
+            p => p.FieldKey == "section_about" && p.Message.Contains("no heading"));
+    }
+
+    [Fact]
+    public void A_form_that_is_only_page_breaks_cannot_be_published()
+    {
+        // Pages of headings and nothing to fill in. It reads as a working form
+        // right up until somebody asks where the answers went.
+        List<FormField> headings = [PageBreak("section_one"), PageBreak("section_two", "Page three")];
+
+        Assert.Contains(
+            FormValidation.Check(headings, requiresMlh: false),
+            p => p.Message.Contains("does not ask anything"));
+        Assert.False(FormValidation.CanPublish(headings, requiresMlh: false));
+    }
+
+    [Fact]
+    public void A_form_with_no_fields_at_all_cannot_be_published_either()
+    {
+        // The same rule from the other side. A survey with nothing on it is a
+        // link that collects nothing.
+        Assert.False(FormValidation.CanPublish([], requiresMlh: false));
     }
 }

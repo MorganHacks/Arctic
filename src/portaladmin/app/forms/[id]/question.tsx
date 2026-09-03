@@ -13,6 +13,7 @@ import { CHOICE_TYPES, TYPES, TYPE_NAMES, nextOptionValue } from "./fields";
 export function Question({
   field,
   index,
+  ordinal,
   count,
   problems,
   disabled,
@@ -23,6 +24,16 @@ export function Question({
 }: {
   field: FormField;
   index: number;
+
+  /**
+   * Which question this is, counting only the questions.
+   *
+   * Not `index + 1`. Page breaks sit in the same array, so numbering by
+   * position puts gaps in the list — and a form that jumps from 4 to 6 reads
+   * as a question having gone missing rather than as a page having started.
+   */
+  ordinal: number;
+
   count: number;
   problems: string[];
   disabled: boolean;
@@ -36,6 +47,27 @@ export function Question({
   // differently, so only one of them gets an explanation.
   const frozen = field.locked || disabled;
   const choices = CHOICE_TYPES.has(field.type);
+
+  // A page break is a divider, not something to answer, and the editor has to
+  // say so at a glance — an author scanning a form needs to see where the
+  // pages fall without reading a type dropdown on every row. Everything below
+  // this point is about an answer: a type, a required toggle, options, a
+  // storage key. None of it applies, and the API refuses a page break that
+  // carries any of it, so it is not offered rather than offered and ignored.
+  if (field.type === "section") {
+    return (
+      <PageBreak
+        field={field}
+        index={index}
+        count={count}
+        problems={problems}
+        disabled={disabled}
+        onChange={onChange}
+        onMove={onMove}
+        onRemove={onRemove}
+      />
+    );
+  }
 
   const setOption = (at: number, changes: Partial<FieldOption>) =>
     onChange({
@@ -62,7 +94,7 @@ export function Question({
   return (
     <li className={problems.length > 0 ? "question flagged" : "question"}>
       <div className="question-bar">
-        <span className="ordinal">{index + 1}</span>
+        <span className="ordinal">{ordinal}</span>
 
         {field.locked ? (
           <span className="pill lapsed">{TYPE_NAMES.get(field.type)}</span>
@@ -276,6 +308,109 @@ export function Question({
           {field.key}
         </code>
       </div>
+
+      {problems.length > 0 ? (
+        <ul className="problems">
+          {problems.map((problem) => (
+            <li key={problem}>{problem}</li>
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * A page break, open for editing.
+ *
+ * Drawn as a divider rather than as a card, because that is what it is: it does
+ * not ask anything, and a form where the dividers and the questions look alike
+ * is one where an author cannot see the shape of their own pages. The controls
+ * are the two that make sense on one — where it sits, and whether it stays.
+ *
+ * No required toggle and no options editor, and not because they would be
+ * ignored. The API refuses to publish a page break carrying either, so
+ * offering them here would be offering a way to build a form that cannot go
+ * live.
+ */
+function PageBreak({
+  field,
+  index,
+  count,
+  problems,
+  disabled,
+  onChange,
+  onMove,
+  onRemove,
+}: {
+  field: FormField;
+  index: number;
+  count: number;
+  problems: string[];
+  disabled: boolean;
+  onChange: (changes: Partial<FormField>) => void;
+  onMove: (delta: number) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <li className={problems.length > 0 ? "page-break flagged" : "page-break"}>
+      <div className="question-bar">
+        <span className="pill lapsed">Page break</span>
+        <span className="grow" />
+
+        <button
+          type="button"
+          className="icon"
+          aria-label="Move up"
+          disabled={disabled || index === 0}
+          onClick={() => onMove(-1)}
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          className="icon"
+          aria-label="Move down"
+          disabled={disabled || index === count - 1}
+          onClick={() => onMove(1)}
+        >
+          ↓
+        </button>
+
+        {/* No duplicate. A copy of a page break is an empty page immediately
+            after this one, which is never what somebody meant to press. */}
+        <button
+          type="button"
+          className="icon danger"
+          aria-label="Delete page break"
+          disabled={disabled}
+          onClick={onRemove}
+        >
+          ✕
+        </button>
+      </div>
+
+      <label htmlFor={`${field.key}-label`}>Page heading</label>
+      <input
+        id={`${field.key}-label`}
+        value={field.label}
+        disabled={disabled}
+        placeholder="What this page covers"
+        onChange={(event) => onChange({ label: event.target.value })}
+      />
+
+      <label htmlFor={`${field.key}-help`}>Description</label>
+      <input
+        id={`${field.key}-help`}
+        value={field.help ?? ""}
+        disabled={disabled}
+        placeholder="Optional. Shown under the heading."
+        onChange={(event) =>
+          onChange({ help: event.target.value === "" ? null : event.target.value })
+        }
+      />
+
+      <p className="meta">Everything below this is on a new page.</p>
 
       {problems.length > 0 ? (
         <ul className="problems">

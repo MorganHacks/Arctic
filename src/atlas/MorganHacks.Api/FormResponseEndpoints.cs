@@ -255,8 +255,16 @@ public static class FormResponseEndpoints
         // spent at submit and never lands in the answer set, so a column for
         // it would be empty in every row forever — the two resume columns
         // below are what it actually became.
+        //
+        // A page break is left out for a stronger reason: it is not a question
+        // and nobody answered it, so a column for it would be an empty column
+        // in every export with a heading nobody was ever asked. Its key stays
+        // out of `known` as a consequence, which is what makes the one case
+        // that matters work — a question turned into a page break after people
+        // had answered it keeps its old answers, and they come back in
+        // other_answers rather than silently disappearing.
         var columns = questions.Published
-            .Where(f => f.Type != FieldType.File)
+            .Where(f => f.Type is not (FieldType.File or FieldType.Section))
             .ToList();
 
         var known = columns.Select(f => f.Key).ToHashSet(StringComparer.Ordinal);

@@ -509,8 +509,29 @@ code,
 
 /* A question the API has complained about. The left edge rather than a fill,
    so a form with six problems still reads as a form. */
-.question.flagged {
+.question.flagged,
+.page-break.flagged {
   border-left: 2px solid var(--stop);
+}
+
+/* A page break, which is a divider and not a card.
+   Sunken and ruled rather than raised like the questions around it, because the
+   thing an author is scanning for is where their pages start — and a divider
+   that looks like a question is a divider they have to read to find. */
+.page-break {
+  border: 1px solid var(--line);
+  border-top-width: 2px;
+  border-radius: var(--radius-lg);
+  background: var(--sunken);
+  padding: 0.75rem 0.9rem 0.6rem;
+}
+
+.page-break label {
+  margin-top: 0.5rem;
+}
+
+.page-break > input {
+  width: 100%;
 }
 
 .question label {
@@ -697,6 +718,28 @@ button.link.add-option:hover {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+/* Where one page of the form ends and the next begins. A rule, because that is
+   what a page break is — the preview shows the whole form at once, and without
+   something to see the pages are invisible in the one view meant to show them. */
+.page-mark-break {
+  border-top: 2px solid var(--line);
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+}
+
+.page-mark {
+  margin: 0 0 0.2rem;
+  color: var(--faint);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.page-heading {
+  margin: 0 0 0.2rem;
+  font-weight: 600;
 }
 
 /* The one place a required marker earns colour: it changes whether somebody

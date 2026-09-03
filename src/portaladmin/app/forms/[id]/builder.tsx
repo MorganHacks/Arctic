@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FieldType, FormField, FormProblem, VersionRow } from "@/lib/api";
 import { publishForm, saveDraft } from "../actions";
-import { TYPES, blankField, copyOf } from "./fields";
+import { TYPES, blankField, blankSection, copyOf } from "./fields";
 import { Preview } from "./preview";
 import { Question } from "./question";
 
@@ -170,6 +170,11 @@ export function Builder({
 
   const add = () => change((current) => [...current, blankField(adding)]);
 
+  // Appended like a question, because it is a field in the same array and
+  // moves with the same two buttons. Everything after it is the next page, so
+  // adding one at the bottom and dragging it up is how a form gets split.
+  const addSection = () => change((current) => [...current, blankSection()]);
+
   async function publish() {
     setPublishing(true);
     setNotice(null);
@@ -226,6 +231,19 @@ export function Builder({
       problem.fieldKey === null ||
       !fields.some((field) => field.key === problem.fieldKey),
   );
+
+  // The number shown against each question, counting only the questions. Page
+  // breaks live in the same array, so numbering by position would leave gaps
+  // that read as a question having gone missing.
+  const ordinals: number[] = [];
+  let asked = 0;
+  for (const field of shown) {
+    if (field.type !== "section") {
+      asked += 1;
+    }
+
+    ordinals.push(asked);
+  }
 
   return (
     <>
@@ -295,6 +313,7 @@ export function Builder({
                 key={field.key}
                 field={field}
                 index={index}
+                ordinal={ordinals[index]}
                 count={shown.length}
                 problems={byKey.get(field.key) ?? []}
                 disabled={!canManage}
@@ -325,6 +344,17 @@ export function Builder({
                 </div>
                 <button type="button" onClick={add}>
                   Add
+                </button>
+
+                <span className="grow" />
+
+                {/* Its own button rather than an entry in the menu beside it.
+                    A page break is not a kind of question, and putting it in
+                    that list is how somebody turns question nine into a
+                    divider by aiming badly — with the answers already given to
+                    it still filed under its key. */}
+                <button type="button" onClick={addSection}>
+                  Add page break
                 </button>
               </div>
             </div>

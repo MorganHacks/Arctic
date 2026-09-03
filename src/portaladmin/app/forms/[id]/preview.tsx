@@ -14,8 +14,36 @@ import type { FormField } from "@/lib/api";
  * question that reads fine as a row in an editor and makes no sense as a
  * question. Sixty words of agreement text look like a label here and like a
  * wall there.
+ *
+ * Page breaks are marked rather than obeyed. Everything is on screen at once
+ * with a rule where each page starts, because the question this answers is
+ * "where do the pages fall", and paging through the preview to find out is the
+ * long way round to it.
  */
 export function Preview({ fields }: { fields: FormField[] }) {
+  // Which page each field lands on. Everything before the first page break is
+  // page one, so a form with no breaks is the single page it has always been —
+  // and the numbers are computed once here rather than by a counter mutated
+  // inside the map below, which would be a render that depends on how many
+  // times React chose to run it.
+  const pages: number[] = [];
+  let page = 1;
+  for (const field of fields) {
+    if (field.type === "section") {
+      page += 1;
+    }
+
+    pages.push(page);
+  }
+
+  // The whole form is shown at once, with the breaks marked, rather than one
+  // page at a time behind a Next button. This is the view an author uses to
+  // check where the pages fall, and answering that question by clicking
+  // through four pages is answering it badly. Page one is labelled only when
+  // there is a second one — on a form with no breaks the label would be
+  // furniture.
+  const paged = page > 1;
+
   return (
     <fieldset className="preview" disabled>
       <legend className="meta">Preview</legend>
@@ -23,9 +51,31 @@ export function Preview({ fields }: { fields: FormField[] }) {
       {fields.length === 0 ? (
         <p className="meta">Nothing to fill in yet.</p>
       ) : (
-        fields.map((field) => <Asked key={field.key} field={field} />)
+        <>
+          {paged ? <p className="page-mark">Page 1</p> : null}
+          {fields.map((field, at) =>
+            field.type === "section" ? (
+              <Break key={field.key} field={field} page={pages[at]} />
+            ) : (
+              <Asked key={field.key} field={field} />
+            ),
+          )}
+        </>
       )}
     </fieldset>
+  );
+}
+
+/** Where one page ends and the next one's heading begins. */
+function Break({ field, page }: { field: FormField; page: number }) {
+  return (
+    <div className="page-mark-break">
+      <p className="page-mark">Page {page}</p>
+      <p className="page-heading">
+        {field.label || <em className="meta">Unheaded page</em>}
+      </p>
+      {field.help ? <p className="meta">{field.help}</p> : null}
+    </div>
   );
 }
 

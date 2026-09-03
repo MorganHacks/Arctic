@@ -6,6 +6,12 @@ import type { FieldType, FormField } from "@/lib/api";
  * Ordered by how often they get used rather than alphabetically or by the
  * enum. Somebody building a registration form reaches for short text and
  * paragraph over and over, and a file upload once.
+ *
+ * `section` is deliberately absent. It is a page break rather than something
+ * anybody answers, so it has its own button and never appears in the menu that
+ * decides what a question asks — a form where "Dropdown" and "Page break" are
+ * neighbours in one list is one where somebody turns a question into a divider
+ * by aiming badly.
  */
 export const TYPES: { value: FieldType; label: string }[] = [
   { value: "shortText", label: "Short text" },
@@ -39,8 +45,13 @@ export const CHOICE_TYPES = new Set<FieldType>(["select", "radio", "checkboxes"]
  * key is allowed to be decided. The randomness is for uniqueness and not for
  * secrecy — these keys become column headers in an export, and are meant to be
  * read.
+ *
+ * The prefix is cosmetic and only ever set at birth. A page break's key never
+ * reaches an export, but it does show up in a problem the API sends back, and
+ * `section_a1b2c3` is a faster thing to find on screen than `question_a1b2c3`
+ * sitting where no question is.
  */
-export function newKey(): string {
+export function newKey(prefix = "question"): string {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
   const bytes = new Uint8Array(6);
   crypto.getRandomValues(bytes);
@@ -50,7 +61,7 @@ export function newKey(): string {
     suffix += alphabet[byte % alphabet.length];
   }
 
-  return `question_${suffix}`;
+  return `${prefix}_${suffix}`;
 }
 
 /** A question as it starts life: keyed, typed, and otherwise blank. */
@@ -64,6 +75,29 @@ export function blankField(type: FieldType): FormField {
     // A choice question with nothing to choose from cannot be published, so it
     // starts with one option rather than with an empty list and a complaint.
     options: CHOICE_TYPES.has(type) ? [{ value: "option_1", label: "Option 1" }] : [],
+    storage: "responses",
+    column: null,
+    locked: false,
+  };
+}
+
+/**
+ * A page break as it starts life.
+ *
+ * Keyed like any other field, because reordering and editing must not disturb
+ * the answers on either side of it. Never required, never optioned and never
+ * pointed at a column: the API refuses to publish a page break that sets any of
+ * those, so the editor does not offer them and nothing here starts one out with
+ * them set.
+ */
+export function blankSection(): FormField {
+  return {
+    key: newKey("section"),
+    type: "section",
+    label: "",
+    help: null,
+    required: false,
+    options: [],
     storage: "responses",
     column: null,
     locked: false,

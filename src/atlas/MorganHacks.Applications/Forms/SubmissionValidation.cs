@@ -37,6 +37,18 @@ public static class SubmissionValidation
 
         foreach (var field in fields)
         {
+            // A page break is not answerable, so it is skipped before anything
+            // below looks at it. This is the check the whole feature rests on:
+            // a section reaching the required test underneath reads as an
+            // unanswered required question, and since no answer can ever
+            // arrive for one, that would refuse every submission to every form
+            // carrying a page break. The switch further down would be the same
+            // failure one step later.
+            if (field.Type == FieldType.Section)
+            {
+                continue;
+            }
+
             // Anything the form does not ask about is ignored rather than
             // rejected. An extra key is not something an applicant can fix,
             // and a form that shrinks between two tabs being open would
