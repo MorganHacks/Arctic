@@ -5,7 +5,7 @@ import { NoCampaigns } from "@/components/mail/no-campaigns";
 import { currentPerson } from "@/lib/api";
 import { Shell } from "../shell";
 import { newCampaign } from "./actions";
-import { readCampaigns, readForms } from "./api";
+import { readBroadcastTemplates, readCampaigns, readForms } from "./api";
 
 /**
  * Everything the registration team has mailed, or is about to.
@@ -21,10 +21,14 @@ export default async function Mail() {
     redirect("/sign-in");
   }
 
-  // Neither needs the other's answer. The forms are only for the segment
-  // picker, and awaiting them in turn would make the screen twice as slow to
-  // arrive for nothing.
-  const [campaigns, choices] = await Promise.all([readCampaigns(), readForms()]);
+  // None of the three needs another's answer. The forms are for the segment
+  // picker and the templates for the dropdown beside it, and awaiting them in
+  // turn would make the screen three times as slow to arrive for nothing.
+  const [campaigns, choices, templates] = await Promise.all([
+    readCampaigns(),
+    readForms(),
+    readBroadcastTemplates(),
+  ]);
   const { forms, events } = choices;
 
   if (!campaigns.ok) {
@@ -66,7 +70,15 @@ export default async function Mail() {
         </p>
       ) : null}
 
-      {canSend ? <NewCampaign forms={forms} events={events} create={newCampaign} /> : null}
+      {canSend ? (
+        <NewCampaign
+          forms={forms}
+          events={events}
+          templates={templates.templates}
+          templatesError={templates.error}
+          create={newCampaign}
+        />
+      ) : null}
 
       {campaigns.items.length === 0 ? (
         <NoCampaigns />

@@ -1,0 +1,259 @@
+/*
+ * The template screens.
+ *
+ * A module rather than more rules in the console's shared stylesheet: nothing
+ * here is used by another screen, and globals.css is edited by everybody.
+ *
+ * Every colour is a token from libs/ui/tokens.css. Not one hex, and almost no
+ * colour at all — the palette's rule is that colour carries meaning or it is
+ * absent, and on this screen nothing means anything until a save fails. Which
+ * template is broadcast and which is transactional is a distinction, not a
+ * verdict, so it is drawn in words rather than in green and grey.
+ */
+
+/* The editor and what it renders to, side by side. Writing and reading the
+   same email in one glance is the whole reason the preview is live. */
+.editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 64rem) {
+  .editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The preview follows the writing rather than scrolling away from it. */
+.sticky {
+  position: sticky;
+  top: 1rem;
+}
+
+@media (max-width: 64rem) {
+  .sticky {
+    position: static;
+  }
+}
+
+.field {
+  margin-bottom: 0.9rem;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.wide {
+  width: 100%;
+}
+
+/* local@domain, written the way it is read. */
+.address {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.address input {
+  min-width: 0;
+  flex: 1;
+}
+
+.at {
+  color: var(--faint);
+}
+
+/*
+ * The body.
+ *
+ * Mono and tall. This is a document being written rather than a field being
+ * filled in, and a placeholder like {{firstName}} is read character by
+ * character to check it is spelled the way the sender spells it.
+ */
+.body {
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  line-height: 1.55;
+  width: 100%;
+  min-height: 24rem;
+  resize: vertical;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.7rem;
+}
+
+/* What the medium supports, where somebody is about to test it. One line. */
+.medium {
+  color: var(--muted);
+  font-size: var(--step-2);
+  margin: 0.35rem 0 0;
+}
+
+/* The names the body asks for. Mono, because they have to match exactly. */
+.placeholders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.placeholders li {
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.4rem;
+  color: var(--ink);
+}
+
+/*
+ * The message.
+ *
+ * A tray with an envelope on it, so the preview reads as a piece of mail and
+ * not as another panel of the console. The frame inside is pinned to a light
+ * colour scheme rather than following the console's, because an email is not
+ * rendered by this application and will not follow its theme.
+ */
+.tray {
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem;
+}
+
+.envelope {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.envelope header {
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.from {
+  color: var(--muted);
+  font-size: var(--step-2);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The subject, at the weight it has in an inbox. */
+.subject {
+  font-size: var(--step0);
+  font-weight: 600;
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The rendered body, in a document of its own.
+ *
+ * An iframe rather than markup dropped into this page: email HTML must not
+ * inherit the console's stylesheet, or the preview would be flattering in a
+ * way no inbox is. It is fully sandboxed, which also means the one thing every
+ * email client does to a script — nothing — is what happens here too.
+ */
+.frame {
+  color-scheme: light;
+  display: block;
+  width: 100%;
+  min-height: 20rem;
+  border: 0;
+}
+
+/* The plain-text part, which is what a text-only client is sent. */
+.plain {
+  margin: 0;
+  padding: 0.85rem;
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+/* The row of buttons under the editor. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+/*
+ * The gate in front of a save that overwrites something.
+ *
+ * Ruled off rather than filled, because this is not an error — it is a second
+ * look at a write that other people's mail depends on.
+ */
+.confirm {
+  margin-top: 1rem;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.confirm p {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/* What the last save did. Only the failure is coloured; a save that worked is
+   a state somebody is in for the rest of the day. */
+.saved {
+  color: var(--muted);
+  font-size: var(--step-1);
+  margin: 0.6rem 0 0;
+}
+
+.saved.failed {
+  color: var(--stop);
+}
+
+/* The template's name and the way back to the list. */
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Which lane a template sends down. A word in a box, not a colour: neither
+   kind is better than the other, they simply go to different places. */
+.chip {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.45rem;
+  font-size: var(--step-1);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The controls, as one thing that can be turned off for somebody who may read
+   a template but not write one. A fieldset, because that disables every
+   control inside it at once rather than seven props that can drift apart. */
+.form {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}

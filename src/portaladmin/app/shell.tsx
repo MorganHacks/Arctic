@@ -14,6 +14,7 @@ const SECTIONS = [
   { href: "/forms", label: "Forms" },
   { href: "/applicants", label: "Applicants" },
   { href: "/mail", label: "Mail" },
+  { href: "/templates", label: "Templates" },
   { href: "/audit", label: "Audit" },
 ];
 

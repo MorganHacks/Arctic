@@ -35,3 +35,6 @@ context.md
 
 # Logs from deploy/local/dev.sh.
 .local-logs/
+
+# Design mockups, not shipped.
+.mockups/
