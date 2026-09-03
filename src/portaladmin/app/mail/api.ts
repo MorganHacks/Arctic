@@ -1,5 +1,7 @@
 import { apiFetch, type FormsView } from "@/lib/api";
 import type { Campaign, CampaignRow, CampaignStatus, EventChoice, FormChoice, Preview, Segment } from "@/components/mail/types";
+import type { TemplateRow } from "@/components/templates/types";
+import { readTemplates } from "@/app/templates/api";
 
 /**
  * Talking to the campaigns API.
@@ -263,6 +265,39 @@ export async function readForms(): Promise<{
   } catch {
     return { forms: [], events: [] };
   }
+}
+
+/**
+ * The templates a campaign is allowed to send.
+ *
+ * Broadcast only, filtered here rather than on the screen. A campaign given a
+ * transactional template is refused when somebody tries to send it, with a
+ * message about a lane and a subdomain that reads like a bug — and by then the
+ * campaign has been named, segmented and previewed. Offering only what can be
+ * chosen means the refusal cannot happen.
+ *
+ * The list is the templates screen's fetch, not a second one. One reader of
+ * the endpoint means one answer to what a template is, and one place the
+ * scaffolding has to be deleted from.
+ *
+ * The error comes back rather than an empty list, because "there are no
+ * templates yet" and "you are not allowed to see them" put somebody on
+ * completely different errands.
+ */
+export async function readBroadcastTemplates(): Promise<{
+  templates: TemplateRow[];
+  error: string | null;
+}> {
+  const read = await readTemplates();
+
+  if (!read.ok) {
+    return { templates: [], error: read.error };
+  }
+
+  return {
+    templates: read.items.filter((template) => template.kind === "broadcast"),
+    error: null,
+  };
 }
 
 // ---------------------------------------------------------------------------
