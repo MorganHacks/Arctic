@@ -381,6 +381,250 @@
   border-top: 1px solid var(--line-soft);
 }
 
+/* What would arrive ------------------------------------------------------ */
+
+/*
+ * The section between the recipients and the send.
+ *
+ * Full width and stacked rather than two columns, because the order is the
+ * argument: the coverage numbers say how many people have a gap, the rendered
+ * message shows one of them having it, and the send is under both. Side by
+ * side they would be two things to choose between; stacked they are one thing
+ * read twice.
+ */
+
+/* A heading inside a panel that already has one. Set at label weight so it
+   groups what follows without competing with the panel's own title. */
+.subhead {
+  margin: 0 0 0.6rem;
+  font-size: var(--step-1);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* The same heading with a control beside it. */
+.subheadRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.subheadRow .subhead {
+  margin-bottom: 0.6rem;
+}
+
+/* Written past `.notice` in globals.css, which carries the margin a banner at
+   the top of a page needs. Inside a panel it is a line above a list. The
+   element is in the selector so it wins wherever the two stylesheets land
+   relative to each other. */
+p.tight {
+  margin: 0 0 0.75rem;
+}
+
+/* Between the two halves. A rule rather than a gap: they are about the same
+   thing from two directions and a blank line would read as two panels. */
+.rule {
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  margin: 1.25rem 0;
+}
+
+/* Placeholder coverage ---------------------------------------------------- */
+
+/*
+ * Every placeholder the template uses, filled and unfilled.
+ *
+ * The row that has a gap is ruled at the left in --warn and nothing else is.
+ * A gap is work to do rather than a failure — the send is not refused for it,
+ * and it must not wear the colour of the control that cannot be undone.
+ */
+.coverage {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.coverage li {
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.coverage li:first-child {
+  border-top: 0;
+}
+
+.coverage li.gap {
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--warn);
+}
+
+.coverageRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* In braces, because that is how it appears in the template somebody would go
+   and edit. Mono for the same reason the addresses are. */
+.placeholder {
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.coverageCounts {
+  display: flex;
+  gap: 1rem;
+  font-size: var(--step-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.filled {
+  color: var(--muted);
+}
+
+/* The only coloured number in the list, and only when it is not zero. A zero
+   that wore the warning colour would teach people to stop reading it. */
+.missing {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/*
+ * A few of the addresses behind a missing count.
+ *
+ * Three at most, whatever the API sends. These are people: enough to make the
+ * number findable, never enough to be a mailing list somebody copied off a
+ * screen.
+ */
+.examples {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  overflow-wrap: anywhere;
+}
+
+/* The rendered message ---------------------------------------------------- */
+
+/* A recessed place to read the message out of, so the envelope inside it
+   reads as a thing that arrived rather than a thing to fill in. */
+.tray {
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 0.9rem;
+}
+
+.envelope {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.envelope header {
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* Which of the sampled recipients this one is. Mono, because it is read
+   character by character to check it is a real person. */
+.to {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  overflow-wrap: anywhere;
+}
+
+/* The subject, at the weight it has in an inbox. */
+.subject {
+  font-size: var(--step0);
+  font-weight: 600;
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+/* What this message still has braces around. The same colour as the count it
+   is one of, so the number above and the consequence below read as one fact. */
+.unfilled {
+  margin: 0.35rem 0 0;
+  color: var(--warn);
+  font-size: var(--step-2);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The body, in a document of its own.
+ *
+ * Fully sandboxed: email HTML must not inherit this console's stylesheet or
+ * the preview flatters it in a way no inbox will, and a sandboxed frame runs
+ * no script — which is what an email client does with one anyway.
+ *
+ * Pinned to a light colour scheme because that is the ground the sender's HTML
+ * was written against. A frame that went dark with the console would be
+ * previewing a message nobody is going to receive.
+ */
+.frame {
+  color-scheme: light;
+
+  /*
+   * The white an email arrives on, painted here rather than left to the
+   * document inside.
+   *
+   * A srcdoc frame whose body sets no background is transparent, so on a dark
+   * console the message renders as the sender's black text over this page's
+   * dark panel and is unreadable — which is the one thing a preview must never
+   * be. `Canvas` is the system colour for a document's own ground, and under
+   * the light scheme forced above it resolves to white. A hex would have said
+   * the same thing while claiming to be a decision about this console's
+   * palette, which it is not: it is the inbox's ground, not ours.
+   */
+  background: Canvas;
+
+  display: block;
+  width: 100%;
+  min-height: 20rem;
+  border: 0;
+}
+
+/* The plain-text part, which is what a text-only client is sent. */
+.plain {
+  margin: 0;
+  padding: 0.85rem;
+  font-family: var(--mono);
+  font-size: var(--step-1);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+/* Stepping between the sampled recipients, and how few of them there are. */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+/* Written past `.count` in globals.css for the same reason as `.tight`. */
+p.stepCount {
+  margin: 0;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
 /* The send ---------------------------------------------------------------- */
 
 /*

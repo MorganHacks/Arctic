@@ -92,6 +92,45 @@ export type MessageProgress = {
 };
 
 /**
+ * One placeholder the template uses, counted against the people it would go to.
+ *
+ * `missing` is the number of recipients who carry no value for it, and they
+ * are the reason this type exists: a placeholder the segment cannot fill is
+ * not an error anywhere — the send succeeds and twelve people read a literal
+ * `{{firstName}}`. The only moment anybody can catch that is before the send.
+ *
+ * `examples` is a handful of the addresses behind `missing`, never the list.
+ * These are people, and a screen that dumped four hundred addresses to
+ * illustrate a number would be handing out a mailing list to make a point.
+ */
+export type PlaceholderCoverage = {
+  /** The name inside the braces, as the API found it in the template. */
+  placeholder: string;
+  missing: number;
+  total: number;
+  examples?: string[];
+};
+
+/**
+ * One recipient's message, rendered by the same code path a send goes through.
+ *
+ * Both parts, because both are sent: an inbox that refuses HTML gets `text`,
+ * and a preview that only showed the HTML would be checking half of what goes
+ * out.
+ *
+ * `unfilled` is what this particular message still has braces around — the
+ * per-person half of the coverage numbers, and the half somebody can actually
+ * see happening.
+ */
+export type Render = {
+  email: string;
+  subject: string;
+  html: string;
+  text: string;
+  unfilled?: string[];
+};
+
+/**
  * What a send would actually do, resolved now.
  *
  * The count is the whole point of the screen and the sample is what makes it
@@ -136,6 +175,24 @@ export type Preview = {
    * reading this screen is the last one who can still fix it.
    */
   problems?: string[];
+
+  /**
+   * Every placeholder the template uses, and how many recipients can fill it.
+   *
+   * Optional because the API grew it after this screen shipped. Absent and
+   * empty mean different things and are shown differently: absent is an API
+   * that has not been asked, empty is a template with no placeholders in it.
+   */
+  placeholderCoverage?: PlaceholderCoverage[];
+
+  /**
+   * A few of the messages, rendered.
+   *
+   * Deliberately a sample — three to five — and not everybody. Four hundred
+   * rendered messages is not a thing anybody reads, and the value here is
+   * seeing one real message rather than all of them.
+   */
+  renders?: Render[];
 };
 
 /** A form somebody could have answered, for the segment picker. */
