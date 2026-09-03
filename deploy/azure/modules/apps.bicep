@@ -93,6 +93,16 @@ nothing to wake it. It stays at one replica and is most of the idle cost.
 @maxValue(3)
 param warmReplicas int = 0
 
+@description('''
+Shared secret proving a request reached harbor through one of our front ends.
+
+Harbor has a public hostname, so the forwarded client address is only believed
+when this arrives with it. Empty means never believed, which is a coarser rate
+limit rather than an absent one.
+''')
+@secure()
+param proxySecret string = ''
+
 param tags object = {}
 
 var suffix = 'mh-${environmentName}'
@@ -255,6 +265,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
             // blip that restarts every replica turns a recoverable problem
             // into an outage.
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
+            { name: 'Network__ProxySecret', value: proxySecret }
           ], sentryEnv, googleEnv, portalEnv, resumeEnv)
           probes: [
             {
@@ -331,6 +342,7 @@ resource harbor 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ASPNETCORE_URLS', value: 'http://+:8080' }
             { name: 'ReverseProxy__Clusters__atlas__Destinations__primary__Address', value: 'https://${atlas.properties.configuration.ingress.fqdn}/' }
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
+            { name: 'Network__ProxySecret', value: proxySecret }
             // Exactly one proxy sits in front of harbor: the Container Apps
             // ingress, which appends the real client to X-Forwarded-For. One
             // means we take that entry and stop.

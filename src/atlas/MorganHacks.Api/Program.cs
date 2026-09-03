@@ -185,6 +185,12 @@ builder.Services.AddSingleton<IGoogleTokenVerifier>(
 //
 // Registered as a partitioned limiter so a request is rejected before any
 // database work happens.
+// Proof that a request came through one of our front ends rather than from
+// somebody reaching atlas or harbor directly. Only then are the forwarded
+// address headers believed; empty means never, which is a worse rate limit
+// rather than an absent one. See ClientAddress.
+var proxySecret = builder.Configuration["Network:ProxySecret"];
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -194,7 +200,7 @@ builder.Services.AddRateLimiter(options =>
     // which is the one thing this endpoint exists to capture.
     options.AddPolicy("webhook", http =>
         RateLimitPartition.GetFixedWindowLimiter(
-            ClientAddress.ForRateLimit(http),
+            ClientAddress.ForRateLimit(http, proxySecret),
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 600,
@@ -246,7 +252,7 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("magic-link", http =>
     {
         // The caller, not the front end that relayed them. See ClientAddress.
-        var ip = ClientAddress.ForRateLimit(http);
+        var ip = ClientAddress.ForRateLimit(http, proxySecret);
         return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 5,

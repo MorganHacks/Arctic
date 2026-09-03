@@ -35,5 +35,11 @@ param warmReplicas = int(empty(readEnvironmentVariable('WARM_REPLICAS', '0'))
   ? '0'
   : readEnvironmentVariable('WARM_REPLICAS', '0'))
 
+// Shared secret proving a request reached harbor through one of our front
+// ends. Empty means forwarded addresses are never believed, which is a coarser
+// rate limit rather than an absent one -- so a missing variable degrades
+// safely.
+param proxySecret = readEnvironmentVariable('PROXY_SHARED_SECRET', '')
+
 param deployPlatform = bool(readEnvironmentVariable('DEPLOY_PLATFORM', 'true'))
 param deployApps = bool(readEnvironmentVariable('DEPLOY_APPS', 'true'))

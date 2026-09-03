@@ -18,6 +18,22 @@ import { cookies } from "next/headers";
  */
 const apiOrigin = process.env.API_ORIGIN ?? "http://localhost:5050";
 
+/*
+ * Proof to harbor that this request came through us.
+ *
+ * Harbor has a public hostname, so a forwarded client address is only
+ * believed when it arrives with this. Without it the caller is bucketed on
+ * the connection, which for us is Vercel -- one bucket for everybody. That is
+ * a worse rate limit; sending a spoofable header was no rate limit at all.
+ */
+const proxySecret = process.env.PROXY_SHARED_SECRET ?? "";
+
+/** The header harbor and atlas check. Empty secret sends nothing. */
+const proxyHeader: Record<string, string> = proxySecret
+  ? { "x-mh-proxy": proxySecret }
+  : {};
+
+
 /**
  * Calls the API as the signed-in person.
  *
@@ -35,6 +51,7 @@ export async function apiFetch(
   return fetch(`${apiOrigin}/api${path}`, {
     ...init,
     headers: {
+      ...proxyHeader,
       ...init.headers,
       ...(session ? { cookie: `mh_session=${session.value}` } : {}),
     },
