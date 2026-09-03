@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using MorganHacks.Applications.Forms;
 using MorganHacks.Observability;
 using MorganHacks.Identity.Services;
 
@@ -54,6 +55,36 @@ public static class AuthEndpoints
         (config["PublicBaseUrl"] ?? "http://localhost:3000").TrimEnd('/');
 
     /// <summary>
+    /// Where the public forms site is, which is not where the portal is.
+    /// </summary>
+    /// <remarks>
+    /// Its own origin, and that is the whole reason this exists rather than
+    /// reusing <see cref="PublicBaseUrl"/>. The session cookie is host-only,
+    /// so a link that lands on the portal sets a cookie the forms site will
+    /// never be sent — somebody would click "sign in" in their inbox, arrive
+    /// at a form, and be asked to sign in again by a browser that is holding a
+    /// perfectly good session for a different hostname.
+    /// <para>
+    /// The localhost default is the port <c>deploy/local/dev.sh</c> starts
+    /// portalforms on.
+    /// </para>
+    /// </remarks>
+    public static string FormsBaseUrl(IConfiguration config) =>
+        (config["FormsBaseUrl"] ?? "http://localhost:3002").TrimEnd('/');
+
+    /// <summary>
+    /// The path a form's sign-in link points at, on the forms site's origin.
+    /// </summary>
+    /// <remarks>
+    /// Carries the <c>/api</c> prefix for the same reason
+    /// <see cref="ConsumePath"/> does: that is the path portalforms proxies to
+    /// harbor, and it is what puts the cookie on the origin the form is
+    /// actually served from.
+    /// </remarks>
+    public static string FormLink(IConfiguration config, string code, string token) =>
+        $"{FormsBaseUrl(config)}{ConsumePath}?token={token}&form={code}";
+
+    /// <summary>
     /// The path the emailed link points at, on the portal's origin.
     /// </summary>
     /// <remarks>
@@ -101,9 +132,17 @@ public static class AuthEndpoints
         public int Count;
     }
 
-    private static bool TooManyFor(IMemoryCache cache, string email)
+    /// <param name="scope">
+    /// What the counter is counting. The forms site has its own sign-in step
+    /// and shares this counter under a different scope, so attempts at a form
+    /// do not consume somebody's attempts at the portal — they are separate
+    /// places to be stuck, and being locked out of one for failing at the
+    /// other is a support ticket nobody can diagnose.
+    /// </param>
+    public static bool TooManyFor(
+        IMemoryCache cache, string email, string scope = "magic-link")
     {
-        var key = $"magic-link:{email.Trim().ToLowerInvariant()}";
+        var key = $"{scope}:{email.Trim().ToLowerInvariant()}";
 
         // A cache rather than a dictionary, because entries have to expire on
         // their own. Keying a plain dictionary by every address ever
@@ -203,8 +242,15 @@ public static class AuthEndpoints
     /// anyone reaching atlas directly.
     /// </para>
     /// </remarks>
+    /// <param name="form">
+    /// The form this link was issued from, when it was. Present only on links
+    /// a sign-in form sent, and it changes nothing except where the browser
+    /// lands: somebody who clicked "sign in" from an RSVP should arrive back
+    /// at the RSVP, not on a portal they were not looking at.
+    /// </param>
     private static async Task<IResult> ConsumeMagicLink(
         string? token,
+        string? form,
         MagicLinkService links,
         SessionService sessions,
         HttpContext http,
@@ -212,11 +258,11 @@ public static class AuthEndpoints
         ILogger<MagicLinkRequest> log,
         CancellationToken ct)
     {
-        var baseUrl = PublicBaseUrl(config);
+        var landing = Landing(config, form);
 
         if (string.IsNullOrWhiteSpace(token))
         {
-            return Results.Redirect($"{baseUrl}{SignInPath}");
+            return Results.Redirect(landing.Refused);
         }
 
         var result = await links.ConsumeAsync(token, ct);
@@ -225,7 +271,7 @@ public static class AuthEndpoints
             // One destination for every rejection. Telling the caller whether
             // a token was expired, already used, or never existed only helps
             // somebody probing them.
-            return Results.Redirect($"{baseUrl}{SignInPath}");
+            return Results.Redirect(landing.Refused);
         }
 
         var sessionToken = await sessions.StartAsync(
@@ -249,7 +295,41 @@ public static class AuthEndpoints
         log.LogInformation(
             "Signed in from a link. {event}", Events.MagicLinkConsumed);
 
-        return Results.Redirect($"{baseUrl}{PortalPath}");
+        return Results.Redirect(landing.Accepted);
+    }
+
+    /// <summary>
+    /// Where a consumed link puts somebody, and where a refused one does.
+    /// </summary>
+    /// <remarks>
+    /// The form code is checked against its own shape before it is used, and
+    /// that check is the only thing standing between this parameter and an
+    /// open redirect. A code is seven characters from a fixed alphabet, so
+    /// anything else — a slash, a scheme, a hostname, a second query string —
+    /// is not a code and is treated as though no form was named at all. It is
+    /// never escaped and reused; it either matches or it is dropped.
+    /// <para>
+    /// Both destinations are absolute and built from the same configured
+    /// origin, so a link and the place it lands cannot disagree about which
+    /// host this environment is.
+    /// </para>
+    /// </remarks>
+    private static (string Accepted, string Refused) Landing(
+        IConfiguration config, string? form)
+    {
+        if (form is not null && FormCode.Looks(form))
+        {
+            var forms = FormsBaseUrl(config);
+
+            // The same query flag the portal's sign-in page uses. It says a
+            // link did not work and never which way — expired, spent and never
+            // issued are one answer, because telling them apart only helps
+            // somebody probing tokens.
+            return ($"{forms}/{form}", $"{forms}/{form}?link=expired");
+        }
+
+        var baseUrl = PublicBaseUrl(config);
+        return ($"{baseUrl}{PortalPath}", $"{baseUrl}{SignInPath}");
     }
 
     private static async Task<IResult> Logout(

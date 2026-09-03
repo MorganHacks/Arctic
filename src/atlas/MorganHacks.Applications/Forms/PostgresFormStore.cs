@@ -24,7 +24,15 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     private const string Columns =
         "id, form_id, version, status, fields, created_at, published_at";
 
-    private const string FormColumns = "id, event_id, code, name, kind, closes_at";
+    /// <remarks>
+    /// <c>eligible_statuses</c> rides along with <c>requires_sign_in</c>
+    /// everywhere, because reading one without the other gives a form whose
+    /// gate is on and whose audience is unknown — and the only safe reading of
+    /// an unknown audience is nobody, which would close a form to the people
+    /// it was built for.
+    /// </remarks>
+    private const string FormColumns =
+        "id, event_id, code, name, kind, closes_at, requires_sign_in, eligible_statuses";
 
     public async Task<Form> CreateAsync(
         Guid eventId, string name, string kind, Guid? actorId, CancellationToken ct = default)
@@ -104,7 +112,35 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
         reader.GetString(2),
         reader.GetString(3),
         reader.GetString(4),
-        reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5));
+        reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5),
+        reader.GetBoolean(6),
+        reader.GetFieldValue<string[]>(7));
+
+    public async Task<Form?> SaveAudienceAsync(
+        Guid formId,
+        bool requiresSignIn,
+        IReadOnlyList<string> eligibleStatuses,
+        CancellationToken ct = default)
+    {
+        // The statuses are cleared rather than kept when the gate goes off.
+        // Left behind they would come back the day somebody turned it on
+        // again, silently narrowing who may answer to whatever last year's
+        // author chose — and the check constraint refuses to store them
+        // anyway, so this is what turns that refusal into the obvious
+        // behaviour rather than a 500.
+        await using var cmd = dataSource.CreateCommand(
+            $"UPDATE applications.forms "
+            + "SET requires_sign_in = @gated, "
+            + "    eligible_statuses = CASE WHEN @gated THEN @statuses ELSE '{}' END "
+            + $"WHERE id = @id RETURNING {FormColumns}");
+
+        cmd.Parameters.AddWithValue("id", formId);
+        cmd.Parameters.AddWithValue("gated", requiresSignIn);
+        cmd.Parameters.AddWithValue("statuses", eligibleStatuses.Distinct().ToArray());
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? ReadForm(reader) : null;
+    }
 
     public async Task<FormVersion?> PublishedAsync(Guid formId, CancellationToken ct = default)
     {

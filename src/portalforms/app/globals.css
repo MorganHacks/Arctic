@@ -224,6 +224,18 @@ fieldset.question > legend + * {
 }
 
 /*
+ * An answer we hold, on a question that is not being asked again.
+ *
+ * Styled as text and never as a disabled input. A greyed-out box reads as a
+ * control that ought to work and does not, and somebody will spend a minute
+ * clicking it before deciding the form is broken; a line of text reads as a
+ * statement, which is what it is.
+ */
+.held {
+  margin: 0 0 0.35rem;
+}
+
+/*
  * How much of a long answer has been used.
  *
  * Numerals and a slash, no words. It sits under a box somebody is typing into

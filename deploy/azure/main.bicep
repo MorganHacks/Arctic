@@ -62,6 +62,15 @@ every hacker to a link that goes nowhere.
 ''')
 param publicBaseUrl string = ''
 
+@description('''
+Where the public forms site is: the portalforms origin, which is not the
+portal's. A sign-in link for a form has to land on the host the form is served
+from, because the session cookie is host-only — landing on the portal instead
+sets a cookie the forms site is never sent, and the person arrives at the form
+still signed out.
+''')
+param formsBaseUrl string = ''
+
 @description('Postgres major version. Keep this the same as docker-compose and the tests.')
 param postgresVersion string = '18'
 
@@ -209,6 +218,7 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     googleClientSecret: googleClientSecret
     googleRedirectUri: googleRedirectUri
     publicBaseUrl: publicBaseUrl
+    formsBaseUrl: formsBaseUrl
     warmReplicas: warmReplicas
     proxySecret: proxySecret
     pullIdentityId: pullIdentity.outputs.id

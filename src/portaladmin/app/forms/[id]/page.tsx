@@ -62,7 +62,7 @@ export default async function FormBuilder({
     );
   }
 
-  const { form, draft, published, locked } =
+  const { form, draft, published, locked, statuses } =
     (await draftResponse.json()) as DraftView;
 
   // History is nice to have rather than load-bearing: the builder works
@@ -85,8 +85,12 @@ export default async function FormBuilder({
       <Builder
         formName={form.name}
         formId={form.id}
+        formKind={form.kind}
         initialFields={draft.fields}
         lockedKeys={locked}
+        statuses={statuses}
+        requiresSignIn={form.requiresSignIn}
+        eligibleStatuses={form.eligibleStatuses}
         versions={versions}
         canManage={mine.has("forms.manage")}
       />

@@ -62,6 +62,19 @@ deployed environment means every link points at a machine nobody is running.
 ''')
 param publicBaseUrl string = ''
 
+@description('''
+The origin the public forms site is on — portalforms, not portalweb and not
+harbor.
+
+A form that requires sign-in emails a link, and that link both sets the session
+cookie and lands the person back on the form. The cookie is host-only, so the
+link has to be on this origin or the person arrives at a form they are still
+signed out of, holding a perfectly good session for a different hostname. Empty
+falls back to http://localhost:3002 in atlas, which is the port
+deploy/local/dev.sh uses.
+''')
+param formsBaseUrl string = ''
+
 @description('Resource id of the identity that pulls images.')
 param pullIdentityId string
 
@@ -204,9 +217,13 @@ var googleEnv = hasGoogle ? [
 // secret, so it needs no Container Apps secret entry, and atlas has a working
 // localhost default for it. An empty value is a misconfiguration worth seeing
 // in the template rather than a deployment worth blocking.
-var portalEnv = empty(publicBaseUrl) ? [] : [
-  { name: 'PublicBaseUrl', value: publicBaseUrl }
-]
+var portalEnv = concat(
+  empty(publicBaseUrl) ? [] : [
+    { name: 'PublicBaseUrl', value: publicBaseUrl }
+  ],
+  empty(formsBaseUrl) ? [] : [
+    { name: 'FormsBaseUrl', value: formsBaseUrl }
+  ])
 
 // Where resumes go. No key and no connection string: the account name plus the
 // identity is the whole configuration, which is the point of choosing an

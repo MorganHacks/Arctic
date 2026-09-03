@@ -23,6 +23,7 @@ export function Question({
   index,
   answer,
   problem,
+  fixed,
   onChange,
   onBusy,
 }: {
@@ -31,6 +32,20 @@ export function Question({
   index: number;
   answer: Answer | undefined;
   problem: string | undefined;
+
+  /**
+   * Whether this is ours to state rather than theirs to answer.
+   *
+   * Only ever true on a form that required signing in, and only for identity
+   * we verified and agreements already given. Rendered as the answer with no
+   * control, never hidden: a question that vanishes is one somebody assumes
+   * was never asked.
+   *
+   * A courtesy either way. The API replaces every one of these with what it
+   * holds before it validates anything, so a crafted submission changes
+   * nothing — this is what stops somebody trying.
+   */
+  fixed?: boolean;
   onChange: (key: string, value: Answer | undefined) => void;
   onBusy: (key: string, busy: boolean) => void;
 }) {
@@ -44,6 +59,17 @@ export function Question({
 
   const describedBy =
     [helpId, counterId, problemId].filter(Boolean).join(" ") || undefined;
+
+  /*
+   * A fixed question is never a group and never a file.
+   *
+   * It has no control at all, so the fieldset and legend a radio group needs
+   * would be a group of nothing — and the counter and the length cap below are
+   * about a box somebody is typing into, which there is not one of.
+   */
+  if (fixed) {
+    return <Held field={field} index={index} answer={answer} />;
+  }
 
   const grouped =
     field.type === "radio" ||
@@ -120,6 +146,65 @@ export function Question({
       {body}
     </div>
   );
+}
+
+/**
+ * A question whose answer is already settled.
+ *
+ * The label, the answer, and one line saying it is not changed here. No
+ * control, no `Required` marker — nothing is being asked — and no disabled
+ * input, which reads as something that ought to work and does not.
+ *
+ * The wording of the note names no route to changing it, because there is not
+ * one on this page and inventing one would be worse than saying nothing.
+ */
+function Held({
+  field,
+  index,
+  answer,
+}: {
+  field: Field;
+  index: number;
+  answer: Answer | undefined;
+}) {
+  return (
+    <div className="question" data-key={field.key}>
+      <p className="prompt">
+        <span className="ordinal">{index}</span>
+        {field.type === "consent" ? "Agreement" : field.label}
+      </p>
+
+      {field.type === "consent" ? (
+        <p>{field.label}</p>
+      ) : (
+        <p className="held">{written(answer)}</p>
+      )}
+
+      <p className="help">
+        We already have this from your application, so it is not asked again
+        here.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * One held answer, as a line of text.
+ *
+ * A ticked agreement reads as "Agreed" rather than "true", which is the only
+ * one of these that needs saying in words — the rest are already what somebody
+ * wrote.
+ */
+function written(answer: Answer | undefined): string {
+  if (answer === true) {
+    return "Agreed";
+  }
+
+  if (Array.isArray(answer)) {
+    return answer.join(", ");
+  }
+
+  return typeof answer === "string" ? answer : "";
 }
 
 /** The id of the control a question's problem should send somebody to. */

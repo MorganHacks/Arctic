@@ -111,6 +111,13 @@ builder.Services.AddSingleton<ISubmissionStore, PostgresSubmissionStore>();
 // opposite risks.
 builder.Services.AddSingleton<IResponseStore, PostgresResponseStore>();
 
+// The applicant's own side of a form that is not the application form: who is
+// signed in, what they have already told us, and where their answer lands.
+// Separate again, and for the sharpest version of the same reason — every
+// query on it is scoped to one person, and nothing on it takes an id from a
+// request.
+builder.Services.AddSingleton<IRespondentStore, PostgresRespondentStore>();
+
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
 
 // Singletons, because both hold nothing but the data source — which is itself

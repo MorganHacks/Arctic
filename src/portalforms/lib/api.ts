@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+
 // Scaffolding. Goes with the block in loadForm below. See lib/preview.ts.
 import { previewForm } from "./preview";
 
@@ -87,11 +89,32 @@ export type Field = {
 };
 
 /**
+ * What state this page is in.
+ *
+ * A word rather than a status code, because none of these is an error and
+ * every one of them is a page with something on it. `signIn` has something to
+ * do — put in an address and wait for a link — and `ineligible` has nothing,
+ * and the two must never be conflated: offering a sign-in box to somebody who
+ * is already signed in is how a person requests four links to a form that will
+ * not open for them either way.
+ */
+export type Access = "open" | "closed" | "signIn" | "ineligible";
+
+/**
+ * An answer we already hold.
+ *
+ * The same shapes the form posts back, because that is what it is: what
+ * somebody told us last time, keyed by question.
+ */
+export type Prefill = string | string[] | boolean | number;
+
+/**
  * A form behind its code.
  *
- * `fields` is absent when the form has closed. That is the API being careful
- * rather than terse: a closed form with its questions attached invites a page
- * that renders them behind a banner somebody scrolls straight past.
+ * `fields` is absent whenever there is nothing to fill in — a closed form, or
+ * one that requires a sign-in this reader has not done. That is the API being
+ * careful rather than terse: questions attached to a page nobody can submit
+ * invite a form rendered behind a banner somebody scrolls straight past.
  */
 export type PublicForm = {
   code: string;
@@ -99,9 +122,60 @@ export type PublicForm = {
   kind: string;
   open: boolean;
   closesAt: string | null;
+
+  /** Whether the link alone is enough. False for the application form, always. */
+  requiresSignIn: boolean;
+  access: Access;
+
   version?: number;
   fields?: Field[];
+
+  /**
+   * Who we have decided this is, from their record.
+   *
+   * Present only once they are signed in and eligible. The form never asks for
+   * a name or an address on a form like this — that is the entire point of
+   * signing in — so this is what the page prints instead.
+   */
+  you?: { name: string | null; email: string };
+
+  /** What they have already told us, keyed by question. Editable. */
+  prefill?: Record<string, Prefill>;
+
+  /**
+   * The questions they may not answer for themselves, keyed by question.
+   *
+   * Shown as fixed rather than hidden. A question that vanishes is one
+   * somebody assumes was never asked; a question shown with its answer and no
+   * control says what we hold and that this is not the place to change it.
+   */
+  fixed?: string[];
 };
+
+/** The cookie a signed-in form is read with. Set by /api/auth/consume. */
+const SESSION_COOKIE = "mh_session";
+
+/**
+ * Hands the reader's session on to the API, when they have one.
+ *
+ * This page is rendered on the server and the server is a different client
+ * from the browser: nothing in the browser's cookie jar is attached to a fetch
+ * made here unless it is put there. Without this, a signed-in form would
+ * render its signed-out state on first paint and only correct itself once
+ * something in the browser asked again — which on campus wifi is a sign-in box
+ * shown to somebody who is already signed in.
+ *
+ * Only the one cookie. Forwarding the whole header would send anything else
+ * this origin happens to be holding to an API that has no business reading it.
+ *
+ * Reading a cookie makes this request dynamic, which it already was: the form
+ * is fetched `no-store` because a form closes at a moment somebody chose and a
+ * new version can be published while people are filling in the old one.
+ */
+async function sessionHeader(): Promise<Record<string, string>> {
+  const session = (await cookies()).get(SESSION_COOKIE);
+  return session ? { cookie: `${SESSION_COOKIE}=${session.value}` } : {};
+}
 
 /**
  * Resolves the code in the URL. Null when there is no form to show.
@@ -131,7 +205,7 @@ export async function loadForm(code: string): Promise<PublicForm | null> {
     response = await fetch(
       `${apiOrigin}/api/forms/${encodeURIComponent(code)}`,
       {
-        headers: proxyHeader,
+        headers: { ...proxyHeader, ...(await sessionHeader()) },
         /*
          * Never cached.
          *
