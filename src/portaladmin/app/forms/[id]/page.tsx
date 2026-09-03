@@ -90,6 +90,8 @@ export default async function FormBuilder({
         statuses={statuses}
         requiresSignIn={form.requiresSignIn}
         eligibleStatuses={form.eligibleStatuses}
+        closesAt={form.closesAt ?? null}
+        published={published !== null}
         versions={versions}
         canManage={mine.has("forms.manage")}
       />
