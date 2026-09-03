@@ -44,6 +44,14 @@ public interface IFormStore
     Task<IReadOnlyList<Form>> ForEventAsync(Guid eventId, CancellationToken ct = default);
 
     /// <summary>The version applicants are currently being shown, if any.</summary>
+    /// <summary>Takes a live form down, leaving its answers and its history.</summary>
+    /// <remarks>False when nothing was published, so pressing twice is harmless.</remarks>
+    Task<bool> UnpublishAsync(Guid formId, CancellationToken ct = default);
+
+    /// <summary>When the form stops accepting answers. Null means never.</summary>
+    Task<Form?> SaveScheduleAsync(
+        Guid formId, DateTimeOffset? closesAt, CancellationToken ct = default);
+
     Task<FormVersion?> PublishedAsync(Guid formId, CancellationToken ct = default);
 
     /// <summary>The draft being edited, creating one if none exists.</summary>

@@ -40,6 +40,10 @@ public static class AdminFormEndpoints
              .RequirePermission(Permission.FormsManage);
         forms.MapPost("/{id:guid}/publish", Publish)
              .RequirePermission(Permission.FormsManage);
+        forms.MapPost("/{id:guid}/unpublish", Unpublish)
+             .RequirePermission(Permission.FormsManage);
+        forms.MapPut("/{id:guid}/schedule", Schedule)
+             .RequirePermission(Permission.FormsManage);
 
         // Who the form is for, which is not one of its questions. Behind
         // forms.manage with the rest of the writing, because narrowing an
@@ -325,6 +329,69 @@ public static class AdminFormEndpoints
             problems = FormValidation.Check(request.Fields).Select(Describe),
         });
     }
+
+    /// <summary>Takes a live form down. Its link stops serving; its answers stay.</summary>
+    /// <remarks>
+    /// The opposite of publishing rather than the opposite of creating. A form
+    /// that was live and is not any more still has a draft to edit, a history to
+    /// read, and every answer it collected, so this is reversible by publishing
+    /// again. Deleting is not offered anywhere and this is not it.
+    /// </remarks>
+    private static async Task<IResult> Unpublish(
+        Guid id,
+        IFormStore forms,
+        ILogger<Form> log,
+        CancellationToken ct)
+    {
+        var form = await Find(forms, id, ct);
+        if (form is null)
+        {
+            return Results.NotFound(new { error = "No such form." });
+        }
+
+        var taken = await forms.UnpublishAsync(id, ct);
+        if (!taken)
+        {
+            return Results.Conflict(new
+            {
+                error = "This form is not published, so there is nothing to take down.",
+            });
+        }
+
+        log.LogInformation(
+            "Form {Code} unpublished. {event}", form.Code, Events.FormUnpublished);
+
+        return Results.Ok(new { id = form.Id, published = false });
+    }
+
+    /// <summary>When the form closes on its own.</summary>
+    /// <remarks>
+    /// An instant, not a date. The console decides what somebody meant by
+    /// "the 15th at midnight" before it gets here, because the answer depends on
+    /// a timezone this layer has no business guessing.
+    /// </remarks>
+    private static async Task<IResult> Schedule(
+        Guid id,
+        ScheduleRequest? request,
+        IFormStore forms,
+        CancellationToken ct)
+    {
+        var form = await Find(forms, id, ct);
+        if (form is null)
+        {
+            return Results.NotFound(new { error = "No such form." });
+        }
+
+        var saved = await forms.SaveScheduleAsync(id, request?.ClosesAt, ct);
+        if (saved is null)
+        {
+            return Results.NotFound(new { error = "No such form." });
+        }
+
+        return Results.Ok(new { id = saved.Id, closesAt = saved.ClosesAt });
+    }
+
+    private sealed record ScheduleRequest(DateTimeOffset? ClosesAt);
 
     /// <summary>
     /// Makes the draft the live form. Requires <c>forms.manage</c>.
