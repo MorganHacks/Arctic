@@ -150,7 +150,18 @@ export function Rendered({
 function wrap(html: string): string {
   return [
     '<!doctype html><html><head><meta charset="utf-8">',
+    // The ground and the ink, inside the document.
+    //
+    // Setting them on the iframe element is not enough: the embedded
+    // document has its own colour scheme, which follows the reader's
+    // operating system unless it is told otherwise. On a machine set to
+    // dark that made the default text light, on the white ground the frame
+    // provides -- washed out and barely readable. A mail client shows an
+    // HTML email on white with dark text whatever the reader prefers, so
+    // this says so explicitly rather than inheriting anything.
     "<style>",
+    ":root{color-scheme:light}",
+    "html,body{background:#ffffff;color:#14161a}",
     "body{margin:0;padding:1rem 1.1rem;line-height:1.55;",
     'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}',
     "img{max-width:100%;height:auto}",

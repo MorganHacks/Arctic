@@ -33,6 +33,9 @@ const DEBOUNCE_MS = 600;
  * until the day somebody types the thing they disagree about, and the one that
  * matters is the one that sends.
  */
+const FROM_LOCAL = "mail";
+const FROM_DOMAIN = "morganhacks.com";
+
 export function Editor({
   template,
   canManage,
@@ -57,10 +60,17 @@ export function Editor({
   const router = useRouter();
 
   const [key, setKey] = useState(template?.key ?? "");
-  const [kind, setKind] = useState<TemplateKind>(template?.kind ?? "broadcast");
+  // Broadcast only, here. The API still serves both kinds -- the sign-in link
+  // is a transactional template and is sent by atlas, not written here -- but
+  // the console has no reason to offer a kind nobody composes by hand.
+  const kind: TemplateKind = template?.kind ?? "broadcast";
   const [subject, setSubject] = useState(template?.subject ?? "");
-  const [fromLocal, setFromLocal] = useState(template?.fromLocal ?? "");
-  const [fromDomain, setFromDomain] = useState(template?.fromDomain ?? "");
+  // One sending identity, not a field. An address somebody types is an address
+  // that can be wrong, and a from address that is not verified in SES does not
+  // bounce -- it fails to send at all. An existing template keeps whatever it
+  // already had, so editing one never silently re-addresses it.
+  const fromLocal = template?.fromLocal ?? FROM_LOCAL;
+  const fromDomain = template?.fromDomain ?? FROM_DOMAIN;
   const [replyTo, setReplyTo] = useState(template?.replyTo ?? "");
   const [markdown, setMarkdown] = useState(template?.markdown ?? "");
 
@@ -222,27 +232,6 @@ export function Editor({
           </div>
 
           <div className={styles.field}>
-            <label htmlFor="kind">Kind</label>
-            <select
-              id="kind"
-              value={kind}
-              onChange={(event) =>
-                setKind(event.target.value as TemplateKind)
-              }
-            >
-              <option value="broadcast">Broadcast</option>
-              <option value="transactional">Transactional</option>
-            </select>
-            {/* Said here because this is where the choice is made, and the
-                compose screen simply will not list a transactional template —
-                which reads as a missing template rather than as a decision
-                somebody took on this page. */}
-            <p className={styles.medium}>
-              Campaigns can only send broadcast templates.
-            </p>
-          </div>
-
-          <div className={styles.field}>
             <label htmlFor="subject">Subject</label>
             {/* The subject goes through the same renderer as the body, so it
                 offers the same names. A menu on one and not the other would
@@ -254,28 +243,6 @@ export function Editor({
               available={available}
               className={styles.wide}
             />
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="fromLocal">From</label>
-            <div className={styles.address}>
-              <input
-                id="fromLocal"
-                value={fromLocal}
-                onChange={(event) => setFromLocal(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <span className={styles.at}>@</span>
-              <input
-                id="fromDomain"
-                aria-label="From domain"
-                value={fromDomain}
-                onChange={(event) => setFromDomain(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
           </div>
 
           <div className={styles.field}>
