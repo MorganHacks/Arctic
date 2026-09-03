@@ -6,7 +6,9 @@ import type {
   EventChoice,
   FormChoice,
   MessageProgress,
+  PlaceholderCoverage,
   Preview,
+  Render,
   Segment,
 } from "@/components/mail/types";
 import type { TemplateRow } from "@/components/templates/types";
@@ -286,7 +288,85 @@ export async function previewCampaign(id: string): Promise<PreviewRead> {
   }
 
   const preview = (await response.json()) as Preview;
-  return { ok: true, preview };
+  return { ok: true, preview: checked(preview) };
+}
+
+/**
+ * A preview body, reduced to the parts this screen can actually render.
+ *
+ * The cast above is a promise, not a check, and two of the fields it promises
+ * are new: an API that has not shipped them yet sends nothing, and one that
+ * has sends them in a shape this screen has never seen. Everywhere else that
+ * costs a wrong number on a panel; here it costs a crash, because the coverage
+ * list decides whether a warning appears at all and the renders are put
+ * through an iframe.
+ *
+ * So the rule is the same for both: a field that is not the shape it was
+ * promised as leaves this function absent rather than half-trusted. Absent is
+ * a state the screen already knows how to be in — it was the only state before
+ * these fields existed.
+ */
+function checked(preview: Preview): Preview {
+  return {
+    ...preview,
+    sample: strings(preview.sample),
+    problems: Array.isArray(preview.problems)
+      ? strings(preview.problems)
+      : undefined,
+    placeholderCoverage: coverage(preview.placeholderCoverage),
+    renders: renders(preview.renders),
+  };
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function counted(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.trunc(value)
+    : 0;
+}
+
+function coverage(value: unknown): PlaceholderCoverage[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value
+    .filter(
+      (entry): entry is PlaceholderCoverage =>
+        typeof entry?.placeholder === "string" && entry.placeholder !== "",
+    )
+    .map((entry) => ({
+      placeholder: entry.placeholder,
+      missing: counted(entry.missing),
+      total: counted(entry.total),
+      examples: strings(entry.examples),
+    }));
+}
+
+function renders(value: unknown): Render[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value
+    .filter(
+      (entry): entry is Render =>
+        typeof entry?.email === "string" &&
+        typeof entry.html === "string" &&
+        typeof entry.text === "string",
+    )
+    .map((entry) => ({
+      email: entry.email,
+      subject: typeof entry.subject === "string" ? entry.subject : "",
+      html: entry.html,
+      text: entry.text,
+      unfilled: strings(entry.unfilled),
+    }));
 }
 
 /** Hands the campaign to the sender. There is no undo past this. */
@@ -692,7 +772,63 @@ function examplePreview(id: string): Preview | null {
     suppressedByReason: byReason,
     sample: exampleAddresses(Math.min(recipientCount, 8)),
     problems: [],
+    placeholderCoverage: exampleCoverage(recipientCount),
+    renders: exampleRenders(recipientCount),
   };
+}
+
+/**
+ * Two placeholders, one of them with a gap.
+ *
+ * A fixture where everything is filled never shows the panel doing its job,
+ * and the job is the twelve people who would open an email addressed to
+ * `{{firstName}}`. So one placeholder the segment covers and one it does not,
+ * which is also the shape of the real problem: the field exists on some
+ * records and not others.
+ */
+function exampleCoverage(recipientCount: number): PlaceholderCoverage[] {
+  const missing = Math.min(recipientCount, 12);
+
+  return [
+    {
+      placeholder: "firstName",
+      missing,
+      total: recipientCount,
+      examples: exampleAddresses(Math.min(missing, 3)),
+    },
+    {
+      placeholder: "eventName",
+      missing: 0,
+      total: recipientCount,
+      examples: [],
+    },
+  ];
+}
+
+/**
+ * Four messages, the last of which is one of the twelve.
+ *
+ * No wording. The bodies are the substituted values and nothing else — the
+ * real ones come from the template, which belongs to whoever writes the
+ * emails, and a fixture that invented copy would be putting words nobody
+ * approved on a screen whose whole purpose is checking what goes out.
+ */
+function exampleRenders(recipientCount: number): Render[] {
+  return exampleAddresses(Math.min(recipientCount, 4)).map(
+    (email, index, all) => {
+      const unfilled = index === all.length - 1 ? ["firstName"] : [];
+      const name =
+        unfilled.length > 0 ? "{{firstName}}" : `Example Person ${index + 1}`;
+
+      return {
+        email,
+        subject: `Example Event · ${name}`,
+        html: `<h1>Example Event</h1>\n<p>${name}</p>`,
+        text: `Example Event\n\n${name}`,
+        unfilled,
+      };
+    },
+  );
 }
 
 function exampleChange(

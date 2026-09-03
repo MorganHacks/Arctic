@@ -7,6 +7,7 @@ import type {
   SendResult,
 } from "@/app/mail/actions";
 import styles from "./mail.module.css";
+import { Message } from "./message";
 import { StatusPill } from "./status";
 import {
   when,
@@ -233,6 +234,14 @@ export function Sending({
                 {error ? <p className="error">{error}</p> : null}
               </div>
             </section>
+
+            {/*
+              What would arrive, and who would get a placeholder instead of
+              their name. Between the recipients and the send, and never
+              beside the send: it is the last consequence anybody can still
+              act on, so it goes where they have to pass it.
+            */}
+            {resolved !== null ? <Message preview={resolved} /> : null}
 
             {/*
               The send exists only here, and only once there is a resolved
