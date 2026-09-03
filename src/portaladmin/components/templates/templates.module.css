@@ -282,6 +282,16 @@
  */
 .frame {
   color-scheme: light;
+
+  /* The document's own ground, not the console's.
+   *
+   * An iframe is transparent until its content paints one, and email HTML
+   * rarely does -- it assumes the white a mail client provides. On a dark
+   * console that left the sender's black text sitting on the dark panel
+   * behind, which is unreadable and, worse, is not what the recipient will
+   * see. Canvas resolves against the color-scheme forced above, so this is
+   * white here and stays correct if that ever changes. */
+  background: Canvas;
   display: block;
   width: 100%;
   min-height: 20rem;
