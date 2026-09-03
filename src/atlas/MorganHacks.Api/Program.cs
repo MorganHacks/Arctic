@@ -87,6 +87,11 @@ builder.Services.AddSingleton<MessageQueue>();
 builder.Services.AddSingleton<IFormStore, PostgresFormStore>();
 builder.Services.AddSingleton<ISubmissionStore, PostgresSubmissionStore>();
 
+// And the organizers' side reads back what the public side wrote. Separate
+// from the submission store on purpose: they touch the same table and have
+// opposite risks.
+builder.Services.AddSingleton<IResponseStore, PostgresResponseStore>();
+
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
 
 // Singletons, because both hold nothing but the data source — which is itself
@@ -257,6 +262,7 @@ app.MapResumes();
 app.MapPeopleAdmin();
 app.MapAuditTrail();
 app.MapFormsAdmin();
+app.MapFormResponses();
 app.MapSesWebhook();
 app.MapGoogle();
 

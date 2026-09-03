@@ -28,6 +28,26 @@ public readonly record struct Permission(string Value)
     /// <summary>Separate from view: resumes are more sensitive than the rest of a record.</summary>
     public static readonly Permission ApplicationsViewResume = new("applications.view_resume");
 
+    /// <summary>
+    /// Reading the answers people gave.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ApplicationsView"/> for the same reason
+    /// <see cref="ApplicationsViewResume"/> is. <c>applications.view</c> is a
+    /// large group — comms holds it to build segments, logistics holds it for
+    /// headcount and dietary needs, and it also gates the form builder, where
+    /// seeing the questions is not seeing anybody's answers to them. Reading
+    /// what several hundred people wrote about themselves is a narrower thing
+    /// than any of that.
+    /// <para>
+    /// Not on the sensitive list. Reading answers on a screen leaves them in
+    /// the system; <see cref="ApplicationsExport"/> is the one that takes a
+    /// copy out, and that is the permission the CSV is behind.
+    /// </para>
+    /// </remarks>
+    public static readonly Permission ApplicationsViewResponses =
+        new("applications.view_responses");
+
     public static readonly Permission ApplicationsNote = new("applications.note");
 
     // Forms
@@ -90,7 +110,8 @@ public readonly record struct Permission(string Value)
     public static readonly IReadOnlySet<Permission> All = new HashSet<Permission>
     {
         ApplicationsView, ApplicationsDecide, ApplicationsBulkDecide,
-        ApplicationsExport, ApplicationsViewResume, ApplicationsNote,
+        ApplicationsExport, ApplicationsViewResume, ApplicationsViewResponses,
+        ApplicationsNote,
         FormsManage,
         EmailSendTemplated, EmailSendBroadcast, EmailManageTemplates, EmailViewStats,
         SponsorsView, SponsorsEdit, SponsorsViewFinancials,
