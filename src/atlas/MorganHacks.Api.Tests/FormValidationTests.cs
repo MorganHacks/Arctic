@@ -55,6 +55,48 @@ public class FormValidationTests
     }
 
     [Fact]
+    public void A_survey_does_not_have_to_carry_the_MLH_questions()
+    {
+        // They are questions about people coming to the event. A mentor
+        // sign-up or a feedback survey is not that, and demanding a code of
+        // conduct agreement on one made the builder useless for anything but
+        // the application form.
+        List<FormField> survey =
+        [
+            new()
+            {
+                Key = "why_mentor",
+                Type = FieldType.Paragraph,
+                Label = "Why do you want to mentor?",
+                Required = true,
+            },
+        ];
+
+        Assert.Empty(FormValidation.Check(survey, requiresMlh: false));
+        Assert.True(FormValidation.CanPublish(survey, requiresMlh: false));
+    }
+
+    [Fact]
+    public void An_application_still_has_to()
+    {
+        // The other half. Loosening this for surveys must not loosen it where
+        // the obligation is real.
+        List<FormField> application =
+        [
+            new()
+            {
+                Key = "why_apply",
+                Type = FieldType.Paragraph,
+                Label = "Why do you want to come?",
+                Required = true,
+            },
+        ];
+
+        Assert.NotEmpty(FormValidation.Check(application));
+        Assert.False(FormValidation.CanPublish(application));
+    }
+
+    [Fact]
     public void The_MLH_questions_do_not_collide_with_each_other()
     {
         // Several MLH fields store in columns, and this check would be

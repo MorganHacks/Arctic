@@ -287,7 +287,7 @@ public static class AdminFormEndpoints
             return Results.NotFound(new { error = "No such form." });
         }
 
-        var reconciled = LockedFields.Reconcile(request.Fields);
+        var reconciled = LockedFields.Reconcile(request.Fields, form.IsApplication);
         if (reconciled.Fields is null)
         {
             return Problems(
@@ -310,7 +310,7 @@ public static class AdminFormEndpoints
         return Results.Ok(new
         {
             saved = reconciled.Fields.Count,
-            problems = FormValidation.Check(reconciled.Fields).Select(Describe),
+            problems = FormValidation.Check(reconciled.Fields, form.IsApplication).Select(Describe),
         });
     }
 

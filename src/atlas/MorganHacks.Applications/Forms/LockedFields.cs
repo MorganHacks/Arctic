@@ -56,7 +56,8 @@ public static partial class LockedFields
     /// presentation choice and none of MLH's business. Everything else about
     /// it comes from <see cref="MlhFields"/>.
     /// </remarks>
-    public static ReconciledDraft Reconcile(IReadOnlyList<FormField> submitted)
+    public static ReconciledDraft Reconcile(
+        IReadOnlyList<FormField> submitted, bool requiresMlh)
     {
         var problems = new List<FormProblem>();
 
@@ -76,12 +77,22 @@ public static partial class LockedFields
             }
         }
 
-        var present = submitted.Select(f => f.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, locked) in Canonical.Where(c => !present.Contains(c.Key)))
+        // Only the application form carries MLH's questions. They are about
+        // people coming to the event, and a mentor sign-up or a feedback survey
+        // is not that — demanding a code of conduct agreement and a level of
+        // study on every form makes the builder useless for anything else.
+        if (requiresMlh)
         {
-            problems.Add(new FormProblem(
-                $"\"{Shorten(locked.Label)}\" is required by MLH and cannot be removed.",
-                key));
+            var present = submitted
+                .Select(f => f.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (key, locked) in Canonical.Where(c => !present.Contains(c.Key)))
+            {
+                problems.Add(new FormProblem(
+                    $"\"{Shorten(locked.Label)}\" is required by MLH and cannot be removed.",
+                    key));
+            }
         }
 
         if (problems.Count > 0)
@@ -90,7 +101,7 @@ public static partial class LockedFields
         }
 
         var fields = submitted
-            .Select(field => Canonical.TryGetValue(field.Key, out var locked)
+            .Select(field => requiresMlh && Canonical.TryGetValue(field.Key, out var locked)
                 ? locked
                 // Locked is not a flag a client gets to set. Left alone, an
                 // author could mark their own question undeletable and nobody

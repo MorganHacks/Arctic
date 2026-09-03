@@ -24,7 +24,8 @@ public static class FormValidation
     /// One at a time turns fixing a form into a guessing game where each fix
     /// reveals the next complaint.
     /// </remarks>
-    public static IReadOnlyList<FormProblem> Check(IReadOnlyList<FormField> fields)
+    public static IReadOnlyList<FormProblem> Check(
+        IReadOnlyList<FormField> fields, bool requiresMlh = true)
     {
         var problems = new List<FormProblem>();
 
@@ -64,8 +65,13 @@ public static class FormValidation
             }
         }
 
+        // Application forms only — see LockedFields.Reconcile. The default is
+        // the strict reading, so a caller that has not thought about it gets
+        // the obligations rather than quietly skipping them.
         var present = fields.Select(f => f.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var required in MlhFields.RequiredKeys.Where(k => !present.Contains(k)))
+        foreach (var required in requiresMlh
+            ? MlhFields.RequiredKeys.Where(k => !present.Contains(k))
+            : [])
         {
             var label = MlhFields.All.First(f => f.Key == required).Label;
             problems.Add(new FormProblem(
@@ -137,7 +143,9 @@ public static class FormValidation
         return problems;
     }
 
-    public static bool CanPublish(IReadOnlyList<FormField> fields) => Check(fields).Count == 0;
+    public static bool CanPublish(
+        IReadOnlyList<FormField> fields, bool requiresMlh = true) =>
+        Check(fields, requiresMlh).Count == 0;
 
     /// <summary>
     /// Trims a label for an error message.
