@@ -47,6 +47,37 @@ public static partial class TemplateRenderer
             Fill(template.BodyText, values, escape: false));
 
     /// <summary>
+    /// Every placeholder a template asks for, across all three parts.
+    /// </summary>
+    /// <remarks>
+    /// So a caller can find out before it renders whether it holds the values
+    /// a template needs. <see cref="Fill"/> leaves an unknown placeholder
+    /// standing, which is the right behaviour for one message somebody is
+    /// testing and the wrong outcome for four hundred that cannot be recalled:
+    /// "Hi {{firstName}}" is only a useful mistake if somebody reads it before
+    /// it goes out.
+    /// <para>
+    /// Here rather than in the caller because the regex that decides what a
+    /// placeholder is lives here. Two copies of it would agree until one was
+    /// changed.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlySet<string> PlaceholdersIn(EmailTemplate template)
+    {
+        var found = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var part in new[] { template.Subject, template.BodyHtml, template.BodyText })
+        {
+            foreach (Match match in Placeholder.Matches(part))
+            {
+                found.Add(match.Groups[1].Value);
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// Substitutes values, escaping them in the HTML part.
     /// </summary>
     /// <remarks>
