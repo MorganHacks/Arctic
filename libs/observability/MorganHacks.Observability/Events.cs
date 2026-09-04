@@ -72,6 +72,26 @@ public static class Events
     /// </remarks>
     public const string ResumeStored = "resume.stored";
 
+    /// <summary>
+    /// A check-in code was presented at the door.
+    /// </summary>
+    /// <remarks>
+    /// Emitted for every scan, including the refusals, because the refusals
+    /// are the signal. The record of who arrived is
+    /// <c>applications.status_history</c>, which a trigger writes in the same
+    /// transaction and which outlives any log retention window; what a table
+    /// cannot show is a queue going wrong while it is still standing there. A
+    /// run of unknown codes is a scanner reading badly or people holding last
+    /// year's screenshot, and a run of unconfirmed ones is a decision that did
+    /// not reach the people it was about.
+    /// <para>
+    /// Carries the outcome, the application id and the volunteer's person id.
+    /// Never the code itself, and never the applicant's name: this line is
+    /// counted, not read for who was in it.
+    /// </para>
+    /// </remarks>
+    public const string CheckInScanned = "check_in.scanned";
+
     /// <summary>A resume was handed to an organizer as a signed link.</summary>
     /// <remarks>
     /// The permission model treats a resume as more sensitive than the rest of

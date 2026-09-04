@@ -7,11 +7,17 @@ import { signOut } from "../actions";
 const tabs = [
   { href: "/portal", label: "Status" },
   { href: "/portal/profile", label: "Profile" },
+  { href: "/portal/check-in", label: "Check in" },
   { href: "/portal/messages", label: "Emails" },
 ] as const;
 
 /**
- * The three screens, and the way out.
+ * The four screens, and the way out.
+ *
+ * Check in is shown to everybody rather than only to people who have a code.
+ * A tab that appeared the day somebody confirmed would tell them that day what
+ * they were supposed to be told by an email, and the screen behind it explains
+ * itself for anyone who is not there yet.
  *
  * A client component only because the current tab has to be marked, and
  * `usePathname` is the only way to know which one that is. `aria-current` does

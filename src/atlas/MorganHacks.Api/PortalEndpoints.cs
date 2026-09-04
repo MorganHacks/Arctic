@@ -44,6 +44,7 @@ public static class PortalEndpoints
         portal.MapGet("/me", Me);
         portal.MapPatch("/profile", SaveProfile);
         portal.MapGet("/messages", Messages);
+        portal.MapGet("/check-in", CheckIn);
 
         return app;
     }
@@ -226,6 +227,68 @@ public static class PortalEndpoints
                 at = m.SentAt ?? m.QueuedAt,
                 delivery = DeliveryView.Describe(m.Status),
             }),
+        });
+    }
+
+    /// <summary>
+    /// The code they show at the door, or the sentence explaining why there is
+    /// not one yet.
+    /// </summary>
+    /// <remarks>
+    /// Its own route rather than a field on <see cref="Me"/>. That one is read
+    /// on every screen in the portal and this one mints a value the first time
+    /// it is asked, and a status page that quietly created something would be
+    /// a surprising thing to find later.
+    /// <para>
+    /// A GET that can write, which the sign-out button in this same app
+    /// deliberately is not. The difference is that this one is idempotent in
+    /// the way that matters: the first call creates the code and every call
+    /// after it returns the same twelve characters, so a link prefetcher
+    /// cannot cause anything a person would notice. Minting on a POST instead
+    /// would mean the screen showing the code needs a button before it can
+    /// show it, which is a worse thing to hand somebody in a queue.
+    /// </para>
+    /// <para>
+    /// Answers 200 in every case, including for somebody with no application
+    /// and somebody who has not confirmed. There is always a screen, and what
+    /// changes is whether it has a code on it — the alternative is a 404 that
+    /// the portal would have to translate back into the sentence this route
+    /// already knows.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> CheckIn(
+        HttpContext http, IApplicantPortalStore store, CancellationToken ct)
+    {
+        var personId = http.PersonId();
+        var application = await store.FindForPersonAsync(personId, ct);
+
+        var words = CheckInView.Describe(
+            application?.Status, application?.DecisionsAnnounced ?? false);
+
+        // Not asked for at all when there is no application, so the common
+        // empty case costs one query rather than two.
+        var code = application is null ? null : await store.CheckInCodeAsync(personId, ct);
+
+        return Results.Ok(new
+        {
+            words.Heading,
+            words.Explanation,
+            words.Hint,
+            code,
+
+            // The grouped spelling comes from the same place as the alphabet.
+            // A portal that split the string itself would be deciding where
+            // the gaps fall, and the gaps are part of reading it out loud.
+            display = code is null ? null : CheckInCode.Format(code),
+
+            // Modules, not an image. The portal decides how large they are
+            // drawn and what they are drawn with; this side only knows which
+            // ones are dark.
+            qr = code is null ? null : QrCode.Encode(code),
+
+            // Said plainly rather than left for the screen to infer from the
+            // heading, because the screen has to change shape for it.
+            checkedIn = application?.Status is ApplicationStatus.CheckedIn,
         });
     }
 
