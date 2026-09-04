@@ -11,9 +11,13 @@ export const config: VercelConfig = {
 
   /**
    * Skip the build when nothing under this directory changed. Run from the
-   * project's Root Directory, so it means "did src/portalweb change?" — which
+   * project's Root Directory, so it means "did src/portalweb change?", which
    * keeps a portaladmin-only commit from rebuilding the public site.
    * Exit 0 skips, exit 1 builds.
+   *
+   * libs is in the list because every app imports its palette from there, and
+   * a colour change that does not rebuild is a colour meaning two things in
+   * two places.
    */
-  ignoreCommand: 'git diff --quiet HEAD^ HEAD ./',
+  ignoreCommand: 'git diff --quiet HEAD^ HEAD ./ ../../libs',
 };
