@@ -52,10 +52,10 @@ public static class ApplicantView
             ApplicationStatus.Incomplete => "Application started",
             ApplicationStatus.Submitted or ApplicationStatus.UnderReview => "Application received",
             ApplicationStatus.Accepted => rsvpDeadline is { } by
-                ? $"Accepted — confirm by {by:MMMM d}"
+                ? $"Accepted — confirm by {Day(by)}"
                 : "Accepted",
             ApplicationStatus.Confirmed => eventStartsAt is { } on
-                ? $"You're in. See you {on:MMMM d}"
+                ? $"You're in. See you {Day(on)}"
                 : "You're in",
             ApplicationStatus.Waitlisted => "Waitlisted",
             ApplicationStatus.Rejected => "Decision made",
@@ -103,11 +103,11 @@ public static class ApplicantView
                 + "it as often as you like until you submit.",
             ApplicationStatus.Submitted or ApplicationStatus.UnderReview => Waiting,
             ApplicationStatus.Accepted => rsvpDeadline is { } by
-                ? $"You have a spot. Confirm it by {by:MMMM d} or it goes to "
+                ? $"You have a spot. Confirm it by {Day(by)} or it goes to "
                   + "somebody on the waitlist."
                 : "You have a spot. We will email you how to confirm it.",
             ApplicationStatus.Confirmed => eventStartsAt is { } on
-                ? $"Nothing to do. We will email you the details before {on:MMMM d}."
+                ? $"Nothing to do. We will email you the details before {Day(on)}."
                 : "Nothing to do. We will email you the details closer to the event.",
             ApplicationStatus.Waitlisted =>
                 "Keep an eye on your email. Spots open up as people drop out, "
@@ -138,4 +138,20 @@ public static class ApplicantView
     private const string Waiting =
         "Nothing to do. We are reading applications and will email everybody "
         + "on the same day.";
+
+    /// <summary>
+    /// The calendar day an instant falls on, in the event's city.
+    /// </summary>
+    /// <remarks>
+    /// Every date in this file is a day rather than a minute, which is the
+    /// precision these dates carry — and a day is exactly the thing a zone
+    /// changes. A deadline stored as the fifteenth at 11:59pm Eastern is the
+    /// sixteenth in UTC, so formatting the instant as it arrives from the
+    /// database moves the applicant's deadline a day later than the team set
+    /// it. Invariant culture, because the month names are English copy the
+    /// team signed off and must not follow the server's locale.
+    /// </remarks>
+    private static string Day(DateTimeOffset instant) =>
+        EventZone.Local(instant).ToString(
+            "MMMM d", System.Globalization.CultureInfo.InvariantCulture);
 }

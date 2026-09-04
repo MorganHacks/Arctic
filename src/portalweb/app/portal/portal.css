@@ -310,6 +310,89 @@ button.link {
   width: 100%;
 }
 
+/* The RSVP panel ---------------------------------------------------------- */
+
+/*
+ * The one panel that asks for something rather than reporting something, and
+ * the only consequential action in the portal. It borrows the status panel's
+ * accent edge because it is part of the same answer: the status line says
+ * there is a spot, and this is the spot.
+ */
+.rsvp {
+  border-left: 3px solid var(--accent);
+}
+
+.rsvp form {
+  margin: 0;
+}
+
+/* The deadline. Sized up from the surrounding copy rather than coloured,
+   because it is the fact on this panel somebody has to take away, and colour
+   in this palette is reserved for meaning rather than emphasis. */
+.rsvp__by {
+  font-size: var(--step1);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 1rem;
+}
+
+/*
+ * The second ask before declining.
+ *
+ * Fades in over 140ms so the swap reads as this panel changing its mind rather
+ * than as a different panel arriving. tokens.css reduces every duration under
+ * prefers-reduced-motion, so this appears instantly for anybody who asked for
+ * that, and nothing here depends on the animation having run.
+ */
+.rsvp__sure {
+  animation: rsvp-settle 140ms ease-out;
+}
+
+.rsvp__sure p {
+  margin: 0 0 0.9rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+@keyframes rsvp-settle {
+  from {
+    opacity: 0;
+    transform: translateY(-0.2rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * Declining, once it has been asked twice.
+ *
+ * The stop colour, which in this palette means "this went wrong" everywhere
+ * else. It means the same thing here in the sense that matters: it is the
+ * button on this page that cannot be taken back, and it should not look like
+ * the one next to it.
+ */
+button.danger {
+  background: var(--stop-soft);
+  border-color: var(--stop);
+  color: var(--stop);
+  font-weight: 600;
+}
+
+button.danger:hover {
+  border-color: var(--stop);
+}
+
+/* button.link carries no padding because it is normally a word inside a
+   sentence. Here it stands alone in a row of actions on a phone, where a
+   23px-tall tap target is one somebody misses and hits Confirm instead. */
+.rsvp .actions button.link {
+  padding: 0.7rem 0.5rem;
+}
+
 /* Messages ---------------------------------------------------------------- */
 
 .messages {
