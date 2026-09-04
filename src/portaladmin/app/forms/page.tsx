@@ -60,8 +60,8 @@ export default async function Forms({
       <Shell personId={person.personId}>
         <h1>Forms</h1>
         <div className="empty">
-          There is no event yet. A form belongs to one, so there is nowhere to
-          put a question until somebody creates it.
+          There is no event yet. A form belongs to one, so create an event
+          under Events first.
         </div>
       </Shell>
     );
