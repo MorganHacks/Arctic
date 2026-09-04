@@ -404,17 +404,22 @@
   color: var(--muted);
 }
 
-/* The same heading with a control beside it. */
+/* The same heading with a control beside it. The gap under the heading moves
+   to the row, because a heading carrying its own bottom margin inside a
+   centred flex row sits half that margin higher than the buttons next to it,
+   and nothing in the row lines up. Wrapped on a narrow screen the row's own
+   gap then separates the two. */
 .subheadRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
   flex-wrap: wrap;
+  margin-bottom: 0.6rem;
 }
 
 .subheadRow .subhead {
-  margin-bottom: 0.6rem;
+  margin-bottom: 0;
 }
 
 /* Written past `.notice` in globals.css, which carries the margin a banner at
@@ -479,11 +484,22 @@ p.tight {
   overflow-wrap: anywhere;
 }
 
+/* Two columns rather than two words that happen to be near each other. The
+   numbers are read down the list — which placeholder is worst — and ragged
+   ends make that a search instead of a glance. Each is given a fixed measure
+   and set to its right edge, so the tens and the hundreds stack. */
 .coverageCounts {
   display: flex;
-  gap: 1rem;
+  gap: 0.25rem 1.25rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   font-size: var(--step-1);
   font-variant-numeric: tabular-nums;
+}
+
+.coverageCounts > * {
+  min-width: 5.5rem;
+  text-align: right;
 }
 
 .filled {
@@ -523,14 +539,50 @@ p.tight {
   padding: 0.9rem;
 }
 
+/*
+ * The message card: who it is addressed to, and a window onto the body.
+ *
+ * The card owns the height, and it is the same height for every message in
+ * the sample. That is the whole fix to two separate faults.
+ *
+ * The first is that the body used to set its own: a frame 20rem tall with an
+ * 800rem email in it cut the message off mid-row, and on a machine with
+ * overlay scrollbars there was nothing on screen to say the rest existed.
+ * What people read was a message that stopped in the middle.
+ *
+ * The second is the stepper. A card that measured whatever was in it moved
+ * the send button up and down the page as somebody stepped between a short
+ * message and a long one, on the one screen in the console where nothing
+ * should move under the reader's hand.
+ *
+ * Set against the window rather than in fixed rows, so a tall display shows
+ * more of the message and a laptop still leaves the stepper and the send
+ * region below the fold of the panel. Clamped at both ends: never so short
+ * that the message is a slot, never so tall that the page has to be scrolled
+ * to find out that there is a send button under it.
+ *
+ * Held to a mail-shaped column rather than the full width of the panel.
+ * Email is written to about 600px and a message ruled across 1100px of white
+ * is not what anybody's inbox will show.
+ */
 .envelope {
+  display: flex;
+  flex-direction: column;
+  height: clamp(20rem, 58vh, 36rem);
+  max-width: 44rem;
+  margin-inline: auto;
   background: var(--raised);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
+/* Never squeezed: the addresses and the subject are the part somebody is
+   checking character by character. A message with three unfilled placeholders
+   takes the room it needs out of the body below it, and the card is still the
+   height it was. */
 .envelope header {
+  flex: none;
   padding: 0.7rem 0.85rem;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -572,6 +624,16 @@ p.tight {
  * Pinned to a light colour scheme because that is the ground the sender's HTML
  * was written against. A frame that went dark with the console would be
  * previewing a message nobody is going to receive.
+ *
+ * It fills the card and scrolls inside it rather than growing to the message,
+ * and that is a consequence of the sandbox rather than a preference. A frame
+ * sandboxed with no `allow-same-origin` is a document in an opaque origin:
+ * `contentDocument` is null from here, and with no `allow-scripts` nothing
+ * inside can measure itself and say so. Measuring the message would mean
+ * handing this page either same-origin access to email HTML or the right to
+ * run it, which is exactly what the empty sandbox attribute is refusing. So
+ * the frame is a window of a known size, the way a mail client's reading pane
+ * is, and the message moves behind it.
  */
 .frame {
   color-scheme: light;
@@ -592,12 +654,27 @@ p.tight {
 
   display: block;
   width: 100%;
-  min-height: 20rem;
   border: 0;
+
+  /* Whatever is left of the card under the header. `min-height: 0` because a
+     replaced element in a flex column will not otherwise shrink below the
+     150px an iframe claims by default. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-/* The plain-text part, which is what a text-only client is sent. */
+/*
+ * The plain-text part, which is what a text-only client is sent.
+ *
+ * The same box as the HTML, filled the same way, so the two tabs are two
+ * views of one message rather than two panels of different heights. It used
+ * to stop at 24rem where the frame stopped at 20rem, and switching tabs moved
+ * everything below it by the difference.
+ */
 .plain {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   margin: 0;
   padding: 0.85rem;
   font-family: var(--mono);
@@ -605,8 +682,6 @@ p.tight {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 24rem;
-  overflow-y: auto;
 }
 
 /* Stepping between the sampled recipients, and how few of them there are. */

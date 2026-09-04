@@ -164,8 +164,24 @@ function wrap(html: string): string {
     "html,body{background:#ffffff;color:#14161a}",
     "body{margin:0;padding:1rem 1.1rem;line-height:1.55;",
     'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}',
+    // A runaway image is scaled, because an image at its natural 2000px is a
+    // scroll region and not a layout anybody is checking.
     "img{max-width:100%;height:auto}",
-    "table{max-width:100%}",
+    //
+    // The tables are not. Email is written to a fixed 600px table, and a
+    // preview that quietly squeezed one to whatever the panel happened to be
+    // wide would be showing a message that reflows to the reader's window --
+    // which is the one thing an email does not do. Narrower than the message,
+    // the frame scrolls sideways inside its own edge; the page never does,
+    // because the frame clips.
+    //
+    // The scrollbars are given colours so that they are drawn at all. Left
+    // alone, an operating system with overlay scrollbars shows nothing until
+    // somebody scrolls, and a message cut off mid-row with no bar beside it
+    // reads as a message that ends there. Both are system colours, resolved
+    // under the light scheme forced above: the ground the document is already
+    // painted with, and the grey the platform uses for something inactive.
+    "html{scrollbar-color:GrayText Canvas}",
     "</style></head><body>",
     html,
     "</body></html>",
