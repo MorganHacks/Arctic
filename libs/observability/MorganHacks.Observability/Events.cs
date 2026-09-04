@@ -186,4 +186,15 @@ public static class Events
     /// somebody should know without being told.
     /// </remarks>
     public const string FormPublished = "form.published";
+
+    /// <summary>
+    /// A live form was taken down.
+    /// </summary>
+    /// <remarks>
+    /// Worth its own event because the symptom is somebody reporting a link
+    /// that used to work, and the cause is a deliberate act by an organizer
+    /// rather than a fault. Without this the trail says only that the version
+    /// was retired, which is also what publishing a new one does.
+    /// </remarks>
+    public const string FormUnpublished = "form.unpublished";
 }

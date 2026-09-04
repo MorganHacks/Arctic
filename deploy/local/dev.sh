@@ -52,7 +52,7 @@ trap cleanup EXIT INT TERM
 # by a count of iterations — a loop that counts tries is a loop that waits an
 # unknown length of time.
 wait_for() {
-  local url="$1" name="$2" deadline=$((SECONDS + 90))
+  local url="$1" name="$2" deadline=$((SECONDS + 150))
   while [ $SECONDS -lt $deadline ]; do
     # Any answer counts, including a 404. portalforms has no route at /
     # at all — every page is /<code> — so demanding a 2xx here waits forever
@@ -61,7 +61,7 @@ wait_for() {
     if [ -n "$code" ] && [ "$code" != "000" ]; then return 0; fi
     sleep 1
   done
-  fail "no answer in 90s"
+  fail "no answer in 150s"
   echo "      last lines of $LOGS/$name.log:" >&2
   tail -6 "$LOGS/$name.log" 2>/dev/null | sed 's/^/      /' >&2
   return 1
@@ -141,6 +141,24 @@ else
 fi
 
 # -------------------------------------------------------------- services ---
+say "Building"
+
+# Built before anything is started, because otherwise the first run after a
+# pull spends its readiness budget compiling and times out looking like a
+# service that will not start. A warm build is a few seconds; a cold one can
+# be minutes, and only one of those is a fault. The services then start
+# with --no-build, because dotnet run rebuilds by default and would
+# otherwise do the whole thing again inside the readiness window.
+for project in atlas harbor; do
+  step "$project"
+  (cd "src/$project" && dotnet build Solution.slnx -v q --nologo) \
+    >"$LOGS/$project-build.log" 2>&1 && ok || {
+      fail
+      tail -12 "$LOGS/$project-build.log" | sed 's/^/      /'
+      exit 1
+    }
+done
+
 say "Starting services"
 
 if [ "$TARGET" != "local" ]; then
@@ -154,13 +172,13 @@ EOF
 fi
 
 step "atlas  :5080"
-(cd src/atlas && dotnet run --project MorganHacks.Api --urls http://localhost:5080) \
+(cd src/atlas && dotnet run --no-build --project MorganHacks.Api --urls http://localhost:5080) \
   >"$LOGS/atlas.log" 2>&1 &
 PIDS+=($!)
 wait_for http://localhost:5080/health atlas && ok || exit 1
 
 step "harbor :5050"
-(cd src/harbor && dotnet run --project MorganHacks.Harbor --urls http://localhost:5050) \
+(cd src/harbor && dotnet run --no-build --project MorganHacks.Harbor --urls http://localhost:5050) \
   >"$LOGS/harbor.log" 2>&1 &
 PIDS+=($!)
 wait_for http://localhost:5050/api/health harbor && ok || exit 1
