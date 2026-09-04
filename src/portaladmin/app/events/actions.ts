@@ -92,8 +92,21 @@ export async function createEvent(
   redirect(id === null ? "/events" : `/events/${id}`);
 }
 
-/** The dates and the capacity, all of them allowed to be nothing. */
-export type Schedule = {
+/**
+ * Everything about an event that can be changed after it is created.
+ *
+ * The name sits beside the dates rather than in a form of its own because it
+ * is corrected in the same moment they are: somebody opens this screen after
+ * the meeting that settled a date and fixes the typo they made in the name
+ * three months ago while they are here.
+ *
+ * The slug is deliberately absent. It is what links, forms and campaign
+ * segments refer to this event by, and a renamed identifier is a broken one.
+ * The API does not accept it either, so this is the same rule stated twice
+ * rather than a decision taken here.
+ */
+export type EventEdit = {
+  name: string;
   startsAt: string | null;
   endsAt: string | null;
   registrationOpensAt: string | null;
@@ -103,24 +116,28 @@ export type Schedule = {
 };
 
 /**
- * Writes the dates and the capacity.
+ * Writes the name, the dates and the capacity.
  *
  * Every field is sent on every save, including the ones that are null. Sending
  * only what changed would leave clearing a date indistinguishable from not
  * touching it, and going back to undecided is a thing that genuinely happens:
  * a date gets penciled in, the room falls through, and the honest state of the
  * field afterwards is empty rather than wrong.
+ *
+ * An empty name is left for the API to refuse rather than caught here. It is
+ * the side that owns the sentence, and a second copy of the rule over here is
+ * one that drifts the first time the API's wording changes.
  */
-export async function saveSchedule(
+export async function saveEvent(
   eventId: string,
-  schedule: Schedule,
+  edit: EventEdit,
 ): Promise<WriteResult> {
   let response: Response;
 
   try {
     response = await eventsFetch(`/admin/events/${eventId}`, {
       method: "PUT",
-      body: JSON.stringify(schedule),
+      body: JSON.stringify(edit),
       headers: { "content-type": "application/json" },
     });
   } catch {

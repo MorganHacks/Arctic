@@ -13,9 +13,10 @@ import { listEvents } from "../api";
  * usually by somebody who came here to change exactly one of them after a
  * meeting. The list is for checking; this is for editing.
  *
- * The slug and the name are not editable here. The slug is what everything
- * else refers to this event by, and the create form is the one place it is
- * ever typed.
+ * The name is editable here; the slug is not. The slug is what everything else
+ * refers to this event by, and the create form is the one place it is ever
+ * typed. The name is only what the console calls it, so a typo made in the
+ * week an event was created is fixable in the month somebody notices.
  *
  * There is no endpoint for one event, so this reads the list and finds it.
  * That is one round trip either way, and an id the list does not carry is an
