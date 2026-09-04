@@ -23,6 +23,17 @@ export type SaveResult = {
 
 type ApiFailure = { error?: string; problems?: FormProblem[] };
 
+/**
+ * What a 404 from one of the newer endpoints means.
+ *
+ * Unpublish and the deadline are being built on the API side while this screen
+ * is being built on ours, so for a while either can answer 404. Told apart from
+ * every other failure on purpose: "not there yet" is a different sentence from
+ * "it went wrong", and only one of them is worth reporting to anybody. The rest
+ * of the screen carries on working either way.
+ */
+const NOT_SHIPPED = "Not available yet. Nothing changed.";
+
 async function readFailure(response: Response): Promise<SaveResult> {
   // 403 is the gate answering, not a fault, and naming the permission is what
   // turns "it doesn't work" into a request an admin can act on.
@@ -182,4 +193,82 @@ export async function createForm(
   // Outside the checks above on purpose: redirect works by throwing, so it
   // must never sit where a catch could swallow it.
   redirect(`/forms/${id}`);
+}
+
+/**
+ * Takes a published form back to draft.
+ *
+ * The one irreversible control on this screen, and irreversible in the way that
+ * matters rather than the way that sounds bad: the code printed on a flyer
+ * stops resolving the moment this returns, and nobody holding that flyer finds
+ * out except by trying. Publishing again brings the link back; it does not
+ * bring back the afternoon in which nobody could answer.
+ *
+ * Answers are not touched, and the screen says so. The fear this control
+ * provokes is "have I just deleted four hundred applications", and leaving that
+ * unanswered is how a control that should be used stops being used.
+ */
+export async function unpublishForm(formId: string): Promise<SaveResult> {
+  let response: Response;
+
+  try {
+    response = await apiFetch(`/admin/forms/${formId}/unpublish`, { method: "POST" });
+  } catch {
+    return { ok: false, error: "The API could not be reached.", problems: [] };
+  }
+
+  if (response.status === 404) {
+    return { ok: false, error: NOT_SHIPPED, problems: [] };
+  }
+
+  if (!response.ok) {
+    return readFailure(response);
+  }
+
+  revalidatePath(`/forms/${formId}`);
+  revalidatePath(`/forms/${formId}/responses`);
+  revalidatePath("/forms");
+  return { ok: true, problems: [] };
+}
+
+/**
+ * Sets or clears when a form stops accepting answers.
+ *
+ * `closesAt` arrives already resolved to an instant, from the wall-clock time
+ * somebody typed against the event's zone. That resolution happens in the
+ * browser and deliberately not here: a server action runs in whichever region
+ * took the request, so anything on this side that consulted a local clock would
+ * move the deadline depending on where the request landed.
+ *
+ * Null clears it. A form with no deadline is open until somebody unpublishes
+ * it, which is not the same as a form that closed at the epoch.
+ */
+export async function scheduleForm(
+  formId: string,
+  closesAt: string | null,
+): Promise<SaveResult> {
+  let response: Response;
+
+  try {
+    response = await apiFetch(`/admin/forms/${formId}/schedule`, {
+      method: "PUT",
+      body: JSON.stringify({ closesAt }),
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return { ok: false, error: "The API could not be reached.", problems: [] };
+  }
+
+  if (response.status === 404) {
+    return { ok: false, error: NOT_SHIPPED, problems: [] };
+  }
+
+  if (!response.ok) {
+    return readFailure(response);
+  }
+
+  revalidatePath(`/forms/${formId}`);
+  revalidatePath(`/forms/${formId}/responses`);
+  revalidatePath("/forms");
+  return { ok: true, problems: [] };
 }

@@ -17,6 +17,8 @@ import { TYPES, blankField, blankSection, copyOf } from "./fields";
 import { PageBreakIcon, Publish, Save, TypeIcon, Warning } from "./icons";
 import { Preview } from "./preview";
 import { Question } from "./question";
+import { Schedule } from "./schedule";
+import { Unpublish } from "./unpublish";
 
 /** How long to wait after the last keystroke before writing. */
 const DEBOUNCE_MS = 700;
@@ -40,6 +42,8 @@ export function Builder({
   statuses,
   requiresSignIn,
   eligibleStatuses,
+  closesAt,
+  published,
   versions,
   canManage,
 }: {
@@ -54,6 +58,12 @@ export function Builder({
   statuses: string[];
   requiresSignIn: boolean;
   eligibleStatuses: string[];
+
+  /** When it stops accepting answers, as an instant, or null for no deadline. */
+  closesAt: string | null;
+
+  /** Whether there is a live version at all, which is what unpublishing needs. */
+  published: boolean;
   versions: VersionRow[];
   canManage: boolean;
 }) {
@@ -412,6 +422,32 @@ export function Builder({
         </div>
       ) : null}
 
+      {/*
+       * Who the form is for, before the questions rather than beside them.
+       *
+       * This band is the settings a form has that are not questions, and it is
+       * above the editor because that is the order the decisions happen in.
+       * A grid rather than a row so it collapses to one column on a narrow
+       * screen without anything being told how many neighbours it has.
+       */}
+      <div className={styles.settings}>
+        <Audience
+          formId={formId}
+          kind={formKind}
+          statuses={statuses}
+          initialRequiresSignIn={requiresSignIn}
+          initialStatuses={eligibleStatuses}
+          canManage={canManage}
+        />
+
+        <Schedule
+          formId={formId}
+          closesAt={closesAt}
+          canManage={canManage}
+          onSaved={() => router.refresh()}
+        />
+      </div>
+
       <div className={styles.pane}>
         <div>
           {/* On an application form only, because a survey starts empty and
@@ -493,15 +529,6 @@ export function Builder({
         <aside className={styles.side}>
           <Preview fields={fields} formName={formName} />
 
-          <Audience
-            formId={formId}
-            kind={formKind}
-            statuses={statuses}
-            initialRequiresSignIn={requiresSignIn}
-            initialStatuses={eligibleStatuses}
-            canManage={canManage}
-          />
-
           {versions.length > 0 ? (
             <section className={styles.history}>
               <h2>History</h2>
@@ -525,6 +552,27 @@ export function Builder({
           ) : null}
         </aside>
       </div>
+
+      {/*
+       * The one control here that cannot be taken back, at the bottom.
+       *
+       * Deliberately not in the band at the top with the other settings, and
+       * not in the toolbar beside Publish. A destructive button placed where
+       * the eye lands first is one that gets pressed by a hand aiming for
+       * something else, and Publish is pressed dozens of times an afternoon
+       * while this is pressed roughly never. The console puts its other
+       * irreversible control at the foot of its page for the same reason.
+       *
+       * Only when there is something to take down. On a form that has never
+       * been published it would be a red panel offering to undo nothing.
+       */}
+      {canManage && published ? (
+        <Unpublish
+          formId={formId}
+          formName={formName}
+          onDone={() => router.refresh()}
+        />
+      ) : null}
     </>
   );
 }

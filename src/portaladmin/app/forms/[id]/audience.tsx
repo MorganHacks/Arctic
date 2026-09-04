@@ -7,14 +7,21 @@ import styles from "./builder.module.css";
 /**
  * Who this form is for.
  *
- * Beside the questions rather than on a settings screen of its own, because it
- * is a decision made while building the form and not one somebody goes looking
- * for afterwards — an RSVP is for accepted applicants from the moment it is a
- * thought, and a feedback survey for people who turned up.
+ * At the top of the builder, above the questions, because that is the order the
+ * decision is actually made in: an RSVP is for accepted applicants from the
+ * moment it is a thought, and a feedback survey is for people who turned up.
+ * Who a form is for shapes what it is reasonable to ask, so it belongs before
+ * the asking rather than after it.
+ *
+ * It used to sit in the right-hand column underneath the preview, which was
+ * wrong twice over. It was below the fold on a form of any length, so it was
+ * missed; and it was directly under a panel drawn as the applicant's page,
+ * which invited reading it as part of that preview rather than as a control
+ * over who ever reaches the page.
  *
  * Not part of the autosave. Every other control on this screen writes as
  * somebody types, which is right for wording and wrong for a door: narrowing an
- * audience closes a live form to people who were about to answer it, and a
+ * audience shuts a live form to people who were about to answer it, and a
  * half-typed intention should not do that. So this is an explicit press.
  */
 export function Audience({
@@ -46,10 +53,15 @@ export function Audience({
    * the one applying creates — and the API and a check constraint both refuse
    * it. This is the third refusal and the only one that is a sentence rather
    * than an error, which is why it is worth having.
+   *
+   * It says so rather than rendering nothing. An absent control on the panel
+   * that every other form has at the top of its builder is a gap somebody
+   * assumes is a bug, and they go looking for the setting on a screen that does
+   * not have one.
    */
   if (kind === "application") {
     return (
-      <section className={styles.history}>
+      <section className={`panel ${styles.settingsPanel}`}>
         <h2>Who can answer</h2>
         <p className="meta">
           Anybody with the link. The application form cannot require sign-in —
@@ -80,10 +92,10 @@ export function Audience({
   }
 
   return (
-    <section className={styles.history}>
+    <section className={`panel ${styles.settingsPanel}`}>
       <h2>Who can answer</h2>
 
-      <label>
+      <label className="check">
         <input
           type="checkbox"
           checked={gated}
@@ -92,7 +104,7 @@ export function Audience({
             setGated(e.target.checked);
             setSaved(false);
           }}
-        />{" "}
+        />
         Require sign-in
       </label>
 
@@ -108,16 +120,25 @@ export function Audience({
 
           {/* Every status at once rather than behind a menu. There are eleven,
               they fit, and the question being answered is "which of these" —
-              which is a list to look down, not a value to pick. */}
-          <div role="group" aria-label="Statuses that can open this form">
+              which is a list to look down, not a value to pick.
+
+              Wrapping into columns rather than one tall column, which is what
+              the sidebar forced. The panel is the full width of the page now,
+              and eleven statuses stacked down it would push the questions off
+              the screen for a control most forms set once. */}
+          <div
+            className={styles.statusGroup}
+            role="group"
+            aria-label="Statuses that can open this form"
+          >
             {statuses.map((status) => (
-              <label key={status}>
+              <label key={status} className="check">
                 <input
                   type="checkbox"
                   checked={chosen.includes(status)}
                   disabled={!canManage || saving}
                   onChange={() => toggle(status)}
-                />{" "}
+                />
                 {status.replace(/_/g, " ")}
               </label>
             ))}
@@ -134,14 +155,16 @@ export function Audience({
       ) : null}
 
       {canManage ? (
-        <button
-          type="button"
-          className="button"
-          disabled={saving || (gated && chosen.length === 0)}
-          onClick={() => void save()}
-        >
-          {saving ? "Saving…" : saved ? "Saved" : "Save"}
-        </button>
+        <div className={styles.settingsActions}>
+          <button
+            type="button"
+            className="button"
+            disabled={saving || (gated && chosen.length === 0)}
+            onClick={() => void save()}
+          >
+            {saving ? "Saving…" : saved ? "Saved" : "Save"}
+          </button>
+        </div>
       ) : null}
 
       {notice ? <p className="error">{notice}</p> : null}
