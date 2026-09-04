@@ -293,6 +293,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 
 app.MapAuth();
+app.MapEvents();
 app.MapForms();
 app.MapPortal();
 app.MapResumes();

@@ -197,4 +197,27 @@ public static class Events
     /// was retired, which is also what publishing a new one does.
     /// </remarks>
     public const string FormUnpublished = "form.unpublished";
+
+    /// <summary>
+    /// A season exists. Everything else can now be hung off it.
+    /// </summary>
+    /// <remarks>
+    /// Rare by design — one a year — which makes it the one line here worth
+    /// watching by volume rather than by absence. Two in a week is somebody
+    /// mistyping a slug and trying again, and the first attempt is still
+    /// sitting there for a form to be attached to by mistake.
+    /// </remarks>
+    public const string EventCreated = "event.created";
+
+    /// <summary>
+    /// An event's dates, name or capacity changed.
+    /// </summary>
+    /// <remarks>
+    /// Worth having because the registration window is on this row. When
+    /// somebody reports that the form stopped accepting answers on a Tuesday,
+    /// this is the line that says whether a person moved the date or something
+    /// broke. It carries which fields were touched and never their values,
+    /// which the row itself already holds.
+    /// </remarks>
+    public const string EventUpdated = "event.updated";
 }
