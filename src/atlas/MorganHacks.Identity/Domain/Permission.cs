@@ -68,6 +68,32 @@ public readonly record struct Permission(string Value)
     /// </remarks>
     public static readonly Permission FormsManage = new("forms.manage");
 
+    // Events
+
+    /// <summary>
+    /// Creating the year's event, and setting its dates and capacity.
+    /// </summary>
+    /// <remarks>
+    /// Its own permission rather than a reuse of
+    /// <see cref="PeopleGrantPermissions"/> or <see cref="AuditView"/>, which
+    /// are the two nobody but super admin holds and so were the obvious
+    /// candidates. The audience is the same today; the sentence is not.
+    /// A permission is the string an admin reads on a grant screen, and
+    /// "give them people.grant_permissions so they can set the registration
+    /// dates" hands somebody the ability to change everybody's access in order
+    /// to get one date field.
+    /// <para>
+    /// Held by super admin alone. An event is the root forms, applications and
+    /// campaign segments all hang off, there is one a year, and its
+    /// registration dates decide who can apply at all.
+    /// </para>
+    /// <para>
+    /// Not on the sensitive list. It moves no PII out of the system and
+    /// changes nobody's access, which is what that list is for.
+    /// </para>
+    /// </remarks>
+    public static readonly Permission EventsManage = new("events.manage");
+
     // Email
     public static readonly Permission EmailSendTemplated = new("email.send_templated");
     public static readonly Permission EmailSendBroadcast = new("email.send_broadcast");
@@ -113,6 +139,7 @@ public readonly record struct Permission(string Value)
         ApplicationsExport, ApplicationsViewResume, ApplicationsViewResponses,
         ApplicationsNote,
         FormsManage,
+        EventsManage,
         EmailSendTemplated, EmailSendBroadcast, EmailManageTemplates, EmailViewStats,
         SponsorsView, SponsorsEdit, SponsorsViewFinancials,
         CheckinScan, SwagScan, CheckinViewStats,
