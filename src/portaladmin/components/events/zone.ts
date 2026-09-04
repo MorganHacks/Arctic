@@ -10,7 +10,7 @@
  *
  * So the zone is fixed, and it is the event's rather than the reader's:
  *
- *   1. The public form already renders its deadline in `America/New_York`, and
+ *   1. The public form already renders its deadline in the event's zone, and
  *      the forms builder already reads and writes deadlines in it. An events
  *      screen on the browser's zone would mean an organizer on Pacific time
  *      typing a date here and reading a different one on the next screen.
@@ -33,7 +33,11 @@
  */
 
 /** The zone every date in the console is written and read in. */
-export const ZONE = "America/New_York";
+// One definition, in libs/ui. This file keeps the formatting helpers;
+// the zone itself is shared so three screens cannot drift apart.
+import { ZONE } from "../../../../libs/ui/zone";
+
+export { ZONE };
 
 /**
  * The wall-clock fields, so they can be compared with an instant.
