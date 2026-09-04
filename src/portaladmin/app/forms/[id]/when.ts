@@ -9,7 +9,7 @@
  * much they cost when ignored:
  *
  *   1. The applicant already sees the deadline in this zone. The public form
- *      renders it with `America/New_York` hard-coded, so an organizer whose
+ *      renders it in the event's zone, so an organizer whose
  *      laptop is on Pacific time and who types 11:59pm would be publishing a
  *      2:59am deadline to everybody reading the form. They would have no way
  *      to tell from this screen.
@@ -28,7 +28,11 @@
  */
 
 /** The zone every deadline in the console is written and read in. */
-export const ZONE = "America/New_York";
+// One definition, in libs/ui, so the console and the public form cannot
+// disagree about when a deadline falls.
+import { ZONE } from "../../../../../libs/ui/zone";
+
+export { ZONE };
 
 /**
  * The wall-clock fields, so they can be compared with an instant.
