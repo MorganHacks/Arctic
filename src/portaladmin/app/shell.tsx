@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
  * two sections current, or none.
  */
 const SECTIONS = [
+  { href: "/events", label: "Events" },
   { href: "/people", label: "People" },
   { href: "/forms", label: "Forms" },
   { href: "/applicants", label: "Applicants" },

@@ -1,0 +1,258 @@
+/*
+ * The events screens.
+ *
+ * A module rather than more rules in app/globals.css, which everybody edits: a
+ * class named `.name` or `.grid` in the shared sheet is a collision waiting for
+ * whoever writes the next screen.
+ *
+ * Every colour is a token from libs/ui/tokens.css and every size is on the
+ * --step-* scale. Not one hex, so nothing here can mean a different colour on
+ * this screen than it does on the next one. The only coloured thing is whether
+ * registration is open, because that is the only thing on these screens that
+ * changes what somebody does next.
+ *
+ * Nothing here restyles a panel, a pill, a table or a field. Those come from
+ * the shared classes so that an organizer who has read the forms list can read
+ * this one without learning it.
+ */
+
+/* Making one ------------------------------------------------------------- */
+
+.newEvent {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.newEventHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.7rem;
+}
+
+.newEventHead h2 {
+  margin: 0;
+}
+
+.newEventNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+/* The slug is typed once and lives forever, so it is set in the face it will
+   be read in everywhere else rather than in the body font it is typed in. */
+.slugInput {
+  font-family: var(--mono);
+  width: 100%;
+}
+
+.nameInput {
+  width: 100%;
+}
+
+.createActions {
+  margin-top: 0.9rem;
+}
+
+/* Rows ------------------------------------------------------------------- */
+
+.cell {
+  vertical-align: top;
+}
+
+.name {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.name:hover {
+  text-decoration: underline;
+}
+
+/* Under the name, quietly. It is how other systems refer to this event and it
+   never changes, which makes it a fact about the row rather than a state of
+   it. */
+.slug {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-family: var(--mono);
+  font-size: var(--step-2);
+  color: var(--muted);
+}
+
+/* The date under a pill: which instant the pill is talking about. A pill on
+   its own says whether registration is open; it cannot say until when. */
+.when {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+/*
+ * The three dates on a row, labelled.
+ *
+ * A definition list rather than three more columns. Most of them are empty for
+ * most of the year, and three empty columns read as a table that failed to
+ * load where three labelled blanks read as three decisions nobody has taken
+ * yet.
+ */
+.dateList {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.6rem;
+  margin: 0;
+}
+
+.dateTerm {
+  color: var(--faint);
+  font-size: var(--step-2);
+}
+
+.dateValue {
+  margin: 0;
+  font-size: var(--step-2);
+}
+
+/*
+ * A date nobody has decided.
+ *
+ * Muted, and never coloured. It is the ordinary state of most fields here for
+ * most of the year, and anything that made it look like a warning would put a
+ * screen full of warnings in front of somebody who has done nothing wrong.
+ */
+.undecided {
+  color: var(--faint);
+  font-size: var(--step-2);
+}
+
+/* Nothing here yet ------------------------------------------------------- */
+
+/*
+ * The first screen in a fresh environment.
+ *
+ * Wider than the shared .empty because it has something to say rather than a
+ * blank to report: this is the one place in the console where the way out of
+ * an empty database is on the screen in front of you.
+ */
+.emptyTitle {
+  margin: 0 0 0.4rem;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: var(--step1);
+  font-weight: 600;
+}
+
+.emptyBody {
+  margin: 0 auto;
+  max-width: 34rem;
+  line-height: 1.6;
+}
+
+/* The dates screen ------------------------------------------------------- */
+
+.head {
+  margin-bottom: 1.25rem;
+}
+
+.headSlug {
+  font-family: var(--mono);
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+/*
+ * Two columns where there is room for two.
+ *
+ * The pairs matter: opens sits beside closes, starts beside ends. A date is
+ * almost always typed while looking at the one it has to come after.
+ */
+.grid {
+  display: grid;
+  gap: 1rem 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  align-items: start;
+}
+
+.fieldHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Sits on the label's line rather than under the input, so that clearing a
+   date is obviously a property of that one field and not of the panel. */
+.clear {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  font-size: var(--step-2);
+  font-weight: 400;
+}
+
+.clear:hover:not(:disabled) {
+  background: none;
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.clear:disabled {
+  background: none;
+  border-color: transparent;
+  color: var(--faint);
+}
+
+/*
+ * What the typed value actually means, read back with the zone named.
+ *
+ * The entire defence against somebody setting a date a day out and not finding
+ * out until it fires. A field that only ever shows what was typed into it
+ * cannot tell anybody they typed the wrong day.
+ */
+.echo {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: var(--step-2);
+  min-height: 1.2rem;
+  transition: color var(--dur) var(--ease);
+}
+
+.capacityInput {
+  max-width: 9rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+}
+
+/* Said once, after a save, and gone the moment anything is typed. Faded in
+   because it appears where nothing was, and four pixels of movement would be
+   the only thing on this screen that moves. */
+@keyframes confirm {
+  from {
+    opacity: 0;
+  }
+}
+
+.saved {
+  color: var(--ok);
+  font-size: var(--step-2);
+  animation: confirm var(--dur) var(--ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saved {
+    animation: none;
+  }
+}
