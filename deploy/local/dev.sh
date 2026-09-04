@@ -106,7 +106,7 @@ done
 step "docker running"
 docker info >/dev/null 2>&1 && ok || { fail "start Docker Desktop"; exit 1; }
 
-for port in 5080 5050 3001 3002; do
+for port in 5080 5050 3000 3001 3002; do
   step "port $port free"
   if port_busy "$port"; then
     fail "in use"
@@ -183,11 +183,19 @@ step "harbor :5050"
 PIDS+=($!)
 wait_for http://localhost:5050/api/health harbor && ok || exit 1
 
-for app in portaladmin:3001 portalforms:3002; do
+for app in portaladmin:3001 portalforms:3002 portalweb:3000; do
   name="${app%%:*}"; port="${app##*:}"
   step "$name :$port"
-  if [ ! -d "src/$name/node_modules" ]; then
+  # Present is not the same as working.
+  #
+  # A node_modules directory can exist and still be broken -- half-copied
+  # between worktrees, or interrupted mid-install -- and the failure arrives
+  # much later as "Cannot find module './timers.js.text.js'" or an invalid
+  # package config, neither of which points at the cause. So this asks the
+  # thing that actually matters: can node resolve the framework.
+  if ! (cd "src/$name" && node -e "require.resolve('next/package.json')") >/dev/null 2>&1; then
     printf 'installing… '
+    rm -rf "src/$name/node_modules" "src/$name/.next" 2>/dev/null
     (cd "src/$name" && npm install --silent) >"$LOGS/$name-install.log" 2>&1 \
       || { fail "npm install failed"; tail -6 "$LOGS/$name-install.log"; exit 1; }
   fi
@@ -212,6 +220,7 @@ cat <<EOF
 
   Organizer console   http://localhost:3001
   Public form         http://localhost:3002/<code>
+  Hacker portal       http://localhost:3000
   API                 ${API}
   Mail                http://localhost:8025
 
