@@ -21,23 +21,23 @@ on:
         type: boolean
         default: false
       portaladmin:
-        description: "Re-run portaladmin (no deploy target yet)"
+        description: "Re-run portaladmin on staging"
         type: boolean
         default: false
       portalforms:
-        description: "Re-run portalforms (no deploy target yet)"
+        description: "Re-run portalforms on staging"
         type: boolean
         default: false
       atlas:
-        description: "Re-run atlas (deployed by deploy-azure.yml)"
+        description: "Re-run atlas (use deploy-azure.yml instead)"
         type: boolean
         default: false
       lark:
-        description: "Re-run lark (deployed by deploy-azure.yml)"
+        description: "Re-run lark (use deploy-azure.yml instead)"
         type: boolean
         default: false
       harbor:
-        description: "Re-run harbor (deployed by deploy-azure.yml)"
+        description: "Re-run harbor (use deploy-azure.yml instead)"
         type: boolean
         default: false
 
@@ -77,14 +77,17 @@ jobs:
             echo "staging moved. Vercel will rebuild portalweb from this push."
           fi
 
+  # One job for all three front ends, because forcing a rebuild is the same act
+  # for each and three copies of it would drift.
+  #
   # Only needed when the commit did not change, since then the push above
   # triggered nothing and the service has to be told to run again.
-  portalweb:
+  frontends:
     needs: claim
-    if: inputs.portalweb
+    if: inputs.portalweb || inputs.portaladmin || inputs.portalforms
     runs-on: ubuntu-latest
     steps:
-      - name: Re-run portalweb on staging
+      - name: Re-run the requested front ends
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
@@ -102,34 +105,53 @@ jobs:
           fi
 
           npm i -g vercel@latest >/dev/null 2>&1
-          latest=$(vercel ls morganhacks-portalweb --token="$VERCEL_TOKEN" 2>/dev/null \
-                   | grep -oE 'https://[a-z0-9.-]+\.vercel\.app' | head -1)
-          if [ -z "$latest" ]; then
-            echo "::error::Could not find a deployment to re-run."
-            exit 1
-          fi
-          echo "Re-running $latest"
-          vercel redeploy "$latest" --token="$VERCEL_TOKEN"
 
-  # These exist so the form matches the service list and lights up on its own
-  # as each service becomes deployable. They fail loudly rather than reporting
-  # a deploy that did not happen.
+          failed=0
+          for app in portalweb portaladmin portalforms; do
+            case "$app" in
+              portalweb)   want="${{ inputs.portalweb }}" ;;
+            esac
+            [ "$want" = "true" ] || continue
+
+            project="morganhacks-$app"
+            latest=$(vercel ls "$project" --token="$VERCEL_TOKEN" 2>/dev/null \
+                     | grep -oE 'https://[a-z0-9.-]+\.vercel\.app' | head -1)
+
+            if [ -z "$latest" ]; then
+              echo "::error::$project has no deployment to re-run."
+              failed=1
+              continue
+            fi
+
+            echo "Re-running $project from $latest"
+            # A redeploy still runs the project's ignoreCommand, which skips a
+            # build when nothing under that app changed. That is right for a
+            # push and wrong here, where nothing changing is the whole point --
+            # so a cancelled redeploy is reported rather than counted as done.
+            if ! vercel redeploy "$latest" --token="$VERCEL_TOKEN"; then
+              echo "::error::$project refused the redeploy. If it was cancelled its"
+              echo "::error::ignoreCommand skipped it: push a commit touching"
+              echo "::error::src/$app or libs/ instead."
+              failed=1
+            fi
+          done
+
+          exit "$failed"
+
   backends:
     needs: claim
-    if: inputs.atlas || inputs.lark || inputs.harbor || inputs.portaladmin || inputs.portalforms
+    if: inputs.atlas || inputs.lark || inputs.harbor
     runs-on: ubuntu-latest
     steps:
-      - name: Not deployable yet
+      - name: Deployed elsewhere
         run: |
-          for s in atlas lark harbor portaladmin portalforms; do
+          for s in atlas lark harbor; do
             case "$s" in
               atlas)       want="${{ inputs.atlas }}" ;;
               lark)        want="${{ inputs.lark }}" ;;
               harbor)      want="${{ inputs.harbor }}" ;;
-              portaladmin) want="${{ inputs.portaladmin }}" ;;
-              portalforms) want="${{ inputs.portalforms }}" ;;
             esac
-            [ "$want" = "true" ] && echo "  $s: requested, but it has no staging deploy target yet."
+            [ "$want" = "true" ] && echo "  $s: ships through deploy-azure.yml, not from here."
           done
-          echo "::error::Nothing was deployed for those services. Remove the tick, or wire up a target first."
+          echo "::error::Nothing was deployed. Use:  gh workflow run deploy-azure.yml -f environment=staging"
           exit 1
