@@ -108,7 +108,7 @@ export function NewCampaign({
           <div>
             <label htmlFor="eventId">Event</label>
             {events.length === 0 ? (
-              <span className="meta">There is no event yet.</span>
+              <span className="meta">There is no event yet. Create one under Events.</span>
             ) : (
               <select id="eventId" name="eventId" defaultValue={events[0]?.id ?? ""}>
                 {events.map((event) => (

@@ -67,7 +67,8 @@ export default async function Applicants({
   if (!chosen) {
     return (
       <Denied personId={person.personId}>
-        There is no event yet. One is made by hand, once a year.
+        There is no event yet. Create one under Events, and applicants
+        will appear here once a form collects them.
       </Denied>
     );
   }
