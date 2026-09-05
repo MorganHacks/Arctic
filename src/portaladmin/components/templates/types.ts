@@ -45,12 +45,27 @@ export type Template = {
   fromDomain: string;
   replyTo: string | null;
   version: number;
+  /** What the allow-list removed from the saved source. Absent on an older API. */
+  notes?: string[];
+
   /** The placeholders the saved body uses, as the API found them. */
   placeholders: string[];
 };
 
-/** What the body and subject come out as. Rendered by the API, never here. */
-export type Rendered = { subject: string; html: string; text: string };
+/**
+ * What the body and subject come out as. Rendered by the API, never here.
+ *
+ * `notes` is what the allow-list removed on the way. Absent on an older API and
+ * on the offline example data, so it is optional rather than an empty array --
+ * a missing field must not render as "nothing was removed" when the truth is
+ * "nobody was asked".
+ */
+export type Rendered = {
+  subject: string;
+  html: string;
+  text: string;
+  notes?: string[];
+};
 
 /**
  * A name a send can actually put a value in, and what that value will be.

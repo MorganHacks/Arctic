@@ -83,7 +83,15 @@ export function Editor({
    */
   const [rendered, setRendered] = useState<Rendered | null>(
     template
-      ? { subject: template.subject, html: template.html, text: template.text }
+      ? {
+          subject: template.subject,
+          html: template.html,
+          text: template.text,
+          // Carried through the seed as well, so a template that was already
+          // written with a stylesheet says so on first paint rather than only
+          // after the next keystroke triggers a render.
+          notes: template.notes,
+        }
       : null,
   );
 
