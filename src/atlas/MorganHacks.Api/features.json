@@ -4,5 +4,5 @@
   //
   // An environment variable of the same name, upper-cased, overrides what is
   // here without a code change: ENABLE_HACKER_PORTAL_FEATURE=false.
-  "enable_hacker_portal_feature": true
+  "enable_hacker_portal_feature": false
 }
