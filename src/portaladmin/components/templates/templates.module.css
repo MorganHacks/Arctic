@@ -407,3 +407,23 @@
 .notes li + li {
   margin-top: 0.35rem;
 }
+
+/* The Body label and the language switch, on one line. */
+.bodyHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/*
+ * The switch itself.
+ *
+ * Beside the label rather than above the editor, because it belongs to the
+ * field it changes the meaning of. Somebody who cannot find it will write
+ * Markdown into an HTML template and see it come out as plain text.
+ */
+.formats {
+  display: flex;
+  gap: 0.25rem;
+}

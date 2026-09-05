@@ -7,11 +7,13 @@ import { EmailPreview } from "./email-preview";
 import { PlaceholderField } from "./placeholder-field";
 import styles from "./templates.module.css";
 import {
+  formatLabel,
   placeholdersIn,
   type Placeholder,
   type Rendered,
   type Template,
   type TemplateDraft,
+  type TemplateFormat,
   type TemplateKind,
 } from "./types";
 
@@ -72,7 +74,18 @@ export function Editor({
   const fromLocal = template?.fromLocal ?? FROM_LOCAL;
   const fromDomain = template?.fromDomain ?? FROM_DOMAIN;
   const [replyTo, setReplyTo] = useState(template?.replyTo ?? "");
-  const [markdown, setMarkdown] = useState(template?.markdown ?? "");
+  const [body, setBody] = useState(template?.body ?? "");
+
+  /*
+   * Markdown unless the template says otherwise.
+   *
+   * A new template is prose until somebody decides it is a design, and prose is
+   * the one that cannot be got wrong -- there is no way to write a stylesheet
+   * in Markdown and therefore no way to lose one.
+   */
+  const [format, setFormat] = useState<TemplateFormat>(
+    template?.format ?? "markdown",
+  );
 
   /*
    * Seeded from what the API already rendered.
@@ -114,8 +127,8 @@ export function Editor({
 
   /** The names the body asks for, derived from what is typed rather than stored. */
   const used = useMemo(
-    () => placeholdersIn(subject, markdown),
-    [subject, markdown],
+    () => placeholdersIn(subject, body),
+    [subject, body],
   );
 
   /**
@@ -134,7 +147,7 @@ export function Editor({
   );
 
   useEffect(() => {
-    if (markdown.trim() === "" && subject.trim() === "") {
+    if (body.trim() === "" && subject.trim() === "") {
       setRendered(null);
       setRenderError(null);
       return;
@@ -144,7 +157,7 @@ export function Editor({
       const mine = (attempt.current += 1);
       setRendering(true);
 
-      void previewBody({ subject, markdown }).then((result) => {
+      void previewBody({ subject, body, format }).then((result) => {
         if (mine !== attempt.current) {
           return;
         }
@@ -161,14 +174,15 @@ export function Editor({
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [subject, markdown]);
+  }, [subject, body, format]);
 
   function draft(): TemplateDraft {
     return {
       key,
       kind,
       subject,
-      markdown,
+      body,
+      format,
       fromLocal,
       fromDomain,
       replyTo: replyTo.trim() === "" ? null : replyTo,
@@ -266,21 +280,61 @@ export function Editor({
           </div>
 
           <div className={styles.field}>
-            <label htmlFor="markdown">Body</label>
+            <div className={styles.bodyHead}>
+              <label htmlFor="body">Body</label>
+
+              {/*
+                Switching does not touch what is typed. Converting between the
+                two would mean guessing, and a guess that rewrites somebody's
+                body is worse than leaving it alone: Markdown in an HTML
+                template renders as the plain text it is, which is visible in
+                the preview and undone by switching back.
+              */}
+              <div
+                className={styles.formats}
+                role="group"
+                aria-label="Body language"
+              >
+                {(["markdown", "html"] as TemplateFormat[]).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={format === option ? "tab on" : "tab"}
+                    aria-pressed={format === option}
+                    onClick={() => setFormat(option)}
+                  >
+                    {formatLabel(option)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <PlaceholderField
-              id="markdown"
-              value={markdown}
-              onChange={setMarkdown}
+              id="body"
+              value={body}
+              onChange={setBody}
               available={available}
               multiline
               spellCheck
               className={styles.body}
             />
-            {/* The answer to "can it carry HTML, CSS and JavaScript", where
-                somebody would otherwise spend an afternoon finding out. */}
+            {/* The answer to "what can this carry", where somebody would
+                otherwise spend an afternoon finding out -- or find out from an
+                email that has already gone. */}
             <p className={styles.medium}>
-              Markdown. Email clients strip JavaScript and most CSS, so neither
-              is offered here.
+              {format === "html" ? (
+                <>
+                  HTML, with styling inline: <code>style=&quot;...&quot;</code>{" "}
+                  on each element. A &lt;style&gt; block is removed, because mail
+                  clients strip or ignore stylesheets. Tables are how email lays
+                  out.
+                </>
+              ) : (
+                <>
+                  Markdown. Switch to HTML for a design you want control of, a
+                  button or a coloured panel.
+                </>
+              )}
             </p>
             {/* Said out loud because a menu nobody knows to summon is the same
                 as no menu, which is the state this screen was in. */}

@@ -4,6 +4,7 @@ import type {
   Rendered,
   Template,
   TemplateDraft,
+  TemplateFormat,
   TemplateRow,
 } from "@/components/templates/types";
 
@@ -218,7 +219,8 @@ async function write(
  */
 export async function renderPreview(input: {
   subject: string;
-  markdown: string;
+  body: string;
+  format: TemplateFormat;
   values?: Record<string, string>;
 }): Promise<PreviewRead> {
   let response: Response;
@@ -397,7 +399,7 @@ function exampleWrite(draft: TemplateDraft): Saved {
     html,
     text,
     version,
-    placeholders: placeholderNames(`${draft.subject}\n${draft.markdown}`),
+    placeholders: placeholderNames(`${draft.subject}\n${draft.body}`),
   });
 
   return { ok: true, key: draft.key, version, note: null };
@@ -405,9 +407,10 @@ function exampleWrite(draft: TemplateDraft): Saved {
 
 function examplePreview(input: {
   subject: string;
-  markdown: string;
+  body: string;
+  format: TemplateFormat;
 }): Rendered {
-  const escaped = input.markdown
+  const escaped = input.body
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
@@ -418,7 +421,7 @@ function examplePreview(input: {
     .map((block) => `<p>${block.replaceAll("\n", "<br>")}</p>`)
     .join("\n");
 
-  return { subject: input.subject, html, text: input.markdown };
+  return { subject: input.subject, html, text: input.body };
 }
 
 function placeholderNames(text: string): string[] {
