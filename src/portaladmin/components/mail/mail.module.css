@@ -878,6 +878,23 @@ p.stepCount {
   min-width: 34rem;
 }
 
+/*
+ * The header sticks to the card, not to the page.
+ *
+ * overflow-x above makes this a scroll container -- and a box that is not
+ * visible on one axis computes to auto on the other, so it is one vertically
+ * too. Sticky then measures from the card rather than the viewport, and the
+ * global `top: var(--topbar-h)` pushes the header a topbar's height down its
+ * own box, parking it on top of the first row. The row is still there and
+ * still clickable, which is what makes it read as a missing campaign rather
+ * than a layout fault.
+ *
+ * Same trade `.table-wrap.wide` takes in globals.css, for the same reason.
+ */
+.tableCard thead th {
+  top: 0;
+}
+
 .tableCard tbody tr:last-child td {
   border-bottom: none;
 }
