@@ -9,6 +9,7 @@
 #   harbor   :5050               the reverse proxy — NOT optional, see below
 #   admin    :3001               the organizer console
 #   forms    :3002               the public form
+#   web      :3000               the marketing site and the applicant portal
 #
 # Harbor is the part that surprises people. Both consoles proxy /api/* to
 # their own origin, and atlas serves /auth/me, not /api/auth/me — stripping
@@ -220,7 +221,7 @@ cat <<EOF
 
   Organizer console   http://localhost:3001
   Public form         http://localhost:3002/<code>
-  Hacker portal       http://localhost:3000
+  Hacker portal       http://localhost:3000/portal
   API                 ${API}
   Mail                http://localhost:8025
 
@@ -239,6 +240,19 @@ elif [ "$TARGET" = "local" ]; then
   Nobody was signed in, because no address was given. Try:
 
     deploy/local/dev.sh you@morgan.edu
+
+EOF
+fi
+
+if [ "$TARGET" = "local" ]; then
+  cat <<'EOF'
+  To look at the applicant portal you need an applicant, who is somebody
+  other than you -- the console signs you in as an organizer. Open:
+
+    http://localhost:3000/api/dev/sign-in?email=THEIR@ADDRESS&next=/portal
+
+  using the address on an application that already exists. The portal
+  shows what that person would see, decision and all.
 
 EOF
 fi
