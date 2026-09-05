@@ -427,6 +427,13 @@ public static partial class TemplateEndpoints
             format,
             html = rendered.BodyHtml,
             text = rendered.BodyText,
+
+            // What the allow-list took out, said while the author is still
+            // looking at the editor. The preview has always shown the result of
+            // the removal and never that a removal happened, which leaves
+            // somebody staring at a collapsed layout with no reason for it.
+            // An email went out that way.
+            notes = EmailHtmlNotes.For(format, source),
         });
     }
 
@@ -722,5 +729,10 @@ public static partial class TemplateEndpoints
         // as a campaign the console said was fine and the API would not send.
         placeholders = TemplateRenderer.PlaceholdersIn(template.ForRendering())
             .OrderBy(placeholder => placeholder, StringComparer.Ordinal),
+
+        // Read from the stored source, so a template written before anybody was
+        // being warned says so the moment it is opened. Somebody wondering why a
+        // sent email looked wrong gets the answer on the first screen they go to.
+        notes = EmailHtmlNotes.For(template.Format, template.Source),
     };
 }

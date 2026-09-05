@@ -384,3 +384,26 @@
   margin: 0;
   min-width: 0;
 }
+
+/*
+ * What the allow-list removed.
+ *
+ * Amber rather than red: nothing failed and the template saved. It is a "this
+ * will not look how you think" and the colour has to say that, or somebody
+ * learns to dismiss it and misses the one that mattered.
+ */
+.notes {
+  margin: 0 0 0.7rem;
+  padding: 0.6rem 0.75rem 0.6rem 1.6rem;
+  list-style: disc;
+  border: 1px solid var(--warn-line, #7a5c1f);
+  border-radius: var(--radius);
+  background: var(--warn-fill, rgba(122, 92, 31, 0.14));
+  color: var(--ink);
+  font-size: var(--step-1);
+  line-height: 1.5;
+}
+
+.notes li + li {
+  margin-top: 0.35rem;
+}

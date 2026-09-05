@@ -58,6 +58,20 @@ export function EmailPreview({
         </div>
       </div>
 
+      {rendered?.notes?.length ? (
+        <ul className={styles.notes}>
+          {/*
+            Above the preview rather than below it. The preview looks
+            deliberate -- that is the whole problem with it -- so the
+            explanation has to sit where it is read before somebody decides
+            the layout is fine.
+          */}
+          {rendered.notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      ) : null}
+
       <div className={styles.tray}>
         <div className={styles.envelope}>
           <header>
