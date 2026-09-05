@@ -147,6 +147,56 @@ export async function saveProfile(
 }
 
 /**
+ * Takes the spot, or gives it back.
+ *
+ * The whole of the decision is the API's. This action forwards a verb and shows
+ * whatever came back, because every rule that governs it — that the application
+ * is accepted, that the applicant has been told so, that the deadline has not
+ * gone, that declining is final — is checked on the write. A copy of any of
+ * them here would be a second opinion that drifts, and it would be the wrong
+ * one: the page was rendered at some point in the past and the deadline is
+ * about now.
+ *
+ * Which is also why the buttons are not the gate. Somebody who left this tab
+ * open overnight submits exactly the request somebody with curl submits, and
+ * both get the same refusal.
+ */
+export async function answerRsvp(
+  _previous: FormState,
+  form: FormData,
+): Promise<FormState> {
+  const answer = text(form, "answer");
+  let response: Response;
+
+  try {
+    response = await apiFetch("/portal/rsvp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ answer }),
+    });
+  } catch {
+    return { error: "We could not save that just now. Try again in a minute." };
+  }
+
+  if (response.status === 401) {
+    redirect("/portal/sign-in");
+  }
+
+  if (!response.ok) {
+    const { error } = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    return { error: error ?? "That could not be saved." };
+  }
+
+  // The status line, the panel and the profile lock all move on this one
+  // answer, so every screen that reads the application has to be redrawn.
+  revalidatePath("/portal");
+  revalidatePath("/portal/profile");
+  return { done: true };
+}
+
+/**
  * Ends the session, here and in the database.
  *
  * The API revokes the row rather than only clearing the cookie, so signing out

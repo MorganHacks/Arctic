@@ -2,6 +2,7 @@ using MorganHacks.Applications.Domain;
 using MorganHacks.Applications.Services;
 using MorganHacks.Lark.Data.Data;
 using MorganHacks.Lark.Data.Domain;
+using MorganHacks.Observability;
 
 namespace MorganHacks.Api;
 
@@ -30,6 +31,14 @@ namespace MorganHacks.Api;
 /// </item>
 /// </list>
 /// <para>
+/// One route here moves an application's status, and it is the only one that
+/// ever should. <see cref="AnswerRsvp"/> takes a spot or gives it back, and it
+/// does it through <see cref="IApplicationStore.TransitionAsync"/> like every
+/// other writer in the system — so the lifecycle table judges the move and the
+/// trail records the applicant as the actor. An applicant is not a special case
+/// of the audit story; they are a participant in it.
+/// </para>
+/// <para>
 /// Nothing here logs an address, a name or an answer. Person ids only, like
 /// the rest of the codebase — see <c>Redaction.SensitiveKeys</c> for the net
 /// underneath that rule.
@@ -43,6 +52,7 @@ public static class PortalEndpoints
 
         portal.MapGet("/me", Me);
         portal.MapPatch("/profile", SaveProfile);
+        portal.MapPost("/rsvp", AnswerRsvp);
         portal.MapGet("/messages", Messages);
         portal.MapGet("/check-in", CheckIn);
 
@@ -65,6 +75,21 @@ public static class PortalEndpoints
         string? ShirtSize,
         string? DietaryNeeds,
         string? AccessibilityNeeds);
+
+    /// <summary>
+    /// Taking a spot, or giving it back.
+    /// </summary>
+    /// <remarks>
+    /// One verb — <c>confirm</c> or <c>decline</c> — and nullable for the same
+    /// binder reason as <see cref="ProfileRequest"/>.
+    /// <para>
+    /// Deliberately not the stored status. An applicant sending
+    /// <c>"confirmed"</c> would mean the wire spelling had reached a screen,
+    /// and the next thing to reach a screen is whichever other status somebody
+    /// guesses is accepted here.
+    /// </para>
+    /// </remarks>
+    public sealed record RsvpRequest(string? Answer);
 
     /// <summary>
     /// Their application, in the words they are allowed to read.
@@ -202,6 +227,139 @@ public static class PortalEndpoints
     }
 
     /// <summary>
+    /// Takes the spot, or gives it back.
+    /// </summary>
+    /// <remarks>
+    /// The one write on this API that moves an application's status, and it is
+    /// deliberately the narrowest possible one. Three separate things make it
+    /// safe, and none of them is the button on the screen:
+    /// <list type="bullet">
+    /// <item>
+    /// <b>It can only ever be their own application.</b> The id passed to
+    /// <see cref="IApplicationStore.TransitionAsync"/> is not read from the
+    /// request — there is no field it could come from. It comes from
+    /// <see cref="IApplicantPortalStore.FindForPersonAsync"/>, whose every
+    /// statement narrows on the session's person id, so RSVPing for somebody
+    /// else is not a check that can be forgotten. There is nothing to forget.
+    /// </item>
+    /// <item>
+    /// <b>The move goes through the lifecycle.</b>
+    /// <see cref="StatusTransition"/> already permits <c>accepted</c> to
+    /// <c>confirmed</c> or <c>declined</c> and nothing else to either, and
+    /// <c>TransitionAsync</c> re-reads the status under a row lock before
+    /// judging it. So a confirm from any other status is refused by the table
+    /// rather than by a condition written here, and it stays refused when an
+    /// organizer moves the row between the read below and this write.
+    /// </item>
+    /// <item>
+    /// <b>The trail names the applicant.</b> <c>actorId</c> is the session's
+    /// person, so <c>status_history.actor_id</c> says who did it. Writing the
+    /// status any other way would record a null actor, which reads as a
+    /// hand-fixed row and is permanently unattributable.
+    /// </item>
+    /// </list>
+    /// <para>
+    /// The deadline is the one rule <c>TransitionAsync</c> cannot know, so it
+    /// is checked here, on the write, against the row this request just read —
+    /// not against anything the caller sent, and not by leaving the buttons
+    /// off the page. A portal tab left open past the deadline gets a refusal,
+    /// which is the whole point of having one.
+    /// </para>
+    /// <para>
+    /// <b>Declining is final.</b> <c>StatusTransition</c> lists nothing after
+    /// <c>declined</c>, so there is no undo to offer and this endpoint does not
+    /// invent one. That is the lifecycle's decision rather than this file's:
+    /// releasing a spot is what moves the waitlist, and a portal that could
+    /// silently take it back would be handing out a place that has already
+    /// been given to somebody else. Somebody who declines by accident emails
+    /// us, and an organizer decides — with a record of both.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> AnswerRsvp(
+        RsvpRequest? request,
+        HttpContext http,
+        IApplicantPortalStore store,
+        IApplicationStore applications,
+        ILogger<RsvpRequest> log,
+        CancellationToken ct)
+    {
+        if (!Rsvp.TryParseAnswer(request?.Answer, out var answer))
+        {
+            return Results.BadRequest(new { error = "Tell us whether you are coming." });
+        }
+
+        var personId = http.PersonId();
+        var current = await store.FindForPersonAsync(personId, ct);
+
+        if (current is null)
+        {
+            return Results.Conflict(new
+            {
+                error = "You have not started an application yet.",
+            });
+        }
+
+        // now() once, so the sentence explaining a refusal is judged against
+        // the same instant the refusal was.
+        var now = DateTimeOffset.UtcNow;
+        var closed = Rsvp.WhyClosed(
+            current.Status, current.DecisionsAnnounced, current.RsvpDeadline, now);
+
+        if (closed is not null)
+        {
+            return Results.Conflict(new { error = closed });
+        }
+
+        StatusChange change;
+        try
+        {
+            // No reason and no batch id. A reason is a sentence somebody wrote
+            // about an applicant and there is nobody here to write one; a batch
+            // id would make one person answering indistinguishable from one of
+            // four hundred rows an organizer moved.
+            change = await applications.TransitionAsync(
+                current.Id, Rsvp.Target(answer), actorId: personId, ct: ct);
+        }
+        catch (InvalidTransitionException)
+        {
+            // Lost the race against an organizer moving the row between the
+            // read above and this write. Rare, and the honest answer is
+            // whatever is true now rather than what was true a moment ago.
+            var settled = await store.FindForPersonAsync(personId, ct);
+
+            return Results.Conflict(new
+            {
+                error = settled is null
+                    ? "You have not started an application yet."
+                    : Rsvp.WhyClosed(
+                        settled.Status, settled.DecisionsAnnounced,
+                        settled.RsvpDeadline, DateTimeOffset.UtcNow)
+                      ?? "That could not be saved.",
+            });
+        }
+
+        // The person id and the two statuses, the same fields
+        // ApplicantEndpoints logs for the organizers' side. Its own event name
+        // rather than application.status_changed, because that one is
+        // documented as an organizer moving somebody and is watched for a
+        // volume that means "a script is running" — four hundred applicants
+        // answering the evening decisions go out is the system working, and it
+        // must not read as the alarm.
+        log.LogInformation(
+            "An applicant answered their RSVP. {PersonId} {from} {to} {event}",
+            personId, change.From?.ToWire(), change.To.ToWire(), Events.RsvpAnswered);
+
+        // Re-read rather than patched locally, so the screen redraws from the
+        // same projection every other route serves. The lifecycle timestamps
+        // this move stamped were the trigger's to write, and guessing them
+        // here would be a second opinion about when somebody answered.
+        var updated = await store.FindForPersonAsync(personId, ct);
+        return updated is null
+            ? Results.Ok(new { application = (object?)null })
+            : Results.Ok(new { application = Describe(updated) });
+    }
+
+    /// <summary>
     /// Every email we have sent them.
     /// </summary>
     /// <remarks>
@@ -304,17 +462,47 @@ public static class PortalEndpoints
     {
         var status = application.Status;
         var announced = application.DecisionsAnnounced;
+        var deadline = application.RsvpDeadline;
+        var now = DateTimeOffset.UtcNow;
+
+        // Sent only to somebody who has already been told they were accepted.
+        // The date itself is a decision: an applicant reading "Application
+        // received" who can also see a deadline in the response has been told
+        // the answer by a field nobody meant to say it.
+        var visibleDeadline = announced && status is ApplicationStatus.Accepted
+            ? deadline
+            : null;
 
         return new
         {
             statusLabel = ApplicantView.Describe(
-                status, announced, application.RsvpDeadline, application.EventStartsAt),
+                status, announced, deadline, application.EventStartsAt),
             nextStep = ApplicantView.NextStep(
-                status, announced, application.RsvpDeadline, application.EventStartsAt),
+                status, announced, deadline, application.EventStartsAt),
             // "received", not "submitted". The applicant is told their
             // application was received; naming the field after the internal
             // status is how that word gets onto a screen by accident.
             receivedAt = application.SubmittedAt,
+
+            // The same rule the write is judged by, so the screen cannot offer
+            // a button the endpoint would refuse — nor withhold one it would
+            // accept, which is the failure nobody notices.
+            rsvp = new
+            {
+                open = Rsvp.IsOpen(status, announced, deadline, now),
+
+                // An instant. The portal renders it in the event's zone, which
+                // is a thing the reader's browser knows how to do and this API
+                // does not know the reader.
+                deadline = visibleDeadline,
+
+                // Null while it is open. Non-null otherwise, including for
+                // somebody with nothing to answer — and in that case it is the
+                // same sentence for every undecided-looking status, which is
+                // what stops it being a decision.
+                closedReason = Rsvp.WhyClosed(status, announced, deadline, now),
+            },
+
             profileEditable = ProfileEditing.IsOpen(status),
             profileLockedReason = ProfileEditing.WhyClosed(status),
             profile = new

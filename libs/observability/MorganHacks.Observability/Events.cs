@@ -57,6 +57,31 @@ public static class Events
     public const string ApplicationStatusChanged = "application.status_changed";
 
     /// <summary>
+    /// An applicant confirmed or declined their own spot.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ApplicationStatusChanged"/> even though both
+    /// are a status moving, because the two are watched for opposite things.
+    /// Four hundred of that one in an evening means somebody is running a
+    /// script; four hundred of this one means the decision email landed and the
+    /// portal is doing its job. Counted together, the signal that matters in
+    /// either is buried by the other.
+    /// <para>
+    /// What is worth alerting on here is the absence. Decisions announced and
+    /// then no RSVPs at all is a portal nobody can answer on — every service
+    /// up, nothing erroring, and a headcount that stays wrong until the week
+    /// of the event.
+    /// </para>
+    /// <para>
+    /// Carries the applicant's person id and the two statuses. Never which of
+    /// the two they chose in words, and never a date: the history row holds
+    /// the whole of what happened, behind a permission, where a log line is
+    /// not.
+    /// </para>
+    /// </remarks>
+    public const string RsvpAnswered = "application.rsvp_answered";
+
+    /// <summary>
     /// A resume was accepted and written to the object store.
     /// </summary>
     /// <remarks>

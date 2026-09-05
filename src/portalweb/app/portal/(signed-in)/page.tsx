@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentPortal, readableDate } from "@/lib/api";
+import { readableTime } from "../../../../../libs/ui/zone";
+import { RsvpPanel } from "./rsvp";
 
 /**
  * Where a sign-in link lands, and the only screen most applicants will open.
@@ -55,6 +57,18 @@ export default async function Status() {
           </p>
         ) : null}
       </section>
+
+      {/*
+        Directly under the status line, because on the one day this appears it
+        is the reason the person opened the page. The deadline is formatted
+        here rather than in the client component so the date is rendered once,
+        on the server, in the event's zone — the same zone the console writes
+        it in and the same one the API says the day in.
+      */}
+      <RsvpPanel
+        rsvp={application.rsvp}
+        deadline={readableTime(application.rsvp.deadline)}
+      />
 
       <section className="panel">
         <h2>Your details</h2>

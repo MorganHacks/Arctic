@@ -75,10 +75,29 @@ export type Application = {
   statusLabel: string;
   nextStep: string;
   receivedAt: string | null;
+  rsvp: Rsvp;
   profileEditable: boolean;
   profileLockedReason: string | null;
   profile: Profile;
   shirtSizes: string[];
+};
+
+/**
+ * Whether there is a spot to answer for, and by when.
+ *
+ * `open` is the API's answer to the same question the API asks itself before
+ * accepting the write, which is why the screen reads it rather than working it
+ * out from a status and a date. There is no status here to work it out from,
+ * and that is deliberate.
+ *
+ * `deadline` is an ISO instant and null unless it may be shown. Rendering it is
+ * this side's job because the zone is a display decision — see libs/ui/zone.ts,
+ * which is where the event's zone lives.
+ */
+export type Rsvp = {
+  open: boolean;
+  deadline: string | null;
+  closedReason: string | null;
 };
 
 export type Profile = {

@@ -70,6 +70,16 @@ public class PortalTests(IdentityDatabase db)
         return request;
     }
 
+    private static HttpRequestMessage Post(string path, string cookie, object body)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = JsonContent.Create(body),
+        };
+        request.Headers.Add("Cookie", cookie);
+        return request;
+    }
+
     // ------------------------------------------------------------ fixtures ---
 
     private async Task<Guid> AddEventAsync(
@@ -434,6 +444,348 @@ public class PortalTests(IdentityDatabase db)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // ----------------------------------------------------------------- rsvp ---
+
+    /// <summary>
+    /// An accepted applicant who has been told so can take their spot.
+    /// </summary>
+    /// <remarks>
+    /// The whole feature in one test: the offer is real, the applicant answers
+    /// it themselves, and the row moves. Everything below is about the ways
+    /// this must not work.
+    /// </remarks>
+    [Fact]
+    public async Task An_accepted_applicant_can_confirm_their_own_spot()
+    {
+        var person = await db.AddPersonAsync(Unique("confirming"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var response = await Client().SendAsync(
+            Post("/portal/rsvp", await SignIn(person), new { answer = "confirm" }));
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("confirmed", (await RowOf(application)).Status);
+    }
+
+    [Fact]
+    public async Task An_accepted_applicant_can_decline_their_own_spot()
+    {
+        var person = await db.AddPersonAsync(Unique("declining"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var response = await Client().SendAsync(
+            Post("/portal/rsvp", await SignIn(person), new { answer = "decline" }));
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("declined", (await RowOf(application)).Status);
+    }
+
+    /// <summary>
+    /// Confirming from anywhere but <c>accepted</c> is refused.
+    /// </summary>
+    /// <remarks>
+    /// The list is every other status the lifecycle has, rather than the two
+    /// or three that seem plausible. The rule is not "these particular states
+    /// are wrong" — it is that <see cref="StatusTransition"/> permits exactly
+    /// one route into <c>confirmed</c>, and a handler that grew a second one
+    /// would pass a test that only checked the states somebody thought of.
+    /// </remarks>
+    [Theory]
+    [InlineData(ApplicationStatus.Incomplete)]
+    [InlineData(ApplicationStatus.Submitted)]
+    [InlineData(ApplicationStatus.UnderReview)]
+    [InlineData(ApplicationStatus.Rejected)]
+    [InlineData(ApplicationStatus.Waitlisted)]
+    [InlineData(ApplicationStatus.Confirmed)]
+    [InlineData(ApplicationStatus.Declined)]
+    [InlineData(ApplicationStatus.Expired)]
+    [InlineData(ApplicationStatus.CheckedIn)]
+    [InlineData(ApplicationStatus.Withdrawn)]
+    public async Task Confirming_from_any_other_status_is_refused(ApplicationStatus status)
+    {
+        var person = await db.AddPersonAsync(Unique("wrongstate"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(application, status);
+
+        var response = await Client().SendAsync(
+            Post("/portal/rsvp", await SignIn(person), new { answer = "confirm" }));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(status.ToWire(), (await RowOf(application)).Status);
+    }
+
+    /// <summary>
+    /// The deadline is enforced by the write, not by the page.
+    /// </summary>
+    /// <remarks>
+    /// Posted straight at the endpoint with no screen involved, which is the
+    /// case that matters: a portal tab opened before the deadline and
+    /// submitted after it looks exactly like this, and so does anybody with
+    /// curl. A button that is not rendered stops neither.
+    /// </remarks>
+    [Fact]
+    public async Task A_confirm_after_the_deadline_is_refused_however_it_arrives()
+    {
+        var person = await db.AddPersonAsync(Unique("late"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-7));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddMinutes(-1));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var cookie = await SignIn(person);
+        var response = await Client().SendAsync(
+            Post("/portal/rsvp", cookie, new { answer = "confirm" }));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("window to confirm has closed", body);
+
+        // Still accepted rather than expired. Letting the deadline lapse is
+        // the hourly job's decision to record, and a refusal that quietly
+        // expired the row would be this endpoint deciding it instead.
+        Assert.Equal("accepted", (await RowOf(application)).Status);
+
+        // And the screen agrees with the refusal it would get.
+        Assert.Contains("\"open\":false", (await Read("/portal/me", cookie))
+            .Replace(" ", string.Empty));
+    }
+
+    /// <summary>
+    /// No deadline set is not a closed deadline.
+    /// </summary>
+    /// <remarks>
+    /// <c>rsvp_deadline</c> is nullable with no default, so null is the
+    /// ordinary state of the column for most of the year. Reading it as
+    /// "closed" would leave an accepted applicant holding a spot they cannot
+    /// take because a field nobody knew was required was left empty.
+    /// </remarks>
+    [Fact]
+    public async Task An_accepted_applicant_with_no_deadline_can_still_confirm()
+    {
+        var person = await db.AddPersonAsync(Unique("nodeadline"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var response = await Client().SendAsync(
+            Post("/portal/rsvp", await SignIn(person), new { answer = "confirm" }));
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("confirmed", (await RowOf(application)).Status);
+    }
+
+    /// <summary>
+    /// The trail says the applicant did it, not nobody.
+    /// </summary>
+    /// <remarks>
+    /// The reason this endpoint goes through <c>TransitionAsync</c> rather
+    /// than writing the column. A status written any other way leaves
+    /// <c>actor_id</c> null, which is the honest record of a row somebody
+    /// fixed by hand — and once written it cannot be told apart from one, ever.
+    /// </remarks>
+    [Fact]
+    public async Task The_audit_trail_names_the_applicant_who_answered()
+    {
+        var person = await db.AddPersonAsync(Unique("audited"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        (await Client().SendAsync(
+            Post("/portal/rsvp", await SignIn(person), new { answer = "confirm" })))
+            .EnsureSuccessStatusCode();
+
+        var (from, actor) = await LastHistoryRow(application);
+
+        Assert.Equal("accepted", from);
+        Assert.Equal(person, actor);
+    }
+
+    /// <summary>
+    /// Nobody can answer for somebody else.
+    /// </summary>
+    /// <remarks>
+    /// The write half of the rule the whole portal rests on. There is no field
+    /// in the body that names an application, so this sends one anyway — the
+    /// failure being a handler that grew a way to accept an id and a check
+    /// somebody has to remember to write beside it.
+    /// </remarks>
+    [Fact]
+    public async Task An_applicant_cannot_rsvp_for_another_applicant()
+    {
+        var theirs = await db.AddPersonAsync(Unique("theirs"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var untouched = await AddApplicationAsync(
+            eventId, theirs, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(untouched, ApplicationStatus.Accepted);
+
+        var nosy = await db.AddPersonAsync(Unique("nosy"));
+
+        var response = await Client().SendAsync(Post(
+            "/portal/rsvp", await SignIn(nosy),
+            new { answer = "confirm", applicationId = untouched, personId = theirs }));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("accepted", (await RowOf(untouched)).Status);
+        Assert.Equal(0, await HistoryActorCount(untouched, nosy));
+    }
+
+    /// <summary>
+    /// An accepted applicant who has not been told cannot answer, and cannot
+    /// tell that they were accepted from being refused.
+    /// </summary>
+    /// <remarks>
+    /// The same rule <see cref="ApplicantView"/> exists for, applied to the
+    /// refusal. A reviewer decides on Tuesday and the team announces on
+    /// Friday; in between, an accepted applicant who pokes this endpoint must
+    /// read exactly what somebody still under review reads.
+    /// </remarks>
+    [Fact]
+    public async Task An_unannounced_decision_cannot_be_answered_or_inferred()
+    {
+        var eventId = await AddEventAsync();
+
+        var accepted = await db.AddPersonAsync(Unique("quietly-accepted"));
+        var decided = await AddApplicationAsync(
+            eventId, accepted, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(decided, ApplicationStatus.Accepted);
+
+        var waiting = await db.AddPersonAsync(Unique("waiting"));
+        await AddApplicationAsync(eventId, waiting, ApplicationStatus.Submitted);
+
+        var mine = await Client().SendAsync(
+            Post("/portal/rsvp", await SignIn(accepted), new { answer = "confirm" }));
+        var theirs = await Client().SendAsync(
+            Post("/portal/rsvp", await SignIn(waiting), new { answer = "confirm" }));
+
+        Assert.Equal(HttpStatusCode.Conflict, mine.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, theirs.StatusCode);
+
+        // Word for word, or the refusal is the announcement.
+        Assert.Equal(
+            await theirs.Content.ReadAsStringAsync(),
+            await mine.Content.ReadAsStringAsync());
+
+        Assert.Equal("accepted", (await RowOf(decided)).Status);
+    }
+
+    /// <summary>
+    /// The deadline never reaches somebody who has not been told the decision
+    /// it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// A date in the response is a decision. Every other field on this route
+    /// is gated on the announcement and a bare <c>rsvpDeadline</c> would walk
+    /// straight past all of them: nobody sets one on an application they have
+    /// not accepted.
+    /// </remarks>
+    [Fact]
+    public async Task An_unannounced_deadline_is_not_in_the_response()
+    {
+        var person = await db.AddPersonAsync(Unique("dateleak"));
+        var eventId = await AddEventAsync();
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: new DateTimeOffset(2099, 3, 4, 5, 6, 7, TimeSpan.Zero));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var body = await Read("/portal/me", await SignIn(person));
+
+        Assert.DoesNotContain("2099", body);
+        Assert.Contains("\"deadline\":null", body.Replace(" ", string.Empty));
+    }
+
+    /// <summary>
+    /// Declining is final, because the lifecycle says so.
+    /// </summary>
+    /// <remarks>
+    /// <c>StatusTransition</c> lists nothing after <c>declined</c>. This is
+    /// that decision reaching the applicant: a spot given back has gone to
+    /// somebody on the waitlist, and a portal that could quietly take it back
+    /// would be promising a place that is no longer ours to give.
+    /// </remarks>
+    [Fact]
+    public async Task A_declined_spot_cannot_be_taken_back_from_the_portal()
+    {
+        var person = await db.AddPersonAsync(Unique("regret"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var cookie = await SignIn(person);
+        (await Client().SendAsync(Post("/portal/rsvp", cookie, new { answer = "decline" })))
+            .EnsureSuccessStatusCode();
+
+        var again = await Client().SendAsync(
+            Post("/portal/rsvp", cookie, new { answer = "confirm" }));
+        var body = await again.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Contains("Email us", body);
+        Assert.Equal("declined", (await RowOf(application)).Status);
+    }
+
+    [Fact]
+    public async Task An_answer_that_is_neither_word_is_refused()
+    {
+        // The body takes a verb rather than a status, so the stored spelling
+        // is not a thing this route accepts either.
+        var person = await db.AddPersonAsync(Unique("gibberish"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var cookie = await SignIn(person);
+
+        foreach (var answer in new[] { "maybe", "confirmed", string.Empty })
+        {
+            var response = await Client().SendAsync(
+                Post("/portal/rsvp", cookie, new { answer }));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        Assert.Equal("accepted", (await RowOf(application)).Status);
+    }
+
+    [Fact]
+    public async Task Rsvp_without_a_session_says_sign_in()
+    {
+        var response = await Client().PostAsJsonAsync(
+            "/portal/rsvp", new { answer = "confirm" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     // ------------------------------------------------------------- messages ---
 
     [Fact]
@@ -524,6 +876,41 @@ public class PortalTests(IdentityDatabase db)
         ],
         _ => [to],
     };
+
+    /// <summary>The newest history row's previous status and who caused it.</summary>
+    private async Task<(string? From, Guid? Actor)> LastHistoryRow(Guid applicationId)
+    {
+        await using var cmd = db.DataSource.CreateCommand("""
+            SELECT from_status, actor_id
+              FROM applications.status_history
+             WHERE application_id = @id
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1
+            """);
+        cmd.Parameters.AddWithValue("id", applicationId);
+        await using var r = await cmd.ExecuteReaderAsync();
+        await r.ReadAsync();
+        return (await r.IsDBNullAsync(0) ? null : r.GetString(0),
+                await r.IsDBNullAsync(1) ? null : r.GetGuid(1));
+    }
+
+    /// <summary>
+    /// How many times this person appears on that application's trail.
+    /// </summary>
+    /// <remarks>
+    /// Zero is the assertion worth making after a refused write: a request
+    /// that touched nothing must also have left no mark saying it did.
+    /// </remarks>
+    private async Task<int> HistoryActorCount(Guid applicationId, Guid actorId)
+    {
+        await using var cmd = db.DataSource.CreateCommand("""
+            SELECT count(*) FROM applications.status_history
+             WHERE application_id = @id AND actor_id = @actor
+            """);
+        cmd.Parameters.AddWithValue("id", applicationId);
+        cmd.Parameters.AddWithValue("actor", actorId);
+        return (int)(long)(await cmd.ExecuteScalarAsync())!;
+    }
 
     private async Task AnnounceDecisions(Guid eventId)
     {

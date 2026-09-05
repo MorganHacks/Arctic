@@ -132,12 +132,53 @@ public class ApplicantViewTests
     public void An_accepted_applicant_is_told_their_deadline()
     {
         // A confirm-by date with no date on it is how a spot goes unclaimed.
+        //
+        // The instant is the one a real deadline is set at: 11:59 PM on the
+        // 15th in the event's zone, which is the 16th at 04:59 in UTC. Read
+        // off the instant as it arrives from the database, the applicant is
+        // told the 16th — a day later than the team set, a day later than the
+        // email said, and a day after the spot has gone.
         var text = ApplicantView.Describe(
             ApplicationStatus.Accepted,
             decisionsAnnounced: true,
-            rsvpDeadline: new DateTimeOffset(2027, 3, 14, 0, 0, 0, TimeSpan.Zero));
+            rsvpDeadline: new DateTimeOffset(2027, 1, 16, 4, 59, 0, TimeSpan.Zero));
 
-        Assert.Contains("March 14", text);
+        Assert.Contains("January 15", text);
+        Assert.DoesNotContain("January 16", text);
+    }
+
+    [Fact]
+    public void The_deadline_and_the_next_step_never_name_different_days()
+    {
+        // Both sentences are on the same screen, one under the other. They
+        // read the same field and must format it the same way; the failure
+        // being one of the two left on the raw instant.
+        var deadline = new DateTimeOffset(2027, 1, 16, 4, 59, 0, TimeSpan.Zero);
+
+        Assert.Contains(
+            "January 15",
+            ApplicantView.Describe(
+                ApplicationStatus.Accepted, decisionsAnnounced: true, rsvpDeadline: deadline));
+        Assert.Contains(
+            "January 15",
+            ApplicantView.NextStep(
+                ApplicationStatus.Accepted, decisionsAnnounced: true, rsvpDeadline: deadline));
+    }
+
+    [Fact]
+    public void A_deadline_in_daylight_saving_is_read_on_the_other_offset()
+    {
+        // The project has been caught by this once already: a September
+        // deadline written up as EST when the month was on EDT. Named zone
+        // rather than a fixed offset, so the switch is handled rather than
+        // assumed — 03:59 UTC is the previous evening only while the clocks
+        // are forward.
+        var text = ApplicantView.Describe(
+            ApplicationStatus.Accepted,
+            decisionsAnnounced: true,
+            rsvpDeadline: new DateTimeOffset(2027, 9, 16, 3, 59, 0, TimeSpan.Zero));
+
+        Assert.Contains("September 15", text);
     }
 
     [Fact]
