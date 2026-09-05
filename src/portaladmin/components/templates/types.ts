@@ -30,15 +30,19 @@ export type TemplateRow = {
 /**
  * One template, whole.
  *
- * `html` and `text` are what the API last rendered from `markdown`. They are
- * shown, never edited: the sender renders from the markdown, and a screen that
- * let somebody edit the html directly would be editing something no send reads.
+ * `html` and `text` are what the API last rendered from `body`. They are shown,
+ * never edited: the sender renders from the source, and a screen that let
+ * somebody edit the html directly would be editing something no send reads.
  */
 export type Template = {
   key: string;
   kind: TemplateKind;
   subject: string;
-  markdown: string;
+
+  /** The source, in whichever language `format` names. */
+  body: string;
+  format: TemplateFormat;
+
   html: string;
   text: string;
   fromLocal: string;
@@ -87,11 +91,30 @@ export type TemplateDraft = {
   key: string;
   kind: TemplateKind;
   subject: string;
-  markdown: string;
+  body: string;
+  format: TemplateFormat;
   fromLocal: string;
   fromDomain: string;
   replyTo: string | null;
 };
+
+/**
+ * The two languages a body can be written in.
+ *
+ * Markdown for anything that reads as prose, which is most of it. HTML for a
+ * design somebody wants control of -- a button needs a table cell with a
+ * background colour, and Markdown has no way to say that.
+ *
+ * The same two strings the API takes, deliberately. A screen that invented its
+ * own words for these would need a translation layer, and the translation is
+ * where the two would eventually disagree.
+ */
+export type TemplateFormat = "markdown" | "html";
+
+/** The word for a format, for a button somebody has to read. */
+export function formatLabel(format: TemplateFormat): string {
+  return format === "html" ? "HTML" : "Markdown";
+}
 
 /** The word for a kind. */
 export function kindLabel(kind: TemplateKind): string {

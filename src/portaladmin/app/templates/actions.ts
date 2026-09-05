@@ -1,7 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Rendered, TemplateDraft } from "@/components/templates/types";
+import type {
+  Rendered,
+  TemplateDraft,
+  TemplateFormat,
+} from "@/components/templates/types";
 import { createTemplate, renderPreview, updateTemplate } from "./api";
 
 /**
@@ -40,7 +44,7 @@ function checked(draft: TemplateDraft): string | null {
     return "A subject is required.";
   }
 
-  if (draft.markdown === "") {
+  if (draft.body === "") {
     return "A body is required.";
   }
 
@@ -58,10 +62,11 @@ function trimmed(draft: TemplateDraft): TemplateDraft {
     key: draft.key.trim(),
     kind: draft.kind,
     subject: draft.subject.trim(),
-    // Not trimmed to the edge on purpose: leading whitespace in a markdown
-    // body can be a list's indentation, and the API is the thing that decides
-    // what the body means.
-    markdown: draft.markdown.replace(/\s+$/, ""),
+    // Not trimmed to the edge on purpose: leading whitespace can be a list's
+    // indentation in Markdown or an indented tag in HTML, and the API is the
+    // thing that decides what the body means.
+    body: draft.body.replace(/\s+$/, ""),
+    format: draft.format,
     fromLocal: draft.fromLocal.trim(),
     fromDomain: draft.fromDomain.trim(),
     replyTo: replyTo === "" ? null : replyTo,
@@ -118,7 +123,8 @@ export async function editTemplate(
 /** What the subject and body would come out as, rendered by the sender. */
 export async function previewBody(input: {
   subject: string;
-  markdown: string;
+  body: string;
+  format: TemplateFormat;
 }): Promise<PreviewResult> {
   return renderPreview(input);
 }
