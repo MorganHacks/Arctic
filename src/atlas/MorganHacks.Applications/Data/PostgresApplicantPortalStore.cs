@@ -133,6 +133,82 @@ public sealed class PostgresApplicantPortalStore(NpgsqlDataSource dataSource)
             : ProfileSave.NoApplication;
     }
 
+    /// <inheritdoc />
+    public async Task<string?> CheckInCodeAsync(Guid personId, CancellationToken ct = default)
+    {
+        // Read first, mint second. The read is the common path by an enormous
+        // margin -- a code is created once and shown every time the screen is
+        // opened after that -- and going straight to an UPDATE would move
+        // updated_at on every view of a page that changes nothing.
+        const string read = $"""
+            SELECT status, check_in_code
+              FROM applications.applications
+             WHERE id = ({Mine})
+            """;
+
+        await using var current = dataSource.CreateCommand(read);
+        current.Parameters.AddWithValue("personId", personId);
+
+        string status;
+        await using (var reader = await current.ExecuteReaderAsync(ct))
+        {
+            if (!await reader.ReadAsync(ct))
+            {
+                return null;
+            }
+
+            status = reader.GetString(0);
+            if (!await reader.IsDBNullAsync(1, ct))
+            {
+                return reader.GetString(1);
+            }
+        }
+
+        if (!CheckInCode.IssuedWire.Contains(status))
+        {
+            return null;
+        }
+
+        // check_in_code IS NULL in the WHERE clause, so two portal loads
+        // racing each other cannot mint two codes: the second writes nothing
+        // and reads back what the first stored. The status is tested again
+        // here for the same reason the profile write tests it -- the read
+        // above is not in this statement's transaction.
+        //
+        // A collision against applications_check_in_code_key would surface
+        // here as a failed request rather than a retry. Sixty bits against a
+        // few thousand codes makes that roughly a one in a quadrillion event,
+        // and the recovery is a page refresh, which mints a different code.
+        const string mint = $"""
+            UPDATE applications.applications
+               SET check_in_code = @code,
+                   check_in_code_issued_at = now()
+             WHERE id = ({Mine})
+               AND check_in_code IS NULL
+               AND status = ANY(@issued)
+            RETURNING check_in_code
+            """;
+
+        await using var write = dataSource.CreateCommand(mint);
+        write.Parameters.AddWithValue("personId", personId);
+        write.Parameters.AddWithValue("code", CheckInCode.Issue());
+        write.Parameters.AddWithValue("issued", CheckInCode.IssuedWire);
+
+        if (await write.ExecuteScalarAsync(ct) is string minted)
+        {
+            return minted;
+        }
+
+        // Nothing was written. Either the race above, or a decision landed
+        // between the two statements. Re-reading answers both honestly:
+        // whatever is on the row now is the code this person should be shown,
+        // and null is the right answer if there is not one.
+        await using var again = dataSource.CreateCommand(
+            $"SELECT check_in_code FROM applications.applications WHERE id = ({Mine})");
+        again.Parameters.AddWithValue("personId", personId);
+        return await again.ExecuteScalarAsync(ct) as string;
+    }
+
     /// <summary>
     /// Reads a nullable text column, collapsing an empty string to null.
     /// </summary>

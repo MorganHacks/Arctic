@@ -67,4 +67,24 @@ public interface IApplicantPortalStore
     /// </remarks>
     Task<ProfileSave> SaveProfileAsync(
         Guid personId, ApplicantProfile profile, CancellationToken ct = default);
+
+    /// <summary>
+    /// This person's check-in code, minting it the first time they ask.
+    /// </summary>
+    /// <remarks>
+    /// Null when they have no application, or when the one they have is not in
+    /// a status that gets a code. A screen with no code has to say why, and
+    /// that sentence is the endpoint's to choose from the status rather than
+    /// this method's to encode in a second return value.
+    /// <para>
+    /// Minted lazily rather than at the moment somebody confirms. Hanging it
+    /// off the transition would put check-in inside the one method that owns
+    /// the lifecycle, and would leave every application confirmed before this
+    /// shipped without a code at all. Asking for it on the screen that shows
+    /// it needs no coordination and cannot be forgotten. What makes that safe
+    /// is that it is idempotent: the first call creates the code and every
+    /// call after it, forever, returns the same twelve characters.
+    /// </para>
+    /// </remarks>
+    Task<string?> CheckInCodeAsync(Guid personId, CancellationToken ct = default);
 }
