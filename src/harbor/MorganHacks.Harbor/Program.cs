@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using MorganHacks.Harbor;
 using MorganHacks.Observability;
+using MorganHacks.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,6 +98,11 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .AllowAnyMethod()
     .AllowCredentials()
     .WithExposedHeaders(IdentityHeaders.CorrelationId)));
+
+// Feature flags. None are read here yet; the call is what makes adding the
+// first one a one-line change, and what makes a missing features.json fail
+// at start-up rather than at the moment somebody first relies on a flag.
+builder.AddFeatures();
 
 var app = builder.Build();
 

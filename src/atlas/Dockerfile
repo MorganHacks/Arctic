@@ -19,6 +19,8 @@ COPY libs/observability/MorganHacks.Observability/MorganHacks.Observability.cspr
      libs/observability/MorganHacks.Observability/
 COPY libs/audit/MorganHacks.Audit/MorganHacks.Audit.csproj \
      libs/audit/MorganHacks.Audit/
+COPY libs/features/MorganHacks.Features/MorganHacks.Features.csproj \
+     libs/features/MorganHacks.Features/
 COPY global.json ./
 COPY src/atlas/Directory.Build.props src/atlas/
 COPY src/lark/Directory.Build.props  src/lark/

@@ -16,6 +16,7 @@ using MorganHacks.Api.Webhooks;
 using MorganHacks.Observability;
 using MorganHacks.Lark.Data.Data;
 using Npgsql;
+using MorganHacks.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -280,6 +281,11 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 });
+
+// Feature flags. Loaded here so every flag is readable from the container that
+// serves the request, and so a missing features.json stops the process rather
+// than silently reading every flag as off.
+builder.AddFeatures();
 
 var app = builder.Build();
 

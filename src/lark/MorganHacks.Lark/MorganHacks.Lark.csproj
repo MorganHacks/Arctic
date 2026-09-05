@@ -15,5 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MorganHacks.Lark.Data\MorganHacks.Lark.Data.csproj" />
     <ProjectReference Include="..\..\..\libs\observability\MorganHacks.Observability\MorganHacks.Observability.csproj" />
+    <ProjectReference Include="..\..\..\libs\features\MorganHacks.Features\MorganHacks.Features.csproj" />
   </ItemGroup>
+
 </Project>

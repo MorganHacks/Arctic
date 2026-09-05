@@ -4,6 +4,7 @@ using MorganHacks.Lark.Data.Data;
 using MorganHacks.Lark.Sending;
 using MorganHacks.Observability;
 using Npgsql;
+using MorganHacks.Features;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -44,6 +45,11 @@ else
 }
 
 builder.Services.AddHostedService<SendLoop>();
+
+// Feature flags. None are read here yet; the call is what makes adding the
+// first one a one-line change, and what makes a missing features.json fail
+// at start-up rather than at the moment somebody first relies on a flag.
+builder.AddFeatures();
 
 var host = builder.Build();
 host.Run();

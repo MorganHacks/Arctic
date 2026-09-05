@@ -8,6 +8,8 @@ WORKDIR /src
 COPY src/harbor/MorganHacks.Harbor/MorganHacks.Harbor.csproj src/harbor/MorganHacks.Harbor/
 COPY libs/observability/MorganHacks.Observability/MorganHacks.Observability.csproj \
      libs/observability/MorganHacks.Observability/
+COPY libs/features/MorganHacks.Features/MorganHacks.Features.csproj \
+     libs/features/MorganHacks.Features/
 COPY global.json ./
 COPY src/harbor/Directory.Build.props src/harbor/
 COPY libs/Directory.Build.props       libs/
