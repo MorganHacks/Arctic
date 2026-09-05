@@ -109,6 +109,36 @@ export type Profile = {
   accessibilityNeeds: string | null;
 };
 
+/**
+ * A QR symbol as the API draws it: one character per module, '1' for dark.
+ *
+ * Modules rather than an image, so the size, the colour and the quiet zone are
+ * decided by the screen showing it rather than baked into a string on the
+ * server.
+ */
+export type QrSymbol = {
+  size: number;
+  rows: string[];
+};
+
+/**
+ * The check-in screen, with or without a code on it.
+ *
+ * `code` is null for anybody the door would turn away, and the sentences are
+ * written for that case too. Nothing here is a status: like everywhere else in
+ * this app, the API sends the words and this side does not map anything.
+ */
+export type CheckInPass = {
+  heading: string;
+  explanation: string;
+  hint: string | null;
+  code: string | null;
+  /** The same code in three groups of four, which is how it is read out. */
+  display: string | null;
+  qr: QrSymbol | null;
+  checkedIn: boolean;
+};
+
 /** One line of mail history. Subject and outcome, never the body. */
 export type Message = {
   id: string;
@@ -134,6 +164,26 @@ export async function currentPortal(): Promise<Portal | null> {
     }
 
     return (await response.json()) as Portal;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The check-in code, or the reason there is not one yet.
+ *
+ * Null covers every reason the call failed, like the two above it, and the
+ * page treats all of them as "sign in again" because that is the only thing an
+ * applicant can do about any of them.
+ */
+export async function checkInPass(): Promise<CheckInPass | null> {
+  try {
+    const response = await apiFetch("/portal/check-in");
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as CheckInPass;
   } catch {
     return null;
   }

@@ -85,6 +85,40 @@
   color: var(--muted);
 }
 
+/*
+ * The way into an event, said in a word.
+ *
+ * The name in the first column goes to the same place, but a link that only
+ * announces itself on hover is a link that has to be known about. The console
+ * is read by an organizing team that turns over completely every year, so the
+ * way to change an event is on the screen rather than in the handover.
+ *
+ * Not a button. It navigates, and nothing here is decided by pressing it.
+ *
+ * Muted rather than accented, and that is the design system rather than taste:
+ * colour on these screens means something, and the accent means the thing to
+ * do next. Editing an event is not what anybody came to this list to do — the
+ * list is for checking whether registration is open. A coloured link in every
+ * row would put the loudest thing on the page in the column that matters
+ * least, five times over.
+ */
+.actionCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.edit {
+  color: var(--muted);
+  font-size: var(--step-2);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.edit:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
 /* The date under a pill: which instant the pill is talking about. A pill on
    its own says whether registration is open; it cannot say until when. */
 .when {

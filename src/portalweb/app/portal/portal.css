@@ -445,6 +445,98 @@ button.danger:hover {
   background: var(--stop-soft);
 }
 
+/* The check-in code ------------------------------------------------------- */
+
+/*
+ * The one screen here that is not read, it is shown. Somebody is holding a
+ * phone out at arm's length in a doorway, in whatever light the queue is
+ * standing in, so the two things on it are as large as the screen allows and
+ * nothing else is on it at all.
+ */
+.pass {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  padding: 1.15rem 1rem 1.25rem;
+  margin-bottom: 1rem;
+  text-align: center;
+
+  /* 140ms, and the only movement on the page. Long enough not to snap, short
+     enough that somebody who opened this at the front of a queue is not
+     waiting for it. The reduced-motion rule in tokens.css takes it out
+     entirely for anyone who has asked. */
+  animation: pass-in 140ms ease-out;
+}
+
+@keyframes pass-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+/*
+ * Light, in both themes, and that is the point of --scan-plate.
+ *
+ * A camera reads a QR against a standard that assumes dark modules on a light
+ * ground. Letting this follow the theme would hand a dark-mode reader an
+ * inverted symbol, which some scanners quietly refuse, and the place that gets
+ * discovered is a queue.
+ */
+.pass__plate {
+  background: var(--scan-plate);
+  border-radius: var(--radius);
+  padding: 0.7rem;
+  margin: 0 auto 1rem;
+  width: fit-content;
+  max-width: 100%;
+
+  /* The plate is the same white as a light page, so in light mode it would
+     otherwise have no edge at all. */
+  border: 1px solid var(--line);
+}
+
+.pass__qr {
+  display: block;
+  /* Most of a phone's width, and no larger than it needs to be on a laptop.
+     At the smaller end this is still around eight device pixels per module,
+     which is several times what a camera needs. */
+  width: min(74vw, 16rem);
+  height: auto;
+  max-width: 100%;
+}
+
+/*
+ * The half that works when the camera does not.
+ *
+ * Monospace so that the groups line up and no character is narrower than
+ * another, and spaced out because this is read aloud across a noisy room as
+ * often as it is read off a screen. Sized between two steps of the scale so
+ * that it is as large as a 360px phone can hold without wrapping mid-group.
+ */
+.pass__code {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: clamp(var(--step2), 7.5vw, var(--step3));
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  word-spacing: 0.35em;
+  line-height: 1.25;
+
+  /* Wraps between groups rather than overflowing, on the narrowest screens. */
+  overflow-wrap: break-word;
+}
+
+/* Checked in. The one colour on the page, and it is the answer to the only
+   question the screen is being asked. */
+.pass--used {
+  border-color: var(--ok);
+}
+
+.pass__hint {
+  margin-bottom: 0;
+}
+
 /* Notices ----------------------------------------------------------------- */
 
 /*

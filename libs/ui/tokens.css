@@ -38,6 +38,20 @@
 
   --focus: #2d5bd7;
 
+  /* The one pair in this file that does not flip with the theme.
+   *
+   * A scanned code is read by a camera against a standard that assumes dark
+   * modules on a light ground. Inverting it in dark mode would hand a reader
+   * a symbol some scanners quietly refuse, which is a thing you find out in a
+   * queue rather than in review. So the plate stays light and the modules stay
+   * dark in both themes, and they are deliberately absent from the two blocks
+   * below.
+   *
+   * Not for anything a person reads. Text on this pair would be a light card
+   * sitting in a dark page for no reason. */
+  --scan-plate: #ffffff;
+  --scan-ink:   #14161a;
+
   --display: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
   --body:    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono:    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;

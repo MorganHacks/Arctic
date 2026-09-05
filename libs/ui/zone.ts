@@ -25,8 +25,11 @@
  * switch right by itself, and every date it renders carries the abbreviation so
  * the reader can see which of the two they got.
  *
- * In libs/ui rather than inside an app because two of them need it. This is the
- * reading side of the convention; the console's date *inputs* still parse
+ * In libs/ui rather than inside an app because two of them need it. There were
+ * three copies of this constant before it moved here -- the form builder's
+ * deadline, the events screens and the public form -- which is three chances for
+ * the console to announce a time the public form shows differently, with nothing
+ * failing to say so. This is the reading side of the convention; the console's date *inputs* still parse
  * wall-clock text in app/forms/[id]/when.ts and components/events/zone.ts, and
  * those two remain the writing side. If any of the three ever disagree about
  * ZONE, this file is the one that is right.

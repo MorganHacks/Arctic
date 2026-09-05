@@ -38,3 +38,6 @@ context.md
 
 # Design mockups, not shipped.
 .mockups/
+
+# Design brief, handed to a designer and then deleted.
+ADMIN-CONSOLE-BRIEF.md

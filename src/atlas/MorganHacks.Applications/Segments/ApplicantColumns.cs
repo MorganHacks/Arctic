@@ -280,6 +280,18 @@ public static class ApplicantColumns
                 "When they arrived at the event. A timestamp — see "
                 + "rsvp_deadline.",
 
+            ["check_in_code"] =
+                "The code they show at the door. Whoever holds it can have "
+                + "its owner marked as arrived, and a broadcast is the one "
+                + "place we could put several hundred of them into several "
+                + "hundred inboxes at once. It lives on their portal screen, "
+                + "behind a sign-in, which is where a link in a message "
+                + "should send them.",
+
+            ["check_in_code_issued_at"] =
+                "When their check-in code was first shown to them. A "
+                + "timestamp, and bookkeeping.",
+
             ["created_at"] =
                 "When the row was written. Bookkeeping.",
 

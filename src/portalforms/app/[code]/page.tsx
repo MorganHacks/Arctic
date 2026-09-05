@@ -3,6 +3,7 @@ import { loadForm } from "@/lib/api";
 import { NoForm } from "../no-form";
 import { Questions } from "./questions";
 import { SignIn } from "./sign-in";
+import { ZONE } from "../../../../libs/ui/zone";
 
 type Props = {
   params: Promise<{ code: string }>;
@@ -190,6 +191,6 @@ function longDate(iso: string): string {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "long",
     timeStyle: "short",
-    timeZone: "America/New_York",
+    timeZone: ZONE,
   }).format(new Date(iso));
 }

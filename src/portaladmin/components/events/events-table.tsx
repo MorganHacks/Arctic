@@ -25,6 +25,9 @@ export function EventsTable({ events, now }: { events: EventRow[]; now: number }
           <th>Registration</th>
           <th>Dates</th>
           <th>Capacity</th>
+          {/* Unlabelled, because a heading over a column of identical links
+              names the link rather than the column. */}
+          <th aria-label="Edit" />
         </tr>
       </thead>
       <tbody>
@@ -53,6 +56,26 @@ export function EventsTable({ events, now }: { events: EventRow[]; now: number }
               ) : (
                 <span className="numeric">{event.capacity}</span>
               )}
+            </td>
+
+            {/* The same destination the name links to, said in a word.
+                The name being a link is discoverable only by hovering it, and
+                this console is read by somebody new every year who has not
+                been told that the way to edit an event is to click its title.
+                Named for what it does rather than where it goes, because
+                "Dates" would be wrong the moment the name became editable —
+                which it now is. */}
+            <td className={`${styles.cell} ${styles.actionCell}`}>
+              <Link
+                href={`/events/${event.id}`}
+                className={styles.edit}
+                /* Named per row. A screen reader listing the links on this
+                   page otherwise reads "Edit" once for every event, which is
+                   a list of identical choices. */
+                aria-label={`Edit ${event.name}`}
+              >
+                Edit<span aria-hidden="true"> →</span>
+              </Link>
             </td>
           </tr>
         ))}

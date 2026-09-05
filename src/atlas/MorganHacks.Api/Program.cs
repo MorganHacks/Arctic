@@ -130,6 +130,12 @@ builder.Services.AddSingleton<IEventStore, PostgresEventStore>();
 // the portal's scope because the resume endpoint reads it.
 builder.Services.AddSingleton<IApplicationStore, PostgresApplicationStore>();
 
+// The door's read of the same table: one code in, one person out. Separate
+// again, and for the plainest version of the reason -- it is reached with a
+// permission that unlocks nothing else, by people holding a phone in a queue,
+// and it must not grow a method that returns anything more than a name.
+builder.Services.AddSingleton<ICheckInStore, PostgresCheckInStore>();
+
 // And the registration team's read side of the same table, plus notes.
 // Separate from the store above because that one owns the lifecycle: there is
 // one way to change a status and this is deliberately not it.
@@ -296,6 +302,7 @@ app.MapAuth();
 app.MapEvents();
 app.MapForms();
 app.MapPortal();
+app.MapCheckIn();
 app.MapResumes();
 app.MapPeopleAdmin();
 app.MapAuditTrail();
