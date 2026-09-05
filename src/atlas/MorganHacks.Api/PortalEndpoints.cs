@@ -3,6 +3,7 @@ using MorganHacks.Applications.Services;
 using MorganHacks.Lark.Data.Data;
 using MorganHacks.Lark.Data.Domain;
 using MorganHacks.Observability;
+using MorganHacks.Features;
 
 namespace MorganHacks.Api;
 
@@ -48,7 +49,12 @@ public static class PortalEndpoints
 {
     public static IEndpointRouteBuilder MapPortal(this IEndpointRouteBuilder app)
     {
-        var portal = app.MapGroup("/portal").RequireSession();
+        // The flag sits outside the session check on purpose. When the portal is off
+        // it is off for everybody, signed in or not, and the answer is 404 -- the same
+        // answer a route that was never built gives.
+        var portal = app.MapGroup("/portal")
+            .RequireFeature(Flags.HackerPortal)
+            .RequireSession();
 
         portal.MapGet("/me", Me);
         portal.MapPatch("/profile", SaveProfile);

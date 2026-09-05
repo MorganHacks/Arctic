@@ -12,6 +12,8 @@ COPY src/lark/MorganHacks.Lark/MorganHacks.Lark.csproj           src/lark/Morgan
 COPY src/lark/MorganHacks.Lark.Data/MorganHacks.Lark.Data.csproj src/lark/MorganHacks.Lark.Data/
 COPY libs/observability/MorganHacks.Observability/MorganHacks.Observability.csproj \
      libs/observability/MorganHacks.Observability/
+COPY libs/features/MorganHacks.Features/MorganHacks.Features.csproj \
+     libs/features/MorganHacks.Features/
 COPY global.json ./
 COPY src/lark/Directory.Build.props src/lark/
 COPY libs/Directory.Build.props     libs/

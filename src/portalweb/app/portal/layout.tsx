@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { HACKER_PORTAL, isOn } from "@/lib/features";
 import { siteConfig } from "@/site.config";
 import "./portal.css";
 
@@ -22,6 +24,19 @@ export const metadata: Metadata = {
 export default function PortalLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Every screen under /portal passes through here, including the sign-in page,
+  // so this is the one place the door has to be shut. Redirecting rather than
+  // rendering a notice: there is nothing useful to say to somebody holding a
+  // link to a portal that is closed, and the page they actually want is the
+  // public one.
+  //
+  // On the server, before anything is sent. A check inside a client component
+  // would ship the portal's markup and then navigate away from it, which is a
+  // flash of a page somebody was not meant to see.
+  if (!isOn(HACKER_PORTAL)) {
+    redirect("/");
+  }
+
   return (
     <div className="portal">
       <header className="portal__bar">

@@ -25,7 +25,15 @@ public class PortalTests(IdentityDatabase db)
     public Task InitializeAsync()
     {
         _app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
-            b.UseSetting("ConnectionStrings:Postgres", db.ConnectionString));
+        {
+            b.UseSetting("ConnectionStrings:Postgres", db.ConnectionString);
+
+            // Say which features this file needs rather than inheriting whatever
+            // features.json currently ships. The portal is off by default, and a
+            // suite that reads the default would go red every time somebody moved
+            // a switch -- which is the opposite of what a switch is for.
+            b.UseSetting("enable_hacker_portal_feature", "true");
+        });
         return Task.CompletedTask;
     }
 

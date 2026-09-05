@@ -1,0 +1,7 @@
+{
+  // Feature flags this service reads. It reads none yet.
+  //
+  // The file is here so that adding the first one is a one-line change rather
+  // than a decision about where flags live, and so every service answers the
+  // question "what can be turned off here" the same way.
+}
