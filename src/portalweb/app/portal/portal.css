@@ -537,6 +537,74 @@ button.danger:hover {
   margin-bottom: 0;
 }
 
+/* Resume ------------------------------------------------------------------ */
+
+/*
+ * What we are holding, above the control that changes it.
+ *
+ * The order matters more than the styling. Somebody opening this page is far
+ * more often checking what we have than replacing it, so the answer to that
+ * question is the first thing on the panel and the picker sits underneath.
+ */
+.upload__held {
+  margin: 0 0 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.upload__held--none {
+  color: var(--faint);
+}
+
+/*
+ * A file input, left as a file input.
+ *
+ * Not restyled into a button with the real control hidden behind it, which is
+ * the usual treatment. The native one is the only version that works with a
+ * keyboard, a screen reader and a phone's file picker without being rebuilt,
+ * and this screen is used once by each person — it is not worth the risk of
+ * being the one control somebody cannot operate.
+ */
+.upload input[type="file"] {
+  padding: 0.5rem;
+  background: var(--sunken);
+}
+
+.upload input[type="file"]:disabled {
+  color: var(--faint);
+  cursor: progress;
+}
+
+/*
+ * How far along the upload is.
+ *
+ * A bar and a number rather than a spinner. A spinner says "something is
+ * happening"; on campus wifi what somebody needs to know is whether it is
+ * worth waiting, and only the number answers that.
+ */
+.progress {
+  margin-top: 0.75rem;
+}
+
+.progress__track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  background: var(--accent);
+
+  /* Eased, because the browser reports progress in jumps and an unanimated bar
+     reads as one that has stalled between them. */
+  transition: width 120ms linear;
+}
+
 /* Notices ----------------------------------------------------------------- */
 
 /*

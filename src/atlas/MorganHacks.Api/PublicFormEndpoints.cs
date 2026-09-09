@@ -1,9 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Primitives;
-using Microsoft.Net.Http.Headers;
 using MorganHacks.Applications.Domain;
 using MorganHacks.Applications.Forms;
 using MorganHacks.Applications.Services;
@@ -754,7 +751,10 @@ public static class PublicFormEndpoints
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
 
-        var picked = await ReadTheFileAsync(request, ct);
+        // One file, and the rest of the body is not read. FormValidation
+        // refuses to publish a form with two file questions, so there is never
+        // a second attachment this could be losing.
+        var picked = await UploadedFile.ReadOneAsync(request, ResumeFile.MaxBytes, ct);
         if (picked is null)
         {
             return Results.BadRequest(new { error = "No file arrived. Pick it again." });
@@ -788,90 +788,6 @@ public static class PublicFormEndpoints
         // from the caller, so this is repeating their own word to them rather
         // than telling them anything.
         return Results.Ok(new { upload, name = filename, size = content.Length });
-    }
-
-    /// <summary>
-    /// Pulls the one file out of a multipart body, without letting it land
-    /// anywhere first.
-    /// </summary>
-    /// <remarks>
-    /// Read as a stream rather than through <c>ReadFormAsync</c>, and the
-    /// difference is what the cap actually means. Form binding buffers
-    /// anything over 64 KB to a temporary file and then hands it over, so
-    /// every check would be running against bytes already written to disk;
-    /// this way a file over the limit is abandoned mid-flight and never exists
-    /// anywhere.
-    /// <para>
-    /// Null means there was no file part at all. A null <c>Content</c> inside
-    /// the result means there was one and it went past the cap.
-    /// </para>
-    /// </remarks>
-    private static async Task<(string? Name, byte[]? Content)?> ReadTheFileAsync(
-        HttpRequest request, CancellationToken ct)
-    {
-        if (!request.HasFormContentType
-            || !MediaTypeHeaderValue.TryParse(request.ContentType, out var mediaType))
-        {
-            return null;
-        }
-
-        var boundary = HeaderUtilities.RemoveQuotes(mediaType.Boundary);
-        if (StringSegment.IsNullOrEmpty(boundary))
-        {
-            return null;
-        }
-
-        var reader = new MultipartReader(boundary.Value!, request.Body);
-
-        // The first file part wins and the rest of the body is not read. The
-        // form asks one file question — FormValidation refuses to publish a
-        // form with two — so a second attachment is either a mistake or
-        // somebody seeing what happens.
-        while (await reader.ReadNextSectionAsync(ct) is { } section)
-        {
-            if (!ContentDispositionHeaderValue.TryParse(
-                    section.ContentDisposition, out var disposition)
-                || !disposition.IsFileDisposition())
-            {
-                continue;
-            }
-
-            var name = HeaderUtilities.RemoveQuotes(disposition.FileNameStar.HasValue
-                ? disposition.FileNameStar
-                : disposition.FileName);
-
-            return (name.Value, await ReadAtMostAsync(section.Body, ResumeFile.MaxBytes, ct));
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Reads a stream, and gives up rather than growing past a limit.
-    /// </summary>
-    /// <remarks>
-    /// One byte past the cap is enough to know: it is read so that a file of
-    /// exactly five megabytes is kept and the one after it is refused, without
-    /// having to trust a length anybody sent.
-    /// </remarks>
-    private static async Task<byte[]?> ReadAtMostAsync(
-        Stream source, int limit, CancellationToken ct)
-    {
-        var buffer = new byte[limit + 1];
-        var read = 0;
-
-        while (read < buffer.Length)
-        {
-            var got = await source.ReadAsync(buffer.AsMemory(read), ct);
-            if (got == 0)
-            {
-                break;
-            }
-
-            read += got;
-        }
-
-        return read > limit ? null : buffer[..read];
     }
 
     /// <summary>A refused upload, in words that say what to do next.</summary>

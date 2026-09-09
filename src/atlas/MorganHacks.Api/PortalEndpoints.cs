@@ -62,6 +62,12 @@ public static class PortalEndpoints
         portal.MapGet("/messages", Messages);
         portal.MapGet("/check-in", CheckIn);
 
+        // Registered against this group rather than a second one, so the resume
+        // routes inherit the same feature flag and the same session gate as
+        // every route above. The handlers live in PortalResumeEndpoints only
+        // because this file is long and shared.
+        portal.MapPortalResume();
+
         return app;
     }
 

@@ -7,12 +7,16 @@ import { signOut } from "../actions";
 const tabs = [
   { href: "/portal", label: "Status" },
   { href: "/portal/profile", label: "Profile" },
+  // Beside Profile rather than inside it. The two lock on different rules —
+  // the profile closes when a decision lands and the resume does not — and one
+  // tab holding two lock states is a screen nobody can explain.
+  { href: "/portal/resume", label: "Resume" },
   { href: "/portal/check-in", label: "Check in" },
   { href: "/portal/messages", label: "Emails" },
 ] as const;
 
 /**
- * The four screens, and the way out.
+ * The five screens, and the way out.
  *
  * Check in is shown to everybody rather than only to people who have a code.
  * A tab that appeared the day somebody confirmed would tell them that day what

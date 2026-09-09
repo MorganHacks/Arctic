@@ -209,6 +209,97 @@ public sealed class PostgresApplicantPortalStore(NpgsqlDataSource dataSource)
         return await again.ExecuteScalarAsync(ct) as string;
     }
 
+    /// <inheritdoc />
+    public async Task<ApplicantResume?> ResumeForPersonAsync(
+        Guid personId, CancellationToken ct = default)
+    {
+        // resume_key is read only to test it for NULL and is never selected.
+        // The portal has no use for it and it is on Redaction.SensitiveKeys,
+        // so the safest place for it is a column this method never carries out
+        // of the database at all.
+        const string sql = $"""
+            SELECT resume_filename, resume_size, resume_uploaded_at
+              FROM applications.applications
+             WHERE id = ({Mine})
+               AND resume_key IS NOT NULL
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("personId", personId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return null;
+        }
+
+        return new ApplicantResume(
+            // The column is nullable and the key is not, because the public
+            // form endpoint has written a key without a name before this
+            // existed. A blank name on the screen reads as a bug in the upload
+            // rather than as an old row, so it is filled in here.
+            await reader.IsDBNullAsync(0, ct) ? "resume.pdf" : reader.GetString(0),
+            await reader.IsDBNullAsync(1, ct) ? null : reader.GetInt32(1),
+            await reader.IsDBNullAsync(2, ct)
+                ? null
+                : reader.GetFieldValue<DateTimeOffset>(2));
+    }
+
+    /// <inheritdoc />
+    public async Task<ResumeSave> SaveResumeAsync(
+        Guid personId,
+        string storageKey,
+        string filename,
+        int size,
+        CancellationToken ct = default)
+    {
+        // Four columns and no others, the same discipline as SaveProfileAsync.
+        // Status, email, event and every agreement timestamp are absent from
+        // this statement, so an upload cannot move anything but the resume.
+        //
+        // id = (Mine) is what makes writing somebody else's resume impossible
+        // rather than merely forbidden. There is no application id parameter
+        // on this method for a caller to get wrong, and the subquery resolves
+        // to exactly one row: the newest application belonging to the session's
+        // person. A request that named another applicant would have nowhere to
+        // put the name.
+        //
+        // The status set is ResumeEditing's rather than ProfileEditing's, and
+        // that divergence is argued in full on ResumeEditing itself.
+        const string sql = $"""
+            UPDATE applications.applications
+               SET resume_key         = @key,
+                   resume_filename    = @filename,
+                   resume_size        = @size,
+                   resume_uploaded_at = now()
+             WHERE id = ({Mine})
+               AND status = ANY(@open)
+            RETURNING id
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("open", ResumeEditing.OpenWire);
+        cmd.Parameters.AddWithValue("key", storageKey);
+        cmd.Parameters.AddWithValue("filename", filename);
+        cmd.Parameters.AddWithValue("size", size);
+
+        if (await cmd.ExecuteScalarAsync(ct) is Guid)
+        {
+            return ResumeSave.Saved;
+        }
+
+        // Nothing was written, and the two reasons need different sentences on
+        // the screen: one is "you have not started yet", the other is "this is
+        // no longer yours to change".
+        await using var exists = dataSource.CreateCommand($"SELECT EXISTS ({Mine})");
+        exists.Parameters.AddWithValue("personId", personId);
+
+        return await exists.ExecuteScalarAsync(ct) is true
+            ? ResumeSave.Closed
+            : ResumeSave.NoApplication;
+    }
+
     /// <summary>
     /// Reads a nullable text column, collapsing an empty string to null.
     /// </summary>
