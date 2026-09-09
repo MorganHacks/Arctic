@@ -575,6 +575,43 @@ public class PortalTests(IdentityDatabase db)
     }
 
     /// <summary>
+    /// The screen does not ask for something the endpoint would refuse.
+    /// </summary>
+    /// <remarks>
+    /// The same application as the test above, read rather than written. It
+    /// answered a confirm with "the window to confirm has closed" while the
+    /// label over the button still said to confirm by a day that had already
+    /// gone — one response contradicting itself, and the half an applicant
+    /// believes is the half that sounds like an instruction.
+    /// </remarks>
+    [Fact]
+    public async Task A_closed_window_does_not_invite_a_confirmation()
+    {
+        var person = await db.AddPersonAsync(Unique("toolate"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-7));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddMinutes(-1));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var body = await Read("/portal/me", await SignIn(person));
+
+        Assert.DoesNotContain("confirm by", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Confirmation deadline passed", body);
+
+        // And it still agrees with the refusal a confirm would get, which is
+        // the sentence that was right all along.
+        Assert.Contains("window to confirm has closed", body);
+        Assert.Contains("\"open\":false", body.Replace(" ", string.Empty));
+
+        // Nothing was written to say so. The row is still accepted until the
+        // hourly job decides otherwise; this is a screen reading a date, not a
+        // second place that expires people.
+        Assert.Equal("accepted", (await RowOf(application)).Status);
+    }
+
+    /// <summary>
     /// No deadline set is not a closed deadline.
     /// </summary>
     /// <remarks>

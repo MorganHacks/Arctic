@@ -429,9 +429,19 @@ public static class PortalEndpoints
         var words = CheckInView.Describe(
             application?.Status, application?.DecisionsAnnounced ?? false);
 
-        // Not asked for at all when there is no application, so the common
-        // empty case costs one query rather than two.
-        var code = application is null ? null : await store.CheckInCodeAsync(personId, ct);
+        // Asked for only when the status is one that has a code, which keeps
+        // the common empty case at one query rather than two and, more to the
+        // point, stops a code outliving the spot it belongs to. The store
+        // returns whatever is stored on the row: the right answer to "what is
+        // this person's code" and the wrong one to "what does this screen
+        // show", because a code minted while somebody was confirmed stays on
+        // the row after they withdraw. Left in, the page printed it directly
+        // above its own sentence saying the code appears once a spot is
+        // confirmed. The desk re-reads the status on every scan, so what this
+        // fixes is a page contradicting itself, not who gets through the door.
+        var code = application is not null && CheckInCode.Issued.Contains(application.Status)
+            ? await store.CheckInCodeAsync(personId, ct)
+            : null;
 
         return Results.Ok(new
         {
