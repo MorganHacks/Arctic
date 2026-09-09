@@ -139,6 +139,27 @@ export type CheckInPass = {
   checkedIn: boolean;
 };
 
+/**
+ * One notice the team posted to everybody at the event.
+ *
+ * The one thing the API sends this app that is neither a sentence the codebase
+ * chose nor a field to render — it is what an organizer typed, and it is shown
+ * as it was typed. Everywhere else in this file the rule is that the API sends
+ * the words so a screen cannot invent its own mapping; here the words are the
+ * data, and the rule that replaces it is that this side never edits them. No
+ * truncation, no "read more": a notice cut off mid-sentence is a schedule
+ * change nobody can act on.
+ *
+ * There is no author on this type and no retraction state, because there is
+ * neither on the wire. A notice is the team speaking rather than one named
+ * organizer, and a retracted one simply is not in the response.
+ */
+export type Announcement = {
+  id: string;
+  body: string;
+  at: string;
+};
+
 /** One line of mail history. Subject and outcome, never the body. */
 export type Message = {
   id: string;
@@ -198,6 +219,32 @@ export async function messageHistory(): Promise<Message[] | null> {
 
     const { messages } = (await response.json()) as { messages: Message[] };
     return messages;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the team has posted for this applicant's event, newest first.
+ *
+ * Empty for somebody who has not applied, which is the API's answer rather
+ * than a case handled here: the feed is scoped to the event of the reader's own
+ * application, and no application means no event and therefore nothing.
+ *
+ * Null covers every reason the call failed, like the two above it, and the page
+ * treats all of them as "sign in again".
+ */
+export async function announcements(): Promise<Announcement[] | null> {
+  try {
+    const response = await apiFetch("/portal/announcements");
+    if (!response.ok) {
+      return null;
+    }
+
+    const { announcements } = (await response.json()) as {
+      announcements: Announcement[];
+    };
+    return announcements;
   } catch {
     return null;
   }

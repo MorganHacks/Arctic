@@ -6,18 +6,27 @@ import { signOut } from "../actions";
 
 const tabs = [
   { href: "/portal", label: "Status" },
+  // COPY — "Announcements" needs sign-off.
+  { href: "/portal/announcements", label: "Announcements" },
   { href: "/portal/profile", label: "Profile" },
   { href: "/portal/check-in", label: "Check in" },
   { href: "/portal/messages", label: "Emails" },
 ] as const;
 
 /**
- * The four screens, and the way out.
+ * The five screens, and the way out.
  *
  * Check in is shown to everybody rather than only to people who have a code.
  * A tab that appeared the day somebody confirmed would tell them that day what
  * they were supposed to be told by an email, and the screen behind it explains
  * itself for anyone who is not there yet.
+ *
+ * Announcements sits second, next to the screen everybody lands on, because it
+ * is the only tab here whose contents change while somebody is standing in the
+ * building. The other three are answers to questions asked once. It is shown
+ * to everybody for the same reason check in is: a tab that appeared the first
+ * time something was posted would be a notification, and a notification is
+ * exactly the thing this feature is not.
  *
  * A client component only because the current tab has to be marked, and
  * `usePathname` is the only way to know which one that is. `aria-current` does

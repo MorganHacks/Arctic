@@ -445,6 +445,54 @@ button.danger:hover {
   background: var(--stop-soft);
 }
 
+/* Announcements ----------------------------------------------------------- */
+
+/*
+ * Deliberately not .messages with a different name. That list is a subject and
+ * a delivery pill, read left to right; this one is a paragraph somebody wrote,
+ * read as a paragraph, with the time underneath it rather than beside it. They
+ * look similar enough that sharing the rules would be tempting and wrong: the
+ * next change to either one would silently move the other.
+ */
+.notices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notices li {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.notices li:last-child {
+  border-bottom: none;
+}
+
+/*
+ * pre-wrap so a notice typed as two lines arrives as two lines. The portal
+ * renders no markup in these — see the page for why — so the only formatting
+ * an organizer has is the return key, and throwing it away would take that
+ * away too.
+ */
+.notices__body {
+  margin: 0 0 0.3rem;
+  white-space: pre-wrap;
+
+  /*
+   * Anything an organizer can type has to fit, including a link pasted in a
+   * hurry with no spaces in it. Without this one of those pushes the whole
+   * column wider than the phone it is being read on.
+   */
+  overflow-wrap: anywhere;
+}
+
+.notices__at {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
 /* The check-in code ------------------------------------------------------- */
 
 /*

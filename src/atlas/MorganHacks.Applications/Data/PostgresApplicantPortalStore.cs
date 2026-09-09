@@ -31,6 +31,23 @@ public sealed class PostgresApplicantPortalStore(NpgsqlDataSource dataSource)
          LIMIT 1
         """;
 
+    /// <summary>
+    /// Which event the portal means by "yours".
+    /// </summary>
+    /// <remarks>
+    /// The same row <see cref="Mine"/> picks, read for its event rather than
+    /// its id. Written as a second constant rather than by joining through
+    /// <see cref="Mine"/> so that the announcements query has no application id
+    /// in it at all — it does not need one, and a query that carries an id it
+    /// does not use is one somebody later filters by.
+    /// </remarks>
+    private const string MyEvent = """
+        SELECT event_id FROM applications.applications
+         WHERE person_id = @personId
+         ORDER BY started_at DESC
+         LIMIT 1
+        """;
+
     public async Task<ApplicantApplication?> FindForPersonAsync(
         Guid personId, CancellationToken ct = default)
     {
@@ -207,6 +224,49 @@ public sealed class PostgresApplicantPortalStore(NpgsqlDataSource dataSource)
             $"SELECT check_in_code FROM applications.applications WHERE id = ({Mine})");
         again.Parameters.AddWithValue("personId", personId);
         return await again.ExecuteScalarAsync(ct) as string;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PortalAnnouncement>> AnnouncementsForPersonAsync(
+        Guid personId, CancellationToken ct = default)
+    {
+        // The event is a subquery rather than a parameter, which is the whole
+        // access check. There is no event id in this call for an endpoint to
+        // take from a request, so reading another year's feed — or another
+        // event running alongside this one — is not a check somebody could
+        // forget to write. Somebody with no application matches no event and
+        // gets an empty list.
+        //
+        // posted_by is not selected. The applicant is being told something by
+        // the team, and which organizer typed it is a fact this screen has no
+        // use for and a person it could send them to argue with.
+        //
+        // Unbounded, unlike the audit read. The only way a row gets in here is
+        // an organizer holding announcements.post typing one during an event,
+        // so the count is tens rather than the several hundred thousand a
+        // clamp exists to protect against.
+        const string sql = $"""
+            SELECT id, body, posted_at
+              FROM applications.announcements
+             WHERE event_id = ({MyEvent})
+               AND retracted_at IS NULL
+             ORDER BY posted_at DESC, id DESC
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("personId", personId);
+
+        var announcements = new List<PortalAnnouncement>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            announcements.Add(new PortalAnnouncement(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetFieldValue<DateTimeOffset>(2)));
+        }
+
+        return announcements;
     }
 
     /// <summary>

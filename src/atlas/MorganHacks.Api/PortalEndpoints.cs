@@ -32,6 +32,15 @@ namespace MorganHacks.Api;
 /// </item>
 /// </list>
 /// <para>
+/// <see cref="Announcements"/> returns text an organizer typed, which reads
+/// like an exception to the second of those and is not one. The rule there is
+/// about a <em>rendered message</em> — one addressed to one person, whose body
+/// is a decision letter or a live sign-in link. An announcement has no
+/// recipient at all: one row is shown identically to everybody at the event,
+/// nothing merges anything into it, and it is the only thing in the system
+/// written specifically to be read by all of them.
+/// </para>
+/// <para>
 /// One route here moves an application's status, and it is the only one that
 /// ever should. <see cref="AnswerRsvp"/> takes a spot or gives it back, and it
 /// does it through <see cref="IApplicationStore.TransitionAsync"/> like every
@@ -60,6 +69,7 @@ public static class PortalEndpoints
         portal.MapPatch("/profile", SaveProfile);
         portal.MapPost("/rsvp", AnswerRsvp);
         portal.MapGet("/messages", Messages);
+        portal.MapGet("/announcements", Announcements);
         portal.MapGet("/check-in", CheckIn);
 
         return app;
@@ -390,6 +400,68 @@ public static class PortalEndpoints
                 // all — which reads as "we never wrote to you".
                 at = m.SentAt ?? m.QueuedAt,
                 delivery = DeliveryView.Describe(m.Status),
+            }),
+        });
+    }
+
+    /// <summary>
+    /// What the team has told everybody at their event, newest first.
+    /// </summary>
+    /// <remarks>
+    /// Exists because until now the only way this system could tell every
+    /// hacker anything was to mail them, and nobody sends four hundred emails
+    /// to move a session by two hours. So the correction gets shouted across a
+    /// room and half the floor never hears it.
+    /// <para>
+    /// <b>Who may read these, stated plainly: anybody signed in who holds an
+    /// application for that event, and nobody else.</b> That is enforced by
+    /// the shape of the query rather than by a check here — see
+    /// <see cref="IApplicantPortalStore.AnnouncementsForPersonAsync"/>, which
+    /// takes no event id at all and resolves it from the session's own
+    /// application. Somebody signed in with no application gets an empty list,
+    /// and last year's applicant sees last year's event.
+    /// </para>
+    /// <para>
+    /// The other half of the leak question is not this file's to enforce and
+    /// is worth saying anyway: one row is shown identically to every applicant
+    /// at the event, so a notice must never contain anything true of only one
+    /// of them. Nothing on this route personalises anything — there are no
+    /// merge fields here and no recipient — so the text comes back exactly as
+    /// an organizer typed it, which means the only way one of these leaks
+    /// something is if a person put it there.
+    /// </para>
+    /// <para>
+    /// The one route in this file that returns words an organizer wrote rather
+    /// than words the codebase chose. Everywhere else the API sends the
+    /// sentence and the portal renders it, precisely so a screen cannot invent
+    /// its own mapping; here the sentence <em>is</em> the data, and the rule it
+    /// replaces that with is that the portal never edits it.
+    /// </para>
+    /// <para>
+    /// Answers 200 with an empty list for somebody with no application, like
+    /// every other read here. They are signed in and this is their portal.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> Announcements(
+        HttpContext http, IApplicantPortalStore store, CancellationToken ct)
+    {
+        var posted = await store.AnnouncementsForPersonAsync(http.PersonId(), ct);
+
+        return Results.Ok(new
+        {
+            announcements = posted.Select(a => new
+            {
+                id = a.Id,
+
+                // The organizer's words, unchanged. Nothing is truncated or
+                // reformatted on the way out: a notice cut off mid-sentence by
+                // this layer would be a schedule change nobody could act on.
+                body = a.Body,
+
+                // An instant, rendered by the portal. Same rule as the RSVP
+                // deadline: the zone is a display decision and this side does
+                // not know the reader.
+                at = a.PostedAt,
             }),
         });
     }
