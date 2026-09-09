@@ -82,6 +82,28 @@ public static class Events
     public const string RsvpAnswered = "application.rsvp_answered";
 
     /// <summary>
+    /// An applicant closed their own application.
+    /// </summary>
+    /// <remarks>
+    /// Its own name rather than either of the two above it, because it is
+    /// watched for a third thing. <see cref="ApplicationStatusChanged"/> alerts
+    /// on volume, which reads as a script; <see cref="RsvpAnswered"/> is
+    /// watched for its absence in the days after decisions go out. This one
+    /// arrives in ones and twos all year and means somebody's plans changed —
+    /// but a cluster of them within an hour of a send almost always means the
+    /// mail said something it should not have, and that is a signal only
+    /// visible if withdrawals are not buried in the same count as everything
+    /// else moving.
+    /// <para>
+    /// Carries the applicant's person id and the two statuses. Never a reason:
+    /// this portal does not ask for one, and if it ever does, the answer will
+    /// be a sentence somebody wrote about their own life and it belongs on the
+    /// history row behind a permission rather than in a log.
+    /// </para>
+    /// </remarks>
+    public const string ApplicationWithdrawn = "application.withdrawn";
+
+    /// <summary>
     /// A resume was accepted and written to the object store.
     /// </summary>
     /// <remarks>
