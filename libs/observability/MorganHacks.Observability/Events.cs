@@ -82,6 +82,28 @@ public static class Events
     public const string RsvpAnswered = "application.rsvp_answered";
 
     /// <summary>
+    /// An applicant closed their own application.
+    /// </summary>
+    /// <remarks>
+    /// Its own name rather than either of the two above it, because it is
+    /// watched for a third thing. <see cref="ApplicationStatusChanged"/> alerts
+    /// on volume, which reads as a script; <see cref="RsvpAnswered"/> is
+    /// watched for its absence in the days after decisions go out. This one
+    /// arrives in ones and twos all year and means somebody's plans changed —
+    /// but a cluster of them within an hour of a send almost always means the
+    /// mail said something it should not have, and that is a signal only
+    /// visible if withdrawals are not buried in the same count as everything
+    /// else moving.
+    /// <para>
+    /// Carries the applicant's person id and the two statuses. Never a reason:
+    /// this portal does not ask for one, and if it ever does, the answer will
+    /// be a sentence somebody wrote about their own life and it belongs on the
+    /// history row behind a permission rather than in a log.
+    /// </para>
+    /// </remarks>
+    public const string ApplicationWithdrawn = "application.withdrawn";
+
+    /// <summary>
     /// A resume was accepted and written to the object store.
     /// </summary>
     /// <remarks>
@@ -96,6 +118,28 @@ public static class Events
     /// </para>
     /// </remarks>
     public const string ResumeStored = "resume.stored";
+
+    /// <summary>
+    /// An applicant replaced the resume on their own application, from the
+    /// portal.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ResumeStored"/> even though both end with bytes
+    /// in the same container, because they are watched for opposite things.
+    /// <see cref="ResumeStored"/> is read against
+    /// <see cref="ApplicationSubmitted"/> — uploads without submissions mean
+    /// resumes failing to attach. This one has no submission to sit beside; it
+    /// arrives weeks later, one at a time, and a burst of it is the interesting
+    /// signal rather than the ordinary one. Folding the two together would make
+    /// four hundred hackers refreshing their CVs before the event look exactly
+    /// like the alarm.
+    /// <para>
+    /// Carries the person id and the size, like everything else the portal
+    /// logs. Never the filename and never the key: people name these after
+    /// themselves, and the key is on <see cref="Redaction.SensitiveKeys"/>.
+    /// </para>
+    /// </remarks>
+    public const string ResumeReplaced = "resume.replaced";
 
     /// <summary>
     /// A check-in code was presented at the door.
@@ -265,4 +309,34 @@ public static class Events
     /// which the row itself already holds.
     /// </remarks>
     public const string EventUpdated = "event.updated";
+
+    /// <summary>
+    /// A notice went up in front of every hacker at an event.
+    /// </summary>
+    /// <remarks>
+    /// Worth watching for the same reason <c>campaign.queued</c> is, one step
+    /// down: several hundred people are about to read something, and the
+    /// difference is only that this one can be taken back. A burst of these in
+    /// a few minutes during the weekend is somebody working out how the
+    /// console behaves in front of a live audience, which is a thing to notice
+    /// while it is happening rather than afterwards.
+    /// <para>
+    /// Carries the announcement id, the event and who posted it. Never the
+    /// body: the row holds the wording, and a log copy of it is a second place
+    /// somebody would have to correct.
+    /// </para>
+    /// </remarks>
+    public const string AnnouncementPosted = "announcement.posted";
+
+    /// <summary>
+    /// A notice was taken back down.
+    /// </summary>
+    /// <remarks>
+    /// Its own event rather than a field on the one above, because the
+    /// question it answers is asked afterwards and by somebody upset: a hacker
+    /// says they were told judging was at two and the schedule says four. The
+    /// row records who retracted it and when, and this line is what puts that
+    /// in the same stream as everything else that happened that afternoon.
+    /// </remarks>
+    public const string AnnouncementRetracted = "announcement.retracted";
 }

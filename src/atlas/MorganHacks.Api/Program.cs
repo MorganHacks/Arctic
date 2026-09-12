@@ -137,6 +137,13 @@ builder.Services.AddSingleton<IApplicationStore, PostgresApplicationStore>();
 // and it must not grow a method that returns anything more than a name.
 builder.Services.AddSingleton<ICheckInStore, PostgresCheckInStore>();
 
+// The organizers' side of the portal's announcements screen. Separate from
+// IApplicantPortalStore for the sharpest version of the reason that one is
+// separate from IApplicationStore: everything on this interface is scoped by
+// an event id the caller names, and everything on that one is scoped by the
+// session's person id and cannot be pointed anywhere.
+builder.Services.AddSingleton<IAnnouncementStore, PostgresAnnouncementStore>();
+
 // And the registration team's read side of the same table, plus notes.
 // Separate from the store above because that one owns the lifecycle: there is
 // one way to change a status and this is deliberately not it.
@@ -308,6 +315,7 @@ app.MapAuth();
 app.MapEvents();
 app.MapForms();
 app.MapPortal();
+app.MapAnnouncements();
 app.MapCheckIn();
 app.MapResumes();
 app.MapPeopleAdmin();

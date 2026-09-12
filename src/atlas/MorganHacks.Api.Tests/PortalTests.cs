@@ -575,6 +575,43 @@ public class PortalTests(IdentityDatabase db)
     }
 
     /// <summary>
+    /// The screen does not ask for something the endpoint would refuse.
+    /// </summary>
+    /// <remarks>
+    /// The same application as the test above, read rather than written. It
+    /// answered a confirm with "the window to confirm has closed" while the
+    /// label over the button still said to confirm by a day that had already
+    /// gone — one response contradicting itself, and the half an applicant
+    /// believes is the half that sounds like an instruction.
+    /// </remarks>
+    [Fact]
+    public async Task A_closed_window_does_not_invite_a_confirmation()
+    {
+        var person = await db.AddPersonAsync(Unique("toolate"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-7));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddMinutes(-1));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        var body = await Read("/portal/me", await SignIn(person));
+
+        Assert.DoesNotContain("confirm by", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Confirmation deadline passed", body);
+
+        // And it still agrees with the refusal a confirm would get, which is
+        // the sentence that was right all along.
+        Assert.Contains("window to confirm has closed", body);
+        Assert.Contains("\"open\":false", body.Replace(" ", string.Empty));
+
+        // Nothing was written to say so. The row is still accepted until the
+        // hourly job decides otherwise; this is a screen reading a date, not a
+        // second place that expires people.
+        Assert.Equal("accepted", (await RowOf(application)).Status);
+    }
+
+    /// <summary>
     /// No deadline set is not a closed deadline.
     /// </summary>
     /// <remarks>
@@ -794,6 +831,332 @@ public class PortalTests(IdentityDatabase db)
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // ------------------------------------------------------------- withdraw ---
+
+    /// <summary>
+    /// Somebody still waiting on a decision can close their own application.
+    /// </summary>
+    /// <remarks>
+    /// The gap this feature fills, in one test. An RSVP can only be answered
+    /// by somebody who was offered a spot; everybody before that point — most
+    /// of the list, for most of the season — had no way to tell us they were
+    /// out, and every one of them stayed in the count and in the mail.
+    /// </remarks>
+    [Fact]
+    public async Task An_applicant_waiting_on_a_decision_can_withdraw()
+    {
+        var person = await db.AddPersonAsync(Unique("leaving"));
+        var eventId = await AddEventAsync();
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, ApplicationStatus.UnderReview);
+
+        var response = await Client().SendAsync(
+            Post("/portal/withdraw", await SignIn(person), new { }));
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("withdrawn", (await RowOf(application)).Status);
+    }
+
+    /// <summary>
+    /// So can somebody who already said they were coming.
+    /// </summary>
+    /// <remarks>
+    /// The expensive case, and the reason this is worth building rather than
+    /// leaving to email. A confirmed applicant who goes quiet is a seat the
+    /// waitlist never gets, a meal ordered for an empty chair and a shirt in
+    /// the wrong size — and until this route existed, telling us was something
+    /// only an organizer could act on.
+    /// </remarks>
+    [Fact]
+    public async Task A_confirmed_applicant_can_withdraw_and_free_their_seat()
+    {
+        var person = await db.AddPersonAsync(Unique("cannot-come"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, ApplicationStatus.Confirmed);
+
+        var response = await Client().SendAsync(
+            Post("/portal/withdraw", await SignIn(person), new { }));
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("withdrawn", (await RowOf(application)).Status);
+    }
+
+    /// <summary>
+    /// Withdrawing from a status the lifecycle closes is refused, and the
+    /// refusal is a sentence.
+    /// </summary>
+    /// <remarks>
+    /// The list is every status <see cref="StatusTransition"/> allows nothing
+    /// out of, plus <c>expired</c>, which allows only an organizer's
+    /// reinstatement. The assertion worth making is not the status code: it is
+    /// that somebody who just pressed a button is told something they can act
+    /// on, because "409" on a screen is what generates the email this portal
+    /// exists to prevent.
+    /// </remarks>
+    [Theory]
+    [InlineData(ApplicationStatus.Rejected)]
+    [InlineData(ApplicationStatus.Declined)]
+    [InlineData(ApplicationStatus.Expired)]
+    [InlineData(ApplicationStatus.CheckedIn)]
+    public async Task Withdrawing_from_a_closed_application_is_refused_with_a_reason(
+        ApplicationStatus status)
+    {
+        var person = await db.AddPersonAsync(Unique("closed"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, status);
+
+        var cookie = await SignIn(person);
+        var response = await Client().SendAsync(Post("/portal/withdraw", cookie, new { }));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        // A whole sentence, not a code and not an empty string. Read out of
+        // the body rather than compared to a constant, so the wording stays
+        // the team's to change without coming back here.
+        var error = ErrorIn(body);
+        Assert.EndsWith(".", error);
+        Assert.True(error.Length > 20, $"The refusal was not a sentence: '{error}'");
+
+        // And it is the sentence the screen is already showing, rather than
+        // the handler's last-resort fallback. The two come from one rule on
+        // purpose: a refusal that says only "that did not work" is the state
+        // that generates the email, and a page that offered the button anyway
+        // is how somebody arrives at it.
+        Assert.Contains(error, await Read("/portal/me", cookie));
+
+        Assert.Equal(status.ToWire(), (await RowOf(application)).Status);
+    }
+
+    /// <summary>
+    /// The trail says the applicant did it, not nobody.
+    /// </summary>
+    /// <remarks>
+    /// The reason this endpoint goes through <c>TransitionAsync</c> rather
+    /// than writing the column, and it matters more here than anywhere: a
+    /// withdrawal is the one status change with no organizer anywhere near it,
+    /// so a null <c>actor_id</c> would leave the trail saying a row was fixed
+    /// by hand. Once written that cannot be told apart from one, ever.
+    /// </remarks>
+    [Fact]
+    public async Task The_audit_trail_names_the_applicant_who_withdrew()
+    {
+        var person = await db.AddPersonAsync(Unique("audited-exit"));
+        var eventId = await AddEventAsync();
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, ApplicationStatus.Submitted);
+
+        (await Client().SendAsync(
+            Post("/portal/withdraw", await SignIn(person), new { })))
+            .EnsureSuccessStatusCode();
+
+        var (from, actor) = await LastHistoryRow(application);
+
+        Assert.Equal("submitted", from);
+        Assert.Equal(person, actor);
+    }
+
+    /// <summary>
+    /// Asking twice is not an error, and does not happen twice.
+    /// </summary>
+    /// <remarks>
+    /// A double submit, a retried request after a dropped response and a back
+    /// button all arrive looking exactly like this. Answering the second one
+    /// with a refusal would tell somebody their withdrawal failed at the
+    /// moment it did not — and the trail has to keep saying they withdrew
+    /// once, because a second row is a second thing they did.
+    /// </remarks>
+    [Fact]
+    public async Task Withdrawing_twice_is_not_an_error_and_is_recorded_once()
+    {
+        var person = await db.AddPersonAsync(Unique("twice"));
+        var eventId = await AddEventAsync();
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, ApplicationStatus.Submitted);
+
+        var cookie = await SignIn(person);
+
+        (await Client().SendAsync(Post("/portal/withdraw", cookie, new { })))
+            .EnsureSuccessStatusCode();
+        (await Client().SendAsync(Post("/portal/withdraw", cookie, new { })))
+            .EnsureSuccessStatusCode();
+
+        Assert.Equal("withdrawn", (await RowOf(application)).Status);
+        Assert.Equal(1, await HistoryCountInto(application, ApplicationStatus.Withdrawn));
+    }
+
+    /// <summary>
+    /// A decision nobody has been told cannot be withdrawn, or inferred from
+    /// being refused.
+    /// </summary>
+    /// <remarks>
+    /// The subtle one, and the reason this endpoint asks about the
+    /// announcement at all. The lifecycle allows an accepted or waitlisted
+    /// application to be withdrawn and allows a rejected one nothing — so a
+    /// route that asked only the table would hand two of the three decided
+    /// applicants a working button and refuse the third, days before the team
+    /// meant to say anything. Pressing it would be how they found out.
+    /// </remarks>
+    [Fact]
+    public async Task An_unannounced_decision_cannot_be_withdrawn_or_inferred()
+    {
+        var eventId = await AddEventAsync();
+        var bodies = new List<string>();
+
+        foreach (var status in new[]
+                 {
+                     ApplicationStatus.Accepted, ApplicationStatus.Rejected,
+                     ApplicationStatus.Waitlisted,
+                 })
+        {
+            var person = await db.AddPersonAsync(Unique("undisclosed"));
+            var application = await AddApplicationAsync(
+                eventId, person, ApplicationStatus.Incomplete);
+            await Decide(application, status);
+
+            var cookie = await SignIn(person);
+            var refusal = await Client().SendAsync(Post("/portal/withdraw", cookie, new { }));
+
+            Assert.Equal(HttpStatusCode.Conflict, refusal.StatusCode);
+            Assert.Equal(status.ToWire(), (await RowOf(application)).Status);
+
+            bodies.Add(await refusal.Content.ReadAsStringAsync());
+
+            // And the screen agrees with the refusal it would get, in the same
+            // words. A button offered here is the announcement.
+            var page = await Read("/portal/me", cookie);
+            Assert.Contains(ErrorIn(bodies[^1]), page);
+        }
+
+        // Word for word across all three, or the refusal is the decision.
+        Assert.Single(bodies.Distinct());
+    }
+
+    /// <summary>
+    /// Once decisions are out, the same three behave differently — and that is
+    /// the lifecycle talking, not this file.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the test above. An accepted applicant who cannot come
+    /// is exactly the person this feature is for, and gating on the
+    /// announcement would be worthless if it never lifted.
+    /// </remarks>
+    [Fact]
+    public async Task An_announced_acceptance_can_be_withdrawn()
+    {
+        var person = await db.AddPersonAsync(Unique("announced-exit"));
+        var eventId = await AddEventAsync(
+            decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete,
+            rsvpDeadline: DateTimeOffset.UtcNow.AddDays(7));
+        await Decide(application, ApplicationStatus.Accepted);
+
+        (await Client().SendAsync(
+            Post("/portal/withdraw", await SignIn(person), new { })))
+            .EnsureSuccessStatusCode();
+
+        Assert.Equal("withdrawn", (await RowOf(application)).Status);
+    }
+
+    /// <summary>
+    /// Nobody can withdraw for somebody else.
+    /// </summary>
+    /// <remarks>
+    /// The route takes no body at all, so this sends one anyway — the failure
+    /// being a handler that grew a way to accept an id and a check somebody
+    /// has to remember to write beside it. A person with no application of
+    /// their own is refused for that reason and no other, and the row they
+    /// named keeps both its status and its trail.
+    /// </remarks>
+    [Fact]
+    public async Task An_applicant_cannot_withdraw_another_applicants_application()
+    {
+        var theirs = await db.AddPersonAsync(Unique("theirs-exit"));
+        var eventId = await AddEventAsync();
+        var untouched = await AddApplicationAsync(
+            eventId, theirs, ApplicationStatus.Incomplete);
+        await Decide(untouched, ApplicationStatus.Submitted);
+
+        var nosy = await db.AddPersonAsync(Unique("nosy-exit"));
+
+        var response = await Client().SendAsync(Post(
+            "/portal/withdraw", await SignIn(nosy),
+            new { applicationId = untouched, personId = theirs }));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("submitted", (await RowOf(untouched)).Status);
+        Assert.Equal(0, await HistoryActorCount(untouched, nosy));
+    }
+
+    /// <summary>
+    /// Afterwards, every screen says the same thing.
+    /// </summary>
+    /// <remarks>
+    /// A withdrawal closes three things at once — the status line, the RSVP
+    /// panel and the profile form — and all three are read from one projection
+    /// so they cannot disagree. The status word is checked because the
+    /// applicant reads it, and the internal spelling is checked against the
+    /// whole body because this route grew a new field and that is exactly how
+    /// an enum reaches a screen.
+    /// </remarks>
+    [Fact]
+    public async Task The_portal_reads_as_closed_once_the_application_is_withdrawn()
+    {
+        var person = await db.AddPersonAsync(Unique("after"));
+        var eventId = await AddEventAsync();
+        var application = await AddApplicationAsync(
+            eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, ApplicationStatus.Submitted);
+
+        var cookie = await SignIn(person);
+        (await Client().SendAsync(Post("/portal/withdraw", cookie, new { })))
+            .EnsureSuccessStatusCode();
+
+        var body = (await Read("/portal/me", cookie)).Replace(" ", string.Empty);
+
+        Assert.Contains("\"statusLabel\":\"Withdrawn\"", body);
+        Assert.Contains("\"open\":false", body);
+        Assert.Contains("\"profileEditable\":false", body);
+        Assert.DoesNotContain("\"open\":true", body);
+
+        foreach (var wire in Enum.GetValues<ApplicationStatus>().Select(s => s.ToWire()))
+        {
+            Assert.DoesNotContain(wire, body, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Withdrawing_without_a_session_says_sign_in()
+    {
+        // An applicant holds no permissions, so the only thing that can be
+        // missing is a session and 403 would be the wrong answer.
+        var response = await Client().PostAsJsonAsync("/portal/withdraw", new { });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Withdrawing_with_no_application_says_so_rather_than_failing()
+    {
+        var person = await db.AddPersonAsync(Unique("nothing-to-close"));
+
+        var response = await Client().SendAsync(
+            Post("/portal/withdraw", await SignIn(person), new { }));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("not started an application", await response.Content.ReadAsStringAsync());
+    }
+
     // ------------------------------------------------------------- messages ---
 
     [Fact]
@@ -919,6 +1282,36 @@ public class PortalTests(IdentityDatabase db)
         cmd.Parameters.AddWithValue("actor", actorId);
         return (int)(long)(await cmd.ExecuteScalarAsync())!;
     }
+
+    /// <summary>
+    /// How many times this application has been moved into a status.
+    /// </summary>
+    /// <remarks>
+    /// One is the assertion after a request that arrived twice: the row has to
+    /// end up where it was asked to go, and the trail has to say that happened
+    /// once, because a second row is a second thing the applicant did.
+    /// </remarks>
+    private async Task<int> HistoryCountInto(Guid applicationId, ApplicationStatus to)
+    {
+        await using var cmd = db.DataSource.CreateCommand("""
+            SELECT count(*) FROM applications.status_history
+             WHERE application_id = @id AND to_status = @to
+            """);
+        cmd.Parameters.AddWithValue("id", applicationId);
+        cmd.Parameters.AddWithValue("to", to.ToWire());
+        return (int)(long)(await cmd.ExecuteScalarAsync())!;
+    }
+
+    /// <summary>The sentence a refusal carried.</summary>
+    /// <remarks>
+    /// Read out of the body rather than compared against a constant copied
+    /// over here. What these tests are about is that a refusal explains
+    /// itself; the wording is applicant-facing copy the team signs off, and a
+    /// test that pinned it would make changing a word a change to this file.
+    /// </remarks>
+    private static string ErrorIn(string body) =>
+        System.Text.Json.JsonDocument.Parse(body).RootElement
+            .GetProperty("error").GetString() ?? string.Empty;
 
     private async Task AnnounceDecisions(Guid eventId)
     {

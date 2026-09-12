@@ -166,6 +166,69 @@ public class ApplicantViewTests
     }
 
     [Fact]
+    public void A_closed_window_does_not_invite_a_confirmation()
+    {
+        // Letting a deadline lapse is the hourly job's to record, so between
+        // the deadline and the next run the row still says accepted while the
+        // offer has gone. Read off the stored status alone, the label asked for
+        // a confirmation the same screen was reporting as closed, and named a
+        // day already past to ask for it.
+        var text = ApplicantView.Describe(
+            ApplicationStatus.Accepted,
+            decisionsAnnounced: true,
+            rsvpDeadline: new DateTimeOffset(2027, 1, 16, 4, 59, 0, TimeSpan.Zero),
+            now: new DateTimeOffset(2027, 1, 20, 0, 0, 0, TimeSpan.Zero));
+
+        Assert.DoesNotContain("confirm by", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("January", text);
+    }
+
+    [Fact]
+    public void A_missed_deadline_reads_the_same_before_and_after_the_job_notices()
+    {
+        // The judgement Rsvp.WhyClosed already makes for the sentence beside
+        // these two: expired and accepted-but-too-late leave the applicant in
+        // the same position, so they are told the same thing. An applicant
+        // whose screen changed wording at the moment a background job ran
+        // would be watching our bookkeeping rather than their own application.
+        var deadline = new DateTimeOffset(2027, 1, 16, 4, 59, 0, TimeSpan.Zero);
+        var after = new DateTimeOffset(2027, 1, 20, 0, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(
+            ApplicantView.Describe(ApplicationStatus.Expired, decisionsAnnounced: true),
+            ApplicantView.Describe(
+                ApplicationStatus.Accepted,
+                decisionsAnnounced: true,
+                rsvpDeadline: deadline,
+                now: after));
+
+        // Both sentences, because they are printed one under the other and a
+        // fix applied to only one of them leaves the pair disagreeing.
+        Assert.Equal(
+            ApplicantView.NextStep(ApplicationStatus.Expired, decisionsAnnounced: true),
+            ApplicantView.NextStep(
+                ApplicationStatus.Accepted,
+                decisionsAnnounced: true,
+                rsvpDeadline: deadline,
+                now: after));
+    }
+
+    [Fact]
+    public void A_deadline_still_to_come_is_still_shown()
+    {
+        // The other half of the rule. A date is what an accepted applicant
+        // needs most, and a check that read every deadline as gone would take
+        // it off the screen of everybody who still has time to act on it.
+        var text = ApplicantView.Describe(
+            ApplicationStatus.Accepted,
+            decisionsAnnounced: true,
+            rsvpDeadline: new DateTimeOffset(2027, 1, 16, 4, 59, 0, TimeSpan.Zero),
+            now: new DateTimeOffset(2027, 1, 10, 0, 0, 0, TimeSpan.Zero));
+
+        Assert.Contains("January 15", text);
+    }
+
+    [Fact]
     public void A_deadline_in_daylight_saving_is_read_on_the_other_offset()
     {
         // The project has been caught by this once already: a September

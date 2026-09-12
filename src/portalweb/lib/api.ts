@@ -76,6 +76,7 @@ export type Application = {
   nextStep: string;
   receivedAt: string | null;
   rsvp: Rsvp;
+  withdraw: Withdrawal;
   profileEditable: boolean;
   profileLockedReason: string | null;
   profile: Profile;
@@ -97,6 +98,25 @@ export type Application = {
 export type Rsvp = {
   open: boolean;
   deadline: string | null;
+  closedReason: string | null;
+};
+
+/**
+ * Whether the applicant may close their own application, and why not if they
+ * may not.
+ *
+ * The same shape as `Rsvp` and for the same reason: `open` is the API's answer
+ * to the question it asks itself before accepting the write, so the screen
+ * cannot offer a button the endpoint would refuse — nor withhold one it would
+ * accept, which is the failure nobody notices.
+ *
+ * `closedReason` is a whole sentence, chosen on the API side from the status
+ * this app is never shown. It is rendered as it came: a second copy of that
+ * reasoning over here would be the one that drifts, and it would drift towards
+ * naming a decision the applicant has not been told yet.
+ */
+export type Withdrawal = {
+  open: boolean;
   closedReason: string | null;
 };
 
@@ -138,6 +158,84 @@ export type CheckInPass = {
   qr: QrSymbol | null;
   checkedIn: boolean;
 };
+
+/**
+ * One notice the team posted to everybody at the event.
+ *
+ * The one thing the API sends this app that is neither a sentence the codebase
+ * chose nor a field to render — it is what an organizer typed, and it is shown
+ * as it was typed. Everywhere else in this file the rule is that the API sends
+ * the words so a screen cannot invent its own mapping; here the words are the
+ * data, and the rule that replaces it is that this side never edits them. No
+ * truncation, no "read more": a notice cut off mid-sentence is a schedule
+ * change nobody can act on.
+ *
+ * There is no author on this type and no retraction state, because there is
+ * neither on the wire. A notice is the team speaking rather than one named
+ * organizer, and a retracted one simply is not in the response.
+ */
+export type Announcement = {
+  id: string;
+  body: string;
+  at: string;
+};
+
+/**
+ * The resume we are holding, as the applicant is allowed to see it.
+ *
+ * A name, a size and a date, and deliberately no way to fetch the bytes. The
+ * organizers' side of the API mints a signed link because a reviewer has to
+ * read a file they have never seen; the applicant is the person who uploaded
+ * it and already has it. There is no storage key here either — see
+ * `Redaction.SensitiveKeys` on the API side, which lists it as the one string
+ * that turns "somebody has a CV" into "here it is".
+ */
+export type ResumeOnFile = {
+  filename: string;
+  size: number | null;
+  uploadedAt: string | null;
+};
+
+/**
+ * The resume screen: what is on file, and whether it may be changed.
+ *
+ * `started` and `editable` are both false for somebody who has not applied
+ * yet, and the two need different sentences — so the API says which it is
+ * rather than leaving this side to infer it from `lockedReason` being null.
+ *
+ * `maxBytes` and `accepts` come from the API because the API enforces them. A
+ * page carrying its own copy of those numbers is a page that eventually
+ * disagrees with the server about what will be accepted, and the person who
+ * finds out is the one whose upload was refused after five minutes.
+ */
+export type ResumeScreen = {
+  resume: ResumeOnFile | null;
+  started: boolean;
+  editable: boolean;
+  lockedReason: string | null;
+  maxBytes: number;
+  accepts: string;
+};
+
+/**
+ * What resume, if any, is on this applicant's application.
+ *
+ * Null covers every reason the call failed, like the reads above it, and the
+ * page treats all of them as "sign in again" because that is the only thing an
+ * applicant can do about any of them.
+ */
+export async function currentResume(): Promise<ResumeScreen | null> {
+  try {
+    const response = await apiFetch("/portal/resume");
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as ResumeScreen;
+  } catch {
+    return null;
+  }
+}
 
 /** One line of mail history. Subject and outcome, never the body. */
 export type Message = {
@@ -198,6 +296,32 @@ export async function messageHistory(): Promise<Message[] | null> {
 
     const { messages } = (await response.json()) as { messages: Message[] };
     return messages;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the team has posted for this applicant's event, newest first.
+ *
+ * Empty for somebody who has not applied, which is the API's answer rather
+ * than a case handled here: the feed is scoped to the event of the reader's own
+ * application, and no application means no event and therefore nothing.
+ *
+ * Null covers every reason the call failed, like the two above it, and the page
+ * treats all of them as "sign in again".
+ */
+export async function announcements(): Promise<Announcement[] | null> {
+  try {
+    const response = await apiFetch("/portal/announcements");
+    if (!response.ok) {
+      return null;
+    }
+
+    const { announcements } = (await response.json()) as {
+      announcements: Announcement[];
+    };
+    return announcements;
   } catch {
     return null;
   }

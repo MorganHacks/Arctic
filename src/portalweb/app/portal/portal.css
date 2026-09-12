@@ -393,6 +393,108 @@ button.danger:hover {
   padding: 0.7rem 0.5rem;
 }
 
+/* Withdrawing ------------------------------------------------------------- */
+
+/*
+ * The panel that closes an application.
+ *
+ * No accent edge and no colour of its own, unlike the RSVP panel above it.
+ * That one is the thing to do next; this one is the thing to do instead, and
+ * dressing it up would put weight on the one control here that cannot be
+ * undone. It is quiet, it is last, and it is findable — which is all it should
+ * be.
+ */
+.withdraw h2 {
+  margin-top: 0;
+}
+
+/*
+ * The second ask.
+ *
+ * A real <dialog> in the top layer rather than a div with a high z-index, so
+ * the focus trap, Escape and the return of focus afterwards are the browser's
+ * job rather than four event listeners that have to stay right. Everything
+ * below is only paint.
+ */
+dialog.ask {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--raised);
+  color: var(--ink);
+  padding: 1.25rem;
+  /* Phone first: nearly the full width, never wider than a readable measure. */
+  width: min(30rem, calc(100vw - 2rem));
+  animation: ask-settle 120ms ease-out;
+}
+
+dialog.ask h2 {
+  margin: 0 0 0.6rem;
+  font-size: var(--step1);
+}
+
+dialog.ask p {
+  margin: 0 0 0.8rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
+dialog.ask form {
+  margin: 0;
+}
+
+/* Same reason as the RSVP panel's: standing alone in a row of actions on a
+   phone, an unpadded text button is a 23px target next to the one that ends
+   the application. */
+dialog.ask .actions button.link {
+  padding: 0.7rem 0.5rem;
+}
+
+dialog.ask::backdrop {
+  /* Not a token: the tokens are opaque surface colours and this has to be
+     see-through in both themes. Neutral black at low alpha reads as a dimmed
+     page on either ground, which a tinted one does not. */
+  background: rgb(0 0 0 / 45%);
+  animation: ask-dim 120ms ease-out;
+}
+
+@keyframes ask-settle {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ask-dim {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * Written out again rather than left to the global rule in tokens.css.
+ *
+ * That one shortens every animation on `*`, and `*` does not match
+ * `::backdrop` — a pseudo-element with its own originating element is not
+ * selected by the universal selector. So a backdrop animation would keep
+ * running for exactly the person who asked it not to. Nothing here depends on
+ * either animation having run.
+ */
+@media (prefers-reduced-motion: reduce) {
+  dialog.ask,
+  dialog.ask::backdrop {
+    animation: none;
+  }
+}
+
 /* Messages ---------------------------------------------------------------- */
 
 .messages {
@@ -443,6 +545,54 @@ button.danger:hover {
 .pill.failed {
   color: var(--stop);
   background: var(--stop-soft);
+}
+
+/* Announcements ----------------------------------------------------------- */
+
+/*
+ * Deliberately not .messages with a different name. That list is a subject and
+ * a delivery pill, read left to right; this one is a paragraph somebody wrote,
+ * read as a paragraph, with the time underneath it rather than beside it. They
+ * look similar enough that sharing the rules would be tempting and wrong: the
+ * next change to either one would silently move the other.
+ */
+.notices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notices li {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.notices li:last-child {
+  border-bottom: none;
+}
+
+/*
+ * pre-wrap so a notice typed as two lines arrives as two lines. The portal
+ * renders no markup in these — see the page for why — so the only formatting
+ * an organizer has is the return key, and throwing it away would take that
+ * away too.
+ */
+.notices__body {
+  margin: 0 0 0.3rem;
+  white-space: pre-wrap;
+
+  /*
+   * Anything an organizer can type has to fit, including a link pasted in a
+   * hurry with no spaces in it. Without this one of those pushes the whole
+   * column wider than the phone it is being read on.
+   */
+  overflow-wrap: anywhere;
+}
+
+.notices__at {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.85rem;
 }
 
 /* The check-in code ------------------------------------------------------- */
@@ -535,6 +685,74 @@ button.danger:hover {
 
 .pass__hint {
   margin-bottom: 0;
+}
+
+/* Resume ------------------------------------------------------------------ */
+
+/*
+ * What we are holding, above the control that changes it.
+ *
+ * The order matters more than the styling. Somebody opening this page is far
+ * more often checking what we have than replacing it, so the answer to that
+ * question is the first thing on the panel and the picker sits underneath.
+ */
+.upload__held {
+  margin: 0 0 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.upload__held--none {
+  color: var(--faint);
+}
+
+/*
+ * A file input, left as a file input.
+ *
+ * Not restyled into a button with the real control hidden behind it, which is
+ * the usual treatment. The native one is the only version that works with a
+ * keyboard, a screen reader and a phone's file picker without being rebuilt,
+ * and this screen is used once by each person — it is not worth the risk of
+ * being the one control somebody cannot operate.
+ */
+.upload input[type="file"] {
+  padding: 0.5rem;
+  background: var(--sunken);
+}
+
+.upload input[type="file"]:disabled {
+  color: var(--faint);
+  cursor: progress;
+}
+
+/*
+ * How far along the upload is.
+ *
+ * A bar and a number rather than a spinner. A spinner says "something is
+ * happening"; on campus wifi what somebody needs to know is whether it is
+ * worth waiting, and only the number answers that.
+ */
+.progress {
+  margin-top: 0.75rem;
+}
+
+.progress__track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  background: var(--accent);
+
+  /* Eased, because the browser reports progress in jumps and an unanimated bar
+     reads as one that has stalled between them. */
+  transition: width 120ms linear;
 }
 
 /* Notices ----------------------------------------------------------------- */

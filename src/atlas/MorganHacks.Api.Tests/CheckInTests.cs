@@ -140,6 +140,43 @@ public class CheckInTests(IdentityDatabase db)
             pass.GetProperty("explanation").GetString());
     }
 
+    /// <summary>
+    /// A code already minted stops being shown once the spot is gone.
+    /// </summary>
+    /// <remarks>
+    /// Every one of these statuses is reachable from <c>confirmed</c>, or
+    /// leaves a code behind from a reinstatement that lapsed, so the row can
+    /// hold a code the person is no longer entitled to see. The screen was
+    /// printing it beside its own sentence saying the code appears once a spot
+    /// is confirmed, which is the whole complaint: not that they could get in,
+    /// because the desk checks the status on every scan, but that the page was
+    /// telling them two opposite things at once.
+    /// </remarks>
+    [Theory]
+    [InlineData(ApplicationStatus.Declined)]
+    [InlineData(ApplicationStatus.Withdrawn)]
+    [InlineData(ApplicationStatus.Rejected)]
+    [InlineData(ApplicationStatus.Expired)]
+    public async Task A_code_is_not_shown_to_somebody_without_a_spot(ApplicationStatus status)
+    {
+        var hacker = await Hacker(status);
+
+        // Planted, because this is the case where one already exists — a
+        // status that never had a code has nothing to withhold and would pass
+        // this test without the rule being there at all.
+        await PlantCode(hacker.ApplicationId);
+
+        var pass = await Pass(hacker.Cookie);
+
+        Assert.Equal(JsonValueKind.Null, pass.GetProperty("code").ValueKind);
+        Assert.Equal(JsonValueKind.Null, pass.GetProperty("display").ValueKind);
+        Assert.Equal(JsonValueKind.Null, pass.GetProperty("qr").ValueKind);
+
+        // And the sentence it used to contradict.
+        Assert.Contains("once you have confirmed a spot",
+            pass.GetProperty("explanation").GetString());
+    }
+
     [Fact]
     public async Task The_code_never_leaves_the_person_it_belongs_to()
     {

@@ -31,11 +31,16 @@ public static class ApplicantView
     /// </param>
     /// <param name="rsvpDeadline">Shown to an accepted applicant, who needs the date.</param>
     /// <param name="eventStartsAt">Shown to a confirmed applicant.</param>
+    /// <param name="now">
+    /// The moment being judged, so a test can pick one. Null is the current
+    /// instant, which is what every caller outside a test means by it.
+    /// </param>
     public static string Describe(
         ApplicationStatus status,
         bool decisionsAnnounced = false,
         DateTimeOffset? rsvpDeadline = null,
-        DateTimeOffset? eventStartsAt = null)
+        DateTimeOffset? eventStartsAt = null,
+        DateTimeOffset? now = null)
     {
         // Before the announcement, a decision reads as no decision. Confirmed,
         // declined and expired are not gated: reaching any of them means the
@@ -47,7 +52,7 @@ public static class ApplicantView
             return "Application received";
         }
 
-        return status switch
+        return Reads(status, rsvpDeadline, now) switch
         {
             ApplicationStatus.Incomplete => "Application started",
             ApplicationStatus.Submitted or ApplicationStatus.UnderReview => "Application received",
@@ -84,11 +89,16 @@ public static class ApplicantView
     /// date we have not published.
     /// </para>
     /// </remarks>
+    /// <param name="now">
+    /// The moment being judged, as in <see cref="Describe"/>. Both sentences
+    /// take one so a screen cannot be built out of two different instants.
+    /// </param>
     public static string NextStep(
         ApplicationStatus status,
         bool decisionsAnnounced = false,
         DateTimeOffset? rsvpDeadline = null,
-        DateTimeOffset? eventStartsAt = null)
+        DateTimeOffset? eventStartsAt = null,
+        DateTimeOffset? now = null)
     {
         if (!decisionsAnnounced && status is ApplicationStatus.Accepted
             or ApplicationStatus.Rejected or ApplicationStatus.Waitlisted)
@@ -96,7 +106,7 @@ public static class ApplicantView
             return Waiting;
         }
 
-        return status switch
+        return Reads(status, rsvpDeadline, now) switch
         {
             ApplicationStatus.Incomplete =>
                 "Finish your application to be considered. You can come back to "
@@ -125,6 +135,35 @@ public static class ApplicantView
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
         };
     }
+
+    /// <summary>
+    /// The status these sentences are written for, which is not always the one
+    /// stored.
+    /// </summary>
+    /// <remarks>
+    /// An accepted application whose deadline has gone reads as an expired
+    /// one, which is the judgement <see cref="Rsvp.WhyClosed"/> already makes
+    /// about the sentence printed beside these. Letting a deadline lapse is
+    /// the hourly job's to record, so between the deadline passing and the
+    /// next run the row still says accepted while the offer is no longer there
+    /// to take — and a label read off the stored status alone asked for a
+    /// confirmation the same response was reporting as closed, naming a day
+    /// already gone to ask for it.
+    /// <para>
+    /// No new wording comes of this. Somebody who missed the deadline is in
+    /// the same position whether or not the job has noticed yet, so they are
+    /// told the same thing, in the sentences already written for expiry. Both
+    /// <see cref="Describe"/> and <see cref="NextStep"/> read the status
+    /// through here because they are printed one under the other, and a fix
+    /// applied to only one of them leaves the pair disagreeing.
+    /// </para>
+    /// </remarks>
+    private static ApplicationStatus Reads(
+        ApplicationStatus status, DateTimeOffset? rsvpDeadline, DateTimeOffset? now) =>
+        status is ApplicationStatus.Accepted
+        && Rsvp.DeadlineHasPassed(rsvpDeadline, now ?? DateTimeOffset.UtcNow)
+            ? ApplicationStatus.Expired
+            : status;
 
     /// <summary>
     /// Said to everybody whose application is in, decided or not.

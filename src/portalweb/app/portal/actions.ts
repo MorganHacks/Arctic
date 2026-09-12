@@ -197,6 +197,56 @@ export async function answerRsvp(
 }
 
 /**
+ * Closes the application, because the applicant said so twice.
+ *
+ * Sends nothing. The API works out whose application this is from the session
+ * and takes no field that could name another one, so there is nothing for this
+ * action to forward and nothing it could be tricked into forwarding wrong.
+ *
+ * The second ask happens on the screen rather than as a word in this body. A
+ * server cannot tell a deliberate press from a repeated one, so a token echoed
+ * back here would look like a confirmation and be nothing of the kind; what
+ * actually protects somebody is the dialog they had to read, and that lives
+ * where the person is.
+ *
+ * Refusals come back as the API's own sentence for the same reason the profile
+ * form shows the API's: this app is never told the status, so it could not
+ * write a better one, and a fallback written here would be the copy nobody
+ * signed off.
+ */
+export async function withdrawApplication(
+  _previous: FormState,
+  _form: FormData,
+): Promise<FormState> {
+  let response: Response;
+
+  try {
+    response = await apiFetch("/portal/withdraw", { method: "POST" });
+  } catch {
+    return { error: "We could not do that just now. Try again in a minute." };
+  }
+
+  if (response.status === 401) {
+    redirect("/portal/sign-in");
+  }
+
+  if (!response.ok) {
+    const { error } = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    return { error: error ?? "That could not be saved." };
+  }
+
+  // One withdrawal closes the status line, the RSVP panel, the profile form
+  // and this panel, so every screen that reads the application has to be
+  // redrawn. Check-in is left out deliberately: it renders from its own route,
+  // which reads the same status and will answer for itself.
+  revalidatePath("/portal");
+  revalidatePath("/portal/profile");
+  return { done: true };
+}
+
+/**
  * Ends the session, here and in the database.
  *
  * The API revokes the row rather than only clearing the cookie, so signing out
