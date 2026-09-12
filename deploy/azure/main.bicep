@@ -94,6 +94,9 @@ weekend; leave it at zero the rest of the year.
 @maxValue(3)
 param warmReplicas int = 0
 
+@description('Whether the applicant portal is served. Empty leaves features.json to decide.')
+param enableHackerPortalFeature string = ''
+
 @description('''
 False on the first pass. The registry has to exist and hold the images before
 the migration job can be created — Container Apps validates that the image is
@@ -220,6 +223,7 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     publicBaseUrl: publicBaseUrl
     formsBaseUrl: formsBaseUrl
     warmReplicas: warmReplicas
+    enableHackerPortalFeature: enableHackerPortalFeature
     proxySecret: proxySecret
     pullIdentityId: pullIdentity.outputs.id
     pullIdentityClientId: pullIdentity.outputs.clientId

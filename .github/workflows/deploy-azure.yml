@@ -131,6 +131,9 @@ jobs:
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
           FORMS_BASE_URL: ${{ vars.FORMS_BASE_URL }}
           WARM_REPLICAS: ${{ vars.WARM_REPLICAS || '0' }}
+          # Empty on purpose when the variable is unset: features.json then
+          # decides, which is not the same as being told 'false'.
+          ENABLE_HACKER_PORTAL_FEATURE: ${{ vars.ENABLE_HACKER_PORTAL_FEATURE }}
           PROXY_SHARED_SECRET: ${{ secrets.PROXY_SHARED_SECRET }}
         run: ./deploy/azure/deploy.sh ${{ steps.target.outputs.env }}
 
@@ -148,6 +151,9 @@ jobs:
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
           FORMS_BASE_URL: ${{ vars.FORMS_BASE_URL }}
           WARM_REPLICAS: ${{ vars.WARM_REPLICAS || '0' }}
+          # Empty on purpose when the variable is unset: features.json then
+          # decides, which is not the same as being told 'false'.
+          ENABLE_HACKER_PORTAL_FEATURE: ${{ vars.ENABLE_HACKER_PORTAL_FEATURE }}
           PROXY_SHARED_SECRET: ${{ secrets.PROXY_SHARED_SECRET }}
           SKIP_PUSH: ${{ steps.target.outputs.skip_push }}
         run: ./deploy/azure/deploy.sh ${{ steps.target.outputs.env }} --apply ${{ steps.target.outputs.tag }}

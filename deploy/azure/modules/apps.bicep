@@ -116,6 +116,9 @@ limit rather than an absent one.
 @secure()
 param proxySecret string = ''
 
+@description('Whether the applicant portal is served. Empty leaves features.json to decide.')
+param enableHackerPortalFeature string = ''
+
 param tags object = {}
 
 var suffix = 'mh-${environmentName}'
@@ -225,6 +228,26 @@ var portalEnv = concat(
     { name: 'FormsBaseUrl', value: formsBaseUrl }
   ])
 
+// Feature flags, as deployment inputs rather than hand-patched env vars.
+//
+// A flag set with `az containerapp update` survives exactly until the next
+// deployment, because this template defines the container's environment and
+// anything absent from it is removed. That is not a quirk to work around: an
+// environment nobody can rebuild from the repository is one nobody can restore
+// after an outage. So a flag that needs to differ per environment comes through
+// here.
+//
+// Empty means absent, and absent means features.json decides. That three-state
+// arrangement is the same one warmReplicas needs, and for the same reason: a
+// variable that does not exist on a GitHub environment arrives as an empty
+// string, which must not be read as "off" when "off" is also a real answer
+// somebody might have chosen.
+//
+// Adding the next flag is this block again under another name.
+var featureEnv = empty(enableHackerPortalFeature) ? [] : [
+  { name: 'ENABLE_HACKER_PORTAL_FEATURE', value: enableHackerPortalFeature }
+]
+
 // Where resumes go. No key and no connection string: the account name plus the
 // identity is the whole configuration, which is the point of choosing an
 // object store in the subscription we already own. There is nothing here that
@@ -283,7 +306,7 @@ resource atlas 'Microsoft.App/containerApps@2024-03-01' = {
             // into an outage.
             { name: 'ASPNETCORE_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
             { name: 'Network__ProxySecret', value: proxySecret }
-          ], sentryEnv, googleEnv, portalEnv, resumeEnv)
+          ], sentryEnv, googleEnv, portalEnv, resumeEnv, featureEnv)
           probes: [
             {
               type: 'Liveness'
