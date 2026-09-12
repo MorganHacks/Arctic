@@ -43,6 +43,11 @@ param warmReplicas = int(empty(readEnvironmentVariable('WARM_REPLICAS', '0'))
 // ends. Empty means forwarded addresses are never believed, which is a coarser
 // rate limit rather than an absent one -- so a missing variable degrades
 // safely.
+// Whether the applicant portal is served. Empty leaves features.json to decide,
+// which is how a flag stays off everywhere until somebody turns it on for one
+// environment. Set ENABLE_HACKER_PORTAL_FEATURE on the GitHub environment.
+param enableHackerPortalFeature = readEnvironmentVariable('ENABLE_HACKER_PORTAL_FEATURE', '')
+
 param proxySecret = readEnvironmentVariable('PROXY_SHARED_SECRET', '')
 
 param deployPlatform = bool(readEnvironmentVariable('DEPLOY_PLATFORM', 'true'))
