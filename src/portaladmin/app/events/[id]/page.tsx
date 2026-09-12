@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentPerson } from "@/lib/api";
+import { Announcements } from "@/components/events/announcements";
 import { ScheduleForm } from "@/components/events/schedule";
 import { registrationState, type Registration } from "@/components/events/types";
 import { Shell } from "../../shell";
 import { listEvents } from "../api";
+import { listAnnouncements } from "../announcements";
 
 /**
  * One event's dates and capacity.
@@ -33,7 +35,14 @@ export default async function Event({
   }
 
   const { id } = await params;
-  const result = await listEvents();
+
+  // Both reads together rather than one after the other. Neither needs the
+  // other's answer, and this screen is opened during an event by somebody who
+  // is already late for the thing they are posting about.
+  const [result, notices] = await Promise.all([
+    listEvents(),
+    listAnnouncements(id),
+  ]);
 
   if (result.state === "signed-out") {
     redirect("/sign-in");
@@ -91,6 +100,18 @@ export default async function Event({
       </div>
 
       <ScheduleForm event={event} />
+
+      {/*
+        A refusal on the list is not a reason to hide the panel. The permission
+        is one somebody may plausibly lack while still administering the event,
+        and a section that vanished would leave them wondering whether
+        announcements exist at all rather than knowing they cannot post one.
+      */}
+      <Announcements
+        eventId={event.id}
+        announcements={notices.state === "ok" ? notices.announcements : []}
+        canPost={notices.state === "ok"}
+      />
     </Shell>
   );
 }
