@@ -21,6 +21,18 @@ public sealed record ApplicantApplication(
     DateTimeOffset? EventStartsAt,
     ApplicantProfile Profile);
 
+/// <summary>
+/// One notice, in the only shape an applicant ever sees one.
+/// </summary>
+/// <remarks>
+/// Deliberately narrower than <see cref="Announcement"/>. There is no
+/// <c>postedBy</c> here: the notice is the team speaking, not a named
+/// organizer, and putting a person id on it would mean the portal knew which
+/// human to be annoyed at about a schedule change. There are no retraction
+/// fields either, because a retracted notice never reaches this type at all.
+/// </remarks>
+public sealed record PortalAnnouncement(Guid Id, string Body, DateTimeOffset PostedAt);
+
 /// <summary>Why a profile write did not happen.</summary>
 public enum ProfileSave
 {
@@ -87,4 +99,36 @@ public interface IApplicantPortalStore
     /// </para>
     /// </remarks>
     Task<string?> CheckInCodeAsync(Guid personId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The live notices for the event this person is applying to, newest
+    /// first.
+    /// </summary>
+    /// <remarks>
+    /// The one read on this interface that is not about the caller's own row,
+    /// which is exactly why it is worth being explicit about who may see it.
+    /// <b>An announcement is visible to anybody signed in who holds an
+    /// application for that event, and to nobody else.</b> That is not a
+    /// policy this method trusts a caller to apply — it is the shape of the
+    /// statement. The event is not a parameter: it is resolved inside the
+    /// query from the session's own most recent application, so somebody
+    /// signed in with no application gets an empty list, and there is no id
+    /// anywhere in the call that could be pointed at another event's feed.
+    /// <para>
+    /// What follows from that is a rule for the people posting rather than for
+    /// this code, and it belongs written down next to the query that enforces
+    /// the first half: a notice is read by every applicant at the event, so it
+    /// must never carry anything true of only one of them. There is no
+    /// targeting here, no recipient column and no merge-field rendering — the
+    /// row is handed out exactly as it was typed — so the only way an
+    /// announcement leaks something is if somebody types it, and the console
+    /// that posts them is where that gets said out loud.
+    /// </para>
+    /// <para>
+    /// Retracted notices are absent rather than marked. An applicant has no
+    /// use for "this was taken down"; the correction is the notice above it.
+    /// </para>
+    /// </remarks>
+    Task<IReadOnlyList<PortalAnnouncement>> AnnouncementsForPersonAsync(
+        Guid personId, CancellationToken ct = default);
 }

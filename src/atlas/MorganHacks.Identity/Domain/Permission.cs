@@ -94,6 +94,37 @@ public readonly record struct Permission(string Value)
     /// </remarks>
     public static readonly Permission EventsManage = new("events.manage");
 
+    /// <summary>
+    /// Posting a notice to everybody in the portal, and taking one back down.
+    /// </summary>
+    /// <remarks>
+    /// Its own permission rather than a reuse of <see cref="EmailSendBroadcast"/>
+    /// or <see cref="EventsManage"/>, which are the two that already mean "you
+    /// may speak to everybody" and "you own the season".
+    /// <para>
+    /// Not <see cref="EventsManage"/>, because super admin is the only holder
+    /// and during the event weekend that is the one person least likely to be
+    /// standing on the floor when the schedule moves. Not
+    /// <see cref="EmailSendBroadcast"/> either, and that is the closer call —
+    /// the act is the same act — but a broadcast cannot be recalled once it is
+    /// approved and this is a row somebody sets a timestamp on. Gating the
+    /// cheap reversible thing behind the permission that exists because the
+    /// expensive irreversible one needs ceremony gives it a ceremony it does
+    /// not need.
+    /// </para>
+    /// <para>
+    /// One permission for posting and for retracting rather than two.
+    /// Somebody who can put a sentence in front of every hacker and cannot
+    /// take it back down is worse off than somebody who holds neither.
+    /// </para>
+    /// <para>
+    /// Held by super admin, comms and logistics — see <c>0024</c> for why the
+    /// third one is on the list. Not on the sensitive list: it moves no PII
+    /// out of the system and changes nobody's access.
+    /// </para>
+    /// </remarks>
+    public static readonly Permission AnnouncementsPost = new("announcements.post");
+
     // Email
     public static readonly Permission EmailSendTemplated = new("email.send_templated");
     public static readonly Permission EmailSendBroadcast = new("email.send_broadcast");
@@ -140,6 +171,7 @@ public readonly record struct Permission(string Value)
         ApplicationsNote,
         FormsManage,
         EventsManage,
+        AnnouncementsPost,
         EmailSendTemplated, EmailSendBroadcast, EmailManageTemplates, EmailViewStats,
         SponsorsView, SponsorsEdit, SponsorsViewFinancials,
         CheckinScan, SwagScan, CheckinViewStats,

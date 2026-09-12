@@ -287,4 +287,34 @@ public static class Events
     /// which the row itself already holds.
     /// </remarks>
     public const string EventUpdated = "event.updated";
+
+    /// <summary>
+    /// A notice went up in front of every hacker at an event.
+    /// </summary>
+    /// <remarks>
+    /// Worth watching for the same reason <c>campaign.queued</c> is, one step
+    /// down: several hundred people are about to read something, and the
+    /// difference is only that this one can be taken back. A burst of these in
+    /// a few minutes during the weekend is somebody working out how the
+    /// console behaves in front of a live audience, which is a thing to notice
+    /// while it is happening rather than afterwards.
+    /// <para>
+    /// Carries the announcement id, the event and who posted it. Never the
+    /// body: the row holds the wording, and a log copy of it is a second place
+    /// somebody would have to correct.
+    /// </para>
+    /// </remarks>
+    public const string AnnouncementPosted = "announcement.posted";
+
+    /// <summary>
+    /// A notice was taken back down.
+    /// </summary>
+    /// <remarks>
+    /// Its own event rather than a field on the one above, because the
+    /// question it answers is asked afterwards and by somebody upset: a hacker
+    /// says they were told judging was at two and the schedule says four. The
+    /// row records who retracted it and when, and this line is what puts that
+    /// in the same stream as everything else that happened that afternoon.
+    /// </remarks>
+    public const string AnnouncementRetracted = "announcement.retracted";
 }
