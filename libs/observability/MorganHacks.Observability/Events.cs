@@ -120,6 +120,28 @@ public static class Events
     public const string ResumeStored = "resume.stored";
 
     /// <summary>
+    /// An applicant replaced the resume on their own application, from the
+    /// portal.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="ResumeStored"/> even though both end with bytes
+    /// in the same container, because they are watched for opposite things.
+    /// <see cref="ResumeStored"/> is read against
+    /// <see cref="ApplicationSubmitted"/> — uploads without submissions mean
+    /// resumes failing to attach. This one has no submission to sit beside; it
+    /// arrives weeks later, one at a time, and a burst of it is the interesting
+    /// signal rather than the ordinary one. Folding the two together would make
+    /// four hundred hackers refreshing their CVs before the event look exactly
+    /// like the alarm.
+    /// <para>
+    /// Carries the person id and the size, like everything else the portal
+    /// logs. Never the filename and never the key: people name these after
+    /// themselves, and the key is on <see cref="Redaction.SensitiveKeys"/>.
+    /// </para>
+    /// </remarks>
+    public const string ResumeReplaced = "resume.replaced";
+
+    /// <summary>
     /// A check-in code was presented at the door.
     /// </summary>
     /// <remarks>

@@ -80,6 +80,11 @@ public static class PortalEndpoints
         // person owns, and a verb keeps this route the same shape as the other
         // write beside it.
         portal.MapPost("/withdraw", Withdraw);
+        // Registered against this group rather than a second one, so the resume
+        // routes inherit the same feature flag and the same session gate as
+        // every route above. The handlers live in PortalResumeEndpoints only
+        // because this file is long and shared.
+        portal.MapPortalResume();
 
         return app;
     }

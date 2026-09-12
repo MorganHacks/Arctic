@@ -180,6 +180,63 @@ export type Announcement = {
   at: string;
 };
 
+/**
+ * The resume we are holding, as the applicant is allowed to see it.
+ *
+ * A name, a size and a date, and deliberately no way to fetch the bytes. The
+ * organizers' side of the API mints a signed link because a reviewer has to
+ * read a file they have never seen; the applicant is the person who uploaded
+ * it and already has it. There is no storage key here either — see
+ * `Redaction.SensitiveKeys` on the API side, which lists it as the one string
+ * that turns "somebody has a CV" into "here it is".
+ */
+export type ResumeOnFile = {
+  filename: string;
+  size: number | null;
+  uploadedAt: string | null;
+};
+
+/**
+ * The resume screen: what is on file, and whether it may be changed.
+ *
+ * `started` and `editable` are both false for somebody who has not applied
+ * yet, and the two need different sentences — so the API says which it is
+ * rather than leaving this side to infer it from `lockedReason` being null.
+ *
+ * `maxBytes` and `accepts` come from the API because the API enforces them. A
+ * page carrying its own copy of those numbers is a page that eventually
+ * disagrees with the server about what will be accepted, and the person who
+ * finds out is the one whose upload was refused after five minutes.
+ */
+export type ResumeScreen = {
+  resume: ResumeOnFile | null;
+  started: boolean;
+  editable: boolean;
+  lockedReason: string | null;
+  maxBytes: number;
+  accepts: string;
+};
+
+/**
+ * What resume, if any, is on this applicant's application.
+ *
+ * Null covers every reason the call failed, like the reads above it, and the
+ * page treats all of them as "sign in again" because that is the only thing an
+ * applicant can do about any of them.
+ */
+export async function currentResume(): Promise<ResumeScreen | null> {
+  try {
+    const response = await apiFetch("/portal/resume");
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as ResumeScreen;
+  } catch {
+    return null;
+  }
+}
+
 /** One line of mail history. Subject and outcome, never the body. */
 export type Message = {
   id: string;

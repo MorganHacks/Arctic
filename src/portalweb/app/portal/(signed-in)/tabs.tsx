@@ -9,6 +9,10 @@ const tabs = [
   // COPY — "Announcements" needs sign-off.
   { href: "/portal/announcements", label: "Announcements" },
   { href: "/portal/profile", label: "Profile" },
+  // Beside Profile rather than inside it. The two lock on different rules —
+  // the profile closes when a decision lands and the resume does not — and one
+  // tab holding two lock states is a screen nobody can explain.
+  { href: "/portal/resume", label: "Resume" },
   { href: "/portal/check-in", label: "Check in" },
   { href: "/portal/messages", label: "Emails" },
 ] as const;
