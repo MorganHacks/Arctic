@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { currentPortal, readableDate } from "@/lib/api";
 import { readableTime } from "../../../../../libs/ui/zone";
 import { RsvpPanel } from "./rsvp";
+import { WithdrawPanel } from "./withdraw";
 
 /**
  * Where a sign-in link lands, and the only screen most applicants will open.
@@ -98,6 +99,15 @@ export default async function Status() {
           </Link>
         </div>
       </section>
+
+      {/*
+        Last, and after everything somebody came here to read. It is the only
+        control on this page that cannot be undone, so it gets no accent and no
+        position anybody lands on by accident — but it is on the page, because
+        an applicant who cannot find it emails an organizer instead, and the
+        seat stays held either way until somebody gets round to the inbox.
+      */}
+      <WithdrawPanel withdraw={application.withdraw} />
     </>
   );
 }

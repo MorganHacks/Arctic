@@ -32,12 +32,15 @@ namespace MorganHacks.Api;
 /// </item>
 /// </list>
 /// <para>
-/// One route here moves an application's status, and it is the only one that
-/// ever should. <see cref="AnswerRsvp"/> takes a spot or gives it back, and it
-/// does it through <see cref="IApplicationStore.TransitionAsync"/> like every
-/// other writer in the system — so the lifecycle table judges the move and the
-/// trail records the applicant as the actor. An applicant is not a special case
-/// of the audit story; they are a participant in it.
+/// Two routes here move an application's status, and they are the only ones
+/// that ever should. <see cref="AnswerRsvp"/> takes a spot or gives it back;
+/// <see cref="Withdraw"/> closes the application at the applicant's own
+/// request, which is the thing an RSVP cannot say for anybody who was never
+/// offered a spot to turn down. Both do it through
+/// <see cref="IApplicationStore.TransitionAsync"/> like every other writer in
+/// the system — so the lifecycle table judges the move and the trail records
+/// the applicant as the actor. An applicant is not a special case of the audit
+/// story; they are a participant in it.
 /// </para>
 /// <para>
 /// Nothing here logs an address, a name or an answer. Person ids only, like
@@ -61,6 +64,12 @@ public static class PortalEndpoints
         portal.MapPost("/rsvp", AnswerRsvp);
         portal.MapGet("/messages", Messages);
         portal.MapGet("/check-in", CheckIn);
+
+        // POST rather than DELETE, and no id in the path. There is no resource
+        // here to address: the application is whichever one the session's
+        // person owns, and a verb keeps this route the same shape as the other
+        // write beside it.
+        portal.MapPost("/withdraw", Withdraw);
 
         return app;
     }
@@ -366,6 +375,149 @@ public static class PortalEndpoints
     }
 
     /// <summary>
+    /// Closes the application, because the applicant says so.
+    /// </summary>
+    /// <remarks>
+    /// The other write that moves a status, and it exists because
+    /// <see cref="AnswerRsvp"/> only speaks for people we already accepted.
+    /// Everybody else — waiting on a decision, still filling the form in,
+    /// confirmed and now unable to come — had no way to tell us at all, and
+    /// the cost of that silence is not symmetric: an accepted seat nobody can
+    /// give back is a seat the waitlist never gets, food ordered for a chair
+    /// that stays empty, and a fortnight of reminder emails to somebody who
+    /// told us as loudly as the portal allowed.
+    /// <para>
+    /// Everything that makes <see cref="AnswerRsvp"/> safe makes this safe, in
+    /// the same three ways and for the same reasons: the id comes from
+    /// <see cref="IApplicantPortalStore.FindForPersonAsync"/> and never from
+    /// the request, so there is no id to forget to check; the move goes
+    /// through <see cref="StatusTransition"/>, which already says exactly which
+    /// statuses may become <c>withdrawn</c> and re-reads the row under a lock
+    /// before judging it; and <c>actorId</c> is the session's person, so
+    /// <c>status_history.actor_id</c> says who did it rather than leaving the
+    /// null that reads as a hand-fixed row forever after.
+    /// </para>
+    /// <para>
+    /// <b>There is no body.</b> Nothing about this request varies — an
+    /// applicant has one application and one thing to say about it — and a
+    /// route that took a field would be a route somebody could send an id in.
+    /// The second ask before it happens is the portal's, where the person is,
+    /// rather than a word echoed back to a server that cannot tell a deliberate
+    /// press from a repeated one anyway.
+    /// </para>
+    /// <para>
+    /// <b>Asking twice is not an error.</b> An application already withdrawn
+    /// answers 200 with the same projection every other route serves, and
+    /// writes nothing. A double submit, a retried request and a back button
+    /// all look like this, and answering the second one with a red box would
+    /// tell somebody their withdrawal failed at the exact moment it did not.
+    /// It costs nothing to be sure of: the state they asked for is the state
+    /// they are in. Refusing the write is still the right answer everywhere
+    /// else, including <c>declined</c> — that one released a spot through the
+    /// RSVP and is a different event with a different consequence, and a
+    /// history row saying somebody withdrew when they declined would be this
+    /// endpoint rewriting what happened.
+    /// </para>
+    /// <para>
+    /// <b>It is one way.</b> <see cref="StatusTransition"/> lists nothing after
+    /// <c>withdrawn</c>, so this endpoint has no undo to offer and does not
+    /// invent one — the same decision, made in the same place, as the one that
+    /// makes declining final. Somebody who withdraws by accident emails us and
+    /// an organizer decides, with a record of both. What this file owes them in
+    /// exchange is that the portal says so plainly before the press, which is
+    /// the confirmation step on the screen.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> Withdraw(
+        HttpContext http,
+        IApplicantPortalStore store,
+        IApplicationStore applications,
+        // Categorised on the application rather than on a request record,
+        // which is what the other writers here name, because this route has no
+        // body to name it after. The same choice ApplicantEndpoints makes.
+        ILogger<ApplicantApplication> log,
+        CancellationToken ct)
+    {
+        var personId = http.PersonId();
+        var current = await store.FindForPersonAsync(personId, ct);
+
+        if (current is null)
+        {
+            return Results.Conflict(new
+            {
+                error = "You have not started an application yet.",
+            });
+        }
+
+        if (Withdrawal.AlreadyWithdrawn(current.Status))
+        {
+            // Nothing written and nothing logged: the second arrival of one
+            // request is not a second withdrawal, and a trail that recorded it
+            // as one would be counting an applicant's clicks as decisions.
+            return Results.Ok(new { application = Describe(current) });
+        }
+
+        var closed = Withdrawal.WhyClosed(current.Status, current.DecisionsAnnounced);
+
+        if (closed is not null)
+        {
+            return Results.Conflict(new { error = closed });
+        }
+
+        StatusChange change;
+        try
+        {
+            // No reason and no batch id, for the reasons AnswerRsvp gives: a
+            // reason is a sentence somebody wrote about an applicant and there
+            // is nobody here to write one, and a batch id would make one
+            // person leaving indistinguishable from a row an organizer moved
+            // in a set of four hundred.
+            change = await applications.TransitionAsync(
+                current.Id, ApplicationStatus.Withdrawn, actorId: personId, ct: ct);
+        }
+        catch (InvalidTransitionException)
+        {
+            // Lost the race against an organizer moving the row between the
+            // read above and this write — an acceptance landing, or the
+            // check-in desk. Rare, and the honest answer is whatever is true
+            // now rather than what was true a moment ago.
+            var settled = await store.FindForPersonAsync(personId, ct);
+
+            if (settled is not null && Withdrawal.AlreadyWithdrawn(settled.Status))
+            {
+                // Two of their own requests crossed. The state they asked for
+                // is the state they have, so this is the idempotent answer
+                // above arriving a moment later than it might have.
+                return Results.Ok(new { application = Describe(settled) });
+            }
+
+            return Results.Conflict(new
+            {
+                error = settled is null
+                    ? "You have not started an application yet."
+                    : Withdrawal.WhyClosed(settled.Status, settled.DecisionsAnnounced)
+                      ?? "That could not be saved.",
+            });
+        }
+
+        // The person id and the two statuses, the same fields the RSVP line
+        // carries and for the same reason: what happened is on the history
+        // row, behind a permission, and this line exists so an absence or a
+        // cluster can be alerted on without reading anybody's application.
+        log.LogInformation(
+            "An applicant withdrew their application. {PersonId} {from} {to} {event}",
+            personId, change.From?.ToWire(), change.To.ToWire(), Events.ApplicationWithdrawn);
+
+        // Re-read rather than patched locally, so the screen redraws from the
+        // same projection every other route serves — including the profile
+        // lock and the RSVP panel, both of which this one move closes.
+        var updated = await store.FindForPersonAsync(personId, ct);
+        return updated is null
+            ? Results.Ok(new { application = (object?)null })
+            : Results.Ok(new { application = Describe(updated) });
+    }
+
+    /// <summary>
     /// Every email we have sent them.
     /// </summary>
     /// <remarks>
@@ -517,6 +669,17 @@ public static class PortalEndpoints
                 // same sentence for every undecided-looking status, which is
                 // what stops it being a decision.
                 closedReason = Rsvp.WhyClosed(status, announced, deadline, now),
+            },
+
+            // Judged by the same rule the write is, so the screen cannot offer
+            // a button the endpoint would refuse. The reason is sent even when
+            // it is open — null then — because the panel says one or the other
+            // and a screen that had to infer the sentence would be writing a
+            // second copy of the wording the team signed off.
+            withdraw = new
+            {
+                open = Withdrawal.IsOpen(status, announced),
+                closedReason = Withdrawal.WhyClosed(status, announced),
             },
 
             profileEditable = ProfileEditing.IsOpen(status),

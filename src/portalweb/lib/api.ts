@@ -76,6 +76,7 @@ export type Application = {
   nextStep: string;
   receivedAt: string | null;
   rsvp: Rsvp;
+  withdraw: Withdrawal;
   profileEditable: boolean;
   profileLockedReason: string | null;
   profile: Profile;
@@ -97,6 +98,25 @@ export type Application = {
 export type Rsvp = {
   open: boolean;
   deadline: string | null;
+  closedReason: string | null;
+};
+
+/**
+ * Whether the applicant may close their own application, and why not if they
+ * may not.
+ *
+ * The same shape as `Rsvp` and for the same reason: `open` is the API's answer
+ * to the question it asks itself before accepting the write, so the screen
+ * cannot offer a button the endpoint would refuse — nor withhold one it would
+ * accept, which is the failure nobody notices.
+ *
+ * `closedReason` is a whole sentence, chosen on the API side from the status
+ * this app is never shown. It is rendered as it came: a second copy of that
+ * reasoning over here would be the one that drifts, and it would drift towards
+ * naming a decision the applicant has not been told yet.
+ */
+export type Withdrawal = {
+  open: boolean;
   closedReason: string | null;
 };
 
