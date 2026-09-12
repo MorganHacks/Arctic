@@ -290,3 +290,91 @@
     animation: none;
   }
 }
+
+/* --------------------------------------------------------- announcements --- */
+
+/*
+ * Set apart from the schedule above it with a rule rather than a card, because
+ * it is a different kind of thing: the schedule is settings somebody edits
+ * once, and this is a log that grows during a weekend.
+ */
+.notice {
+  margin-top: 2.4rem;
+  padding-top: 1.8rem;
+  border-top: 1px solid var(--line);
+}
+
+.noticeWrite {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1.2rem 0 0.4rem;
+  max-width: 46rem;
+}
+.noticeWrite textarea {
+  font: inherit;
+  width: 100%;
+  resize: vertical;
+  background: var(--raised);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.65rem;
+}
+
+/*
+ * Amber, and above the button rather than below it. Nothing has failed --
+ * this is the thing somebody needs to know before they type, not after.
+ */
+.noticeWarn {
+  margin: 0.2rem 0 0;
+  font-size: var(--step-1);
+  color: var(--warn, #d9a441);
+}
+
+.noticeActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.notices {
+  list-style: none;
+  margin: 1.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  max-width: 46rem;
+}
+.notices li {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.notices li:last-child { border-bottom: 0; padding-bottom: 0; }
+
+.noticeBody {
+  margin: 0 0 0.25rem;
+  /* Line breaks survive; nothing else is interpreted, so a stray character
+     cannot become formatting. */
+  white-space: pre-wrap;
+}
+
+/* Retracted stays visible and struck through: the console is the only place
+   "we said it and took it back" can be told from "we never said it". */
+.noticeGone .noticeBody {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.noticeRetract {
+  margin-top: 0.45rem;
+  font-size: var(--step-1);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.noticeRetract:hover { color: var(--ink); }

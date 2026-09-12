@@ -171,3 +171,50 @@ function idOf(body: unknown): string | null {
 
   return null;
 }
+
+/* ------------------------------------------------------------ announcements --- */
+
+/**
+ * Post a notice to everybody at an event.
+ *
+ * Revalidates the event page rather than returning the new row, because the
+ * panel shows retracted notices too and the server is the only thing that
+ * knows the whole list. During an event two organizers may both be on this
+ * screen; re-reading is how the second one sees the first one's notice.
+ */
+export async function postNotice(
+  eventId: string,
+  body: string,
+): Promise<WriteResult> {
+  const { postAnnouncement } = await import("./announcements");
+  const result = await postAnnouncement(eventId, body);
+
+  if (result.ok) {
+    revalidatePath(`/events/${eventId}`);
+    return { ok: true };
+  }
+
+  return { ok: false, error: result.error };
+}
+
+/**
+ * Take a notice down.
+ *
+ * The row survives: the applicant feed stops showing it, and this screen keeps
+ * it struck through. "We never said that" and "we said it and took it back"
+ * are different facts and the console is where the difference is visible.
+ */
+export async function retractNotice(
+  eventId: string,
+  id: string,
+): Promise<WriteResult> {
+  const { retractAnnouncement } = await import("./announcements");
+  const result = await retractAnnouncement(id);
+
+  if (result.ok) {
+    revalidatePath(`/events/${eventId}`);
+    return { ok: true };
+  }
+
+  return { ok: false, error: result.error };
+}
