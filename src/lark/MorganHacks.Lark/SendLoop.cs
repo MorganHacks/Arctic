@@ -114,6 +114,21 @@ public sealed class SendLoop(
                     await SendOneAsync(message, stoppingToken);
                     await Task.Delay(_options.BetweenSends, clock, stoppingToken);
                 }
+
+                // After the batch rather than after each message. The question
+                // it answers -- has this campaign finished -- can only change
+                // when a message stops being outstanding, and asking once for
+                // the two or three campaigns a batch touched is one statement
+                // instead of twenty-four.
+                //
+                // Outside the cancellation check on purpose: a batch cut short
+                // still moved some messages, and a campaign left reading
+                // `queued` because the worker was restarted mid-send is the
+                // exact wrong answer to give somebody deciding whether to send
+                // it again.
+                await queue.ReconcileAsync(
+                    claimed.Select(m => m.CampaignId).Distinct().ToArray(),
+                    CancellationToken.None);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

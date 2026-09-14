@@ -162,6 +162,71 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
         return claimed;
     }
 
+    /// <summary>
+    /// Brings a campaign's status into line with the messages under it.
+    /// </summary>
+    /// <remarks>
+    /// Without this a campaign says <c>queued</c> for ever. The schema has
+    /// named <c>sending</c>, <c>sent</c> and <c>failed</c> since the table was
+    /// written and nothing ever set any of them, so the mail screen reported
+    /// every campaign as waiting to go out — including ones whose every
+    /// message SES had accepted minutes earlier. An organizer reading it had
+    /// no way to tell a send that was stuck from one that was finished, which
+    /// is the one question that screen exists to answer.
+    /// <para>
+    /// Derived from the messages rather than counted as they go. A worker that
+    /// decremented a total would have to be the only worker, survive its own
+    /// restarts, and never lose a race with the webhook that marks a message
+    /// delivered. Asking the rows is none of those things.
+    /// </para>
+    /// <para>
+    /// Only <c>queued</c> and <c>sending</c> campaigns are touched, so a
+    /// cancelled one stays cancelled even though its already-claimed messages
+    /// go on landing for a few seconds afterwards.
+    /// </para>
+    /// </remarks>
+    public async Task ReconcileAsync(
+        IReadOnlyCollection<Guid> campaignIds, CancellationToken ct = default)
+    {
+        if (campaignIds.Count == 0)
+        {
+            return;
+        }
+
+        // `failed` only when nothing got out at all. A campaign where one
+        // address hard-bounced and four hundred arrived is a campaign that
+        // sent, and calling it failed would have somebody re-send it to all
+        // four hundred.
+        const string sql = """
+            WITH tally AS (
+                SELECT campaign_id,
+                       count(*) FILTER (
+                           WHERE status IN ('pending', 'sending')) AS outstanding,
+                       count(*) FILTER (
+                           WHERE status IN ('sent', 'delivered')) AS away
+                  FROM notify.messages
+                 WHERE campaign_id = ANY(@ids)
+                 GROUP BY campaign_id
+            )
+            UPDATE notify.campaigns c
+               SET status = CASE
+                       WHEN t.outstanding > 0 THEN 'sending'
+                       WHEN t.away > 0 THEN 'sent'
+                       ELSE 'failed'
+                   END,
+                   completed_at = CASE
+                       WHEN t.outstanding > 0 THEN NULL ELSE now()
+                   END
+              FROM tally t
+             WHERE c.id = t.campaign_id
+               AND c.status IN ('queued', 'sending')
+            """;
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("ids", campaignIds.ToArray());
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     /// <summary>Records a successful hand-off to the provider.</summary>
     /// <remarks>
     /// <c>sent</c> means the provider accepted it. <c>delivered</c> means the

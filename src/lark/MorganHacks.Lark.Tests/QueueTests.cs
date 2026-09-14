@@ -182,6 +182,148 @@ public class QueueTests(NotifyDatabase db) : IClassFixture<NotifyDatabase>
 
         Assert.DoesNotContain(second, m => first.Any(f => f.Id == m.Id));
     }
+
+    // ------------------------------------------------ where a campaign got to ---
+
+    [Fact]
+    public async Task A_campaign_with_everything_sent_reads_as_sent()
+    {
+        // The bug this closes. `sending`, `sent` and `failed` were named in
+        // the schema and written by nothing, so every campaign said `queued`
+        // for ever — including ones whose every message SES had accepted
+        // minutes earlier. Reading that screen, a stuck send and a finished
+        // one looked identical.
+        var campaign = await db.AddCampaignAsync("broadcast");
+        var first = await db.QueueAsync(campaign, Email("done"));
+        var second = await db.QueueAsync(campaign, Email("done"));
+
+        await Queue.MarkSentAsync(first, "provider-1");
+        await Queue.MarkSentAsync(second, "provider-2");
+        await Queue.ReconcileAsync([campaign]);
+
+        Assert.Equal("sent", await Status(campaign));
+        Assert.True(await HasCompletedAt(campaign));
+    }
+
+    [Fact]
+    public async Task A_campaign_still_going_reads_as_sending()
+    {
+        // The state between the two, and the one an organizer actually watches
+        // during an event. Without it a half-sent blast is indistinguishable
+        // from one that has not started.
+        var campaign = await db.AddCampaignAsync("broadcast");
+        var first = await db.QueueAsync(campaign, Email("partly"));
+        await db.QueueAsync(campaign, Email("partly"));
+
+        await Queue.MarkSentAsync(first, "provider-1");
+        await Queue.ReconcileAsync([campaign]);
+
+        Assert.Equal("sending", await Status(campaign));
+
+        // Not finished, so nothing may claim it has a completion time.
+        Assert.False(await HasCompletedAt(campaign));
+    }
+
+    [Fact]
+    public async Task A_campaign_where_nothing_got_out_reads_as_failed()
+    {
+        var campaign = await db.AddCampaignAsync("broadcast");
+        var only = await db.QueueAsync(campaign, Email("doomed"));
+
+        await Fail(only);
+        await Queue.ReconcileAsync([campaign]);
+
+        Assert.Equal("failed", await Status(campaign));
+    }
+
+    [Fact]
+    public async Task One_bounce_does_not_make_a_delivered_campaign_a_failure()
+    {
+        // Four hundred arrived and one address is dead. Calling that failed is
+        // how somebody re-sends the whole thing to all four hundred.
+        var campaign = await db.AddCampaignAsync("broadcast");
+        var good = await db.QueueAsync(campaign, Email("fine"));
+        var bad = await db.QueueAsync(campaign, Email("bounced"));
+
+        await Queue.MarkSentAsync(good, "provider-1");
+        await Fail(bad);
+        await Queue.ReconcileAsync([campaign]);
+
+        Assert.Equal("sent", await Status(campaign));
+    }
+
+    [Fact]
+    public async Task A_cancelled_campaign_stays_cancelled()
+    {
+        // Messages already claimed go on landing for a few seconds after
+        // somebody presses cancel. Those landings must not undo the cancel.
+        var campaign = await db.AddCampaignAsync("broadcast");
+        var only = await db.QueueAsync(campaign, Email("stopped"));
+
+        await Cancel(campaign);
+        await Queue.MarkSentAsync(only, "provider-1");
+        await Queue.ReconcileAsync([campaign]);
+
+        Assert.Equal("cancelled", await Status(campaign));
+    }
+
+    [Fact]
+    public async Task Reconciling_nothing_asks_the_database_nothing()
+    {
+        // An idle loop reconciles an empty batch on every pass.
+        await Queue.ReconcileAsync([]);
+    }
+
+    private async Task<string> Status(Guid campaign)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            "SELECT status FROM notify.campaigns WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", campaign);
+        return (string)(await cmd.ExecuteScalarAsync())!;
+    }
+
+    /// <summary>
+    /// Whether the campaign has a completion time, without saying what it is.
+    /// </summary>
+    /// <remarks>
+    /// Read as "is it null" rather than cast to a date. A timestamptz comes
+    /// back from Npgsql as a DateTime, so `as DateTimeOffset?` is null for a
+    /// column that holds a perfectly good value — which is a test that passes
+    /// when the column is empty and fails when it is full.
+    /// </remarks>
+    private async Task<bool> HasCompletedAt(Guid campaign)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            "SELECT completed_at FROM notify.campaigns WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", campaign);
+        var value = await cmd.ExecuteScalarAsync();
+        return value is not null && value is not DBNull;
+    }
+
+    /// <summary>
+    /// A message that has finished failing.
+    /// </summary>
+    /// <remarks>
+    /// <c>failed_perm</c> rather than a retryable failure, because a retryable
+    /// one goes back to <c>pending</c> with a next attempt on it — which is
+    /// the whole reason the reconciler counts pending as outstanding rather
+    /// than counting failures as done.
+    /// </remarks>
+    private async Task Fail(Guid message)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            "UPDATE notify.messages SET status = 'failed_perm' WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", message);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private async Task Cancel(Guid campaign)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            "UPDATE notify.campaigns SET status = 'cancelled' WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", campaign);
+        await cmd.ExecuteNonQueryAsync();
+    }
 }
 
 public class FailureClassificationTests
