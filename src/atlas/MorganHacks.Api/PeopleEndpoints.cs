@@ -47,6 +47,8 @@ public static class PeopleEndpoints
              .RequirePermission(Permission.PeopleManageTeams);
         admin.MapPost("/people/{id:guid}/restore", RestorePerson)
              .RequirePermission(Permission.PeopleManageTeams);
+        admin.MapPost("/people/{id:guid}/unlink", UnlinkGoogle)
+             .RequirePermission(Permission.PeopleManageTeams);
 
         // The two that hand out a permission directly are gated separately,
         // because being trusted to put somebody on the logistics team is not
@@ -130,6 +132,11 @@ public static class PeopleEndpoints
             email = person.Email,
             revoked = person.Revoked,
             revokedAt = person.RevokedAt,
+            // Whether they can sign in at all, as opposed to whether they are
+            // allowed to. An allowlisted organizer with no binding has simply
+            // never signed in; one with a binding they cannot reach needs it
+            // taken away before they can.
+            linked = person.Linked,
             teams = person.Teams.Select(t => new
             {
                 slug = t.TeamSlug,
@@ -411,6 +418,40 @@ public static class PeopleEndpoints
         log.LogInformation(
             "Access restored. {actor} {subject} {event}",
             http.PersonId(), id, Events.PersonRestored);
+
+        return Results.NoContent();
+    }
+
+    /// <summary>Requires <c>people.manage_teams</c>.</summary>
+    /// <remarks>
+    /// For the organizer whose Google account is gone: locked out of it,
+    /// graduated out of it, or bound to the wrong one of the three they were
+    /// signed into at the time. Until this existed the binding was write-once
+    /// and the only cure was somebody in the database.
+    /// <para>
+    /// Unlinking yourself is allowed, unlike revoking yourself. It signs you
+    /// out, and that is the whole of the damage: signing in again binds afresh.
+    /// Refusing it would mean an admin whose own Google account is the broken
+    /// one needs a second admin, which is the trap this endpoint exists to get
+    /// people out of.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> UnlinkGoogle(
+        Guid id,
+        HttpContext http,
+        IIdentityStore store,
+        TimeProvider clock,
+        ILogger<AddOrganizerRequest> log,
+        CancellationToken ct)
+    {
+        if (!await store.UnlinkGoogleAsync(id, clock.GetUtcNow(), http.PersonId(), ct))
+        {
+            return Results.NotFound(new { error = "No such person." });
+        }
+
+        log.LogInformation(
+            "Google account unlinked and sessions cut. {actor} {subject} {event}",
+            http.PersonId(), id, Events.GoogleUnlinked);
 
         return Results.NoContent();
     }

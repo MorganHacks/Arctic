@@ -271,6 +271,8 @@ export type PersonDetail = {
   email: string;
   revoked: boolean;
   revokedAt: string | null;
+  /** Whether a Google account is bound. Never which one. */
+  linked: boolean;
   teams: { slug: string; expiresAt: string | null }[];
   grants: { permission: string; expiresAt: string | null }[];
   effective: string[];

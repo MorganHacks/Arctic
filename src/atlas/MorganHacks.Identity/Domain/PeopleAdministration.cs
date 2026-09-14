@@ -118,7 +118,8 @@ public sealed record PersonDetail(
     string Email,
     DateTimeOffset? RevokedAt,
     IReadOnlyList<TeamMembership> Teams,
-    IReadOnlyList<PermissionGrant> Grants)
+    IReadOnlyList<PermissionGrant> Grants,
+    bool Linked = false)
 {
     public bool Revoked => RevokedAt is not null;
 }

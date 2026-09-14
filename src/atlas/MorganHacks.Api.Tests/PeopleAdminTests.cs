@@ -562,6 +562,109 @@ public class PeopleAdminTests(IdentityDatabase db)
         Assert.Equal(Permission.Sensitive.Select(p => p.Value).ToHashSet(), sensitive);
     }
 
+    // -------------------------------------------------- the google binding ---
+
+    [Fact]
+    public async Task Unlinking_lets_a_different_google_account_take_the_address()
+    {
+        // The dead end this closes. The binding is made by the first sign-in
+        // and was write-once, so an organizer whose Google account is gone —
+        // locked out, graduated, or simply the wrong one of three they were
+        // signed into — could never sign in again.
+        var (person, _) = await NewOrganizer("rebind");
+        await db.BindGoogleAsync(person, $"sub-{Guid.NewGuid():N}");
+        var admin = await SuperAdmin("closer");
+
+        var unlinked = await Send(
+            HttpMethod.Post, $"/admin/people/{person}/unlink", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NoContent, unlinked.StatusCode);
+        Assert.Null(await db.GoogleSubOf(person));
+    }
+
+    [Fact]
+    public async Task Unlinking_cuts_the_sessions_the_old_account_holds()
+    {
+        // The security half. The sessions that exist were started by the
+        // account being unlinked, and leaving them alive means that account
+        // keeps a working console while a different one is free to claim the
+        // row. One of the two is meant to have access, and it is not both.
+        var (person, _) = await NewOrganizer("stale-link");
+        await db.GrantAsync(person, Permission.PeopleView.Value);
+        await db.BindGoogleAsync(person, $"sub-{Guid.NewGuid():N}");
+        var theirCookie = await SignIn(person);
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{person}/unlink", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Send(HttpMethod.Get, "/admin/people", theirCookie)).StatusCode);
+        Assert.Equal(0, await LiveSessions(person));
+    }
+
+    [Fact]
+    public async Task Unlinking_leaves_the_allowlist_and_the_teams_alone()
+    {
+        // Unlinking is about which Google account, not about whether they may
+        // in. Somebody who has to rebind should not also have to be re-added
+        // to everything they were on.
+        var (person, _) = await NewOrganizer("keeps");
+        await db.AddToTeamAsync(person, "super-admin");
+        await db.BindGoogleAsync(person, $"sub-{Guid.NewGuid():N}");
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{person}/unlink", admin.Cookie);
+
+        var detail = await Detail(person, admin.Cookie);
+        Assert.False(detail.GetProperty("revoked").GetBoolean());
+        Assert.False(detail.GetProperty("linked").GetBoolean());
+        Assert.Contains(
+            detail.GetProperty("teams").EnumerateArray(),
+            t => t.GetProperty("slug").GetString() == "super-admin");
+    }
+
+    [Fact]
+    public async Task Unlinking_yourself_is_allowed()
+    {
+        // Unlike revoking yourself. It signs you out and nothing else: signing
+        // in again binds afresh. Refusing would mean an admin whose own Google
+        // account is the broken one needs a second admin — which is the trap
+        // this endpoint exists to get people out of.
+        var admin = await SuperAdmin("self-unlink");
+
+        var response = await Send(
+            HttpMethod.Post, $"/admin/people/{admin.Id}/unlink", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unlinking_somebody_with_nothing_bound_is_not_an_error()
+    {
+        // An organizer who has never signed in has no binding, and an admin
+        // pressing the button on them has asked for the state that already
+        // holds. Reporting "no such person" would send them looking for a
+        // different bug.
+        var (person, _) = await NewOrganizer("never-signed-in");
+        var admin = await SuperAdmin("closer");
+
+        var response = await Send(
+            HttpMethod.Post, $"/admin/people/{person}/unlink", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unlinking_an_id_that_does_not_exist_is_a_404()
+    {
+        var admin = await SuperAdmin("closer");
+
+        var response = await Send(
+            HttpMethod.Post, $"/admin/people/{Guid.NewGuid()}/unlink", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     // ------------------------------------------------------- the welcome ---
 
     [Fact]
@@ -697,6 +800,7 @@ public class PeopleAdminTests(IdentityDatabase db)
         (HttpMethod.Delete, $"/admin/people/{target}/grants/people.view"),
         (HttpMethod.Post, $"/admin/people/{target}/revoke"),
         (HttpMethod.Post, $"/admin/people/{target}/restore"),
+        (HttpMethod.Post, $"/admin/people/{target}/unlink"),
     ];
 
     private HttpClient Client() => _app.CreateClient(

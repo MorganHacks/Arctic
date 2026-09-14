@@ -271,6 +271,16 @@ public static class Events
     /// </remarks>
     public const string PersonRestored = "access.person_restored";
 
+    /// <summary>
+    /// The Google account an organizer signs in with was unbound.
+    /// </summary>
+    /// <remarks>
+    /// Rare and worth noticing. It hands the address back to whichever Google
+    /// account next proves control of it, which is the same trust the first
+    /// sign-in was given — but given a second time, by somebody, on purpose.
+    /// </remarks>
+    public const string GoogleUnlinked = "access.google_unlinked";
+
     /// <summary>A form was made, and got the code that goes on a flyer.</summary>
     public const string FormCreated = "form.created";
 

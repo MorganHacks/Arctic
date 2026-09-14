@@ -7,6 +7,7 @@ import {
   leaveTeam,
   restorePerson,
   revokePerson,
+  unlinkGoogle,
   ungrant,
   type FormState,
 } from "../actions";
@@ -426,6 +427,79 @@ export function Restore({
       ) : (
         <button type="button" className="primary" onClick={() => setAsked(true)}>
           Restore access
+        </button>
+      )}
+
+      {state.error ? <p className="error">{state.error}</p> : null}
+    </section>
+  );
+}
+
+/**
+ * Taking the Google account off an organizer.
+ *
+ * Shown only when there is one bound, because that is the only time it means
+ * anything. It is for the person whose Google account is gone — locked out of
+ * it, graduated out of it, or bound to the wrong one of three they were signed
+ * into when they first pressed the button.
+ *
+ * Not dressed as a danger, and confirmed all the same. Nothing is lost: they
+ * keep the allowlist, the teams, the grants, and the next sign-in from any
+ * Google account that proves control of the address binds afresh. What is
+ * worth a second press is that last part — this hands the address back to
+ * whoever can prove control of it next, which is the same trust the first
+ * sign-in was given and should be given deliberately.
+ */
+export function Unlink({
+  personId,
+  email,
+  isSelf,
+}: {
+  personId: string;
+  email: string;
+  isSelf: boolean;
+}) {
+  const [state, submit, pending] = useActionState(unlinkGoogle, {});
+  const [asked, setAsked] = useState(false);
+  const question = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (asked) {
+      question.current?.focus();
+    }
+  }, [asked]);
+
+  return (
+    // COPY: everything visible in this component needs sign-off.
+    <section className="panel">
+      <h2>Google account</h2>
+      <p className="meta" style={{ marginBottom: "0.75rem" }}>
+        Signing in the first time links a Google account to this address, and
+        only that account works afterwards. Unlink it if they cannot get into
+        it any more &mdash; they keep their teams, and the next sign-in links
+        whichever account they use.
+        {/* Said before the press, not after. Somebody unlinking their own
+            account is about to be logged out, and finding that out by being
+            logged out is a bad way to learn it. */}
+        {isSelf ? " This is your account, so you will be signed out." : null}
+      </p>
+
+      {asked ? (
+        <form action={submit} className={styles.confirm}>
+          <input type="hidden" name="id" value={personId} />
+          <p className={styles.asking} ref={question} tabIndex={-1}>
+            Unlink the Google account on <strong>{email}</strong>?
+          </p>
+          <button type="submit" className="primary" disabled={pending}>
+            {pending ? "Unlinking…" : "Yes, unlink"}
+          </button>
+          <button type="button" onClick={() => setAsked(false)}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button type="button" onClick={() => setAsked(true)}>
+          Unlink Google account
         </button>
       )}
 
