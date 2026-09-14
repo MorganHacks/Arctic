@@ -63,6 +63,13 @@ every hacker to a link that goes nowhere.
 param publicBaseUrl string = ''
 
 @description('''
+Where the organizer console is: the portaladmin origin. A new organizer's
+welcome email links to it, and an empty value means that email links nowhere.
+Not the same as googleRedirectUri, which is this origin plus a callback path.
+''')
+param consoleBaseUrl string = ''
+
+@description('''
 Where the public forms site is: the portalforms origin, which is not the
 portal's. A sign-in link for a form has to land on the host the form is served
 from, because the session cookie is host-only — landing on the portal instead
@@ -221,6 +228,7 @@ module apps 'modules/apps.bicep' = if (deployApps) {
     googleClientSecret: googleClientSecret
     googleRedirectUri: googleRedirectUri
     publicBaseUrl: publicBaseUrl
+    consoleBaseUrl: consoleBaseUrl
     formsBaseUrl: formsBaseUrl
     warmReplicas: warmReplicas
     enableHackerPortalFeature: enableHackerPortalFeature

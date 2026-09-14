@@ -33,6 +33,9 @@ public sealed class QueuedEmailSender(
     /// <summary>The template this sender needs to exist. Seeded by migration.</summary>
     public const string TemplateKey = "magic_link";
 
+    /// <summary>The one a new organizer gets. Also seeded by migration.</summary>
+    public const string WelcomeTemplateKey = "organizer_welcome";
+
     public async Task SendMagicLinkAsync(
         Guid personId, string email, string link, CancellationToken ct = default)
     {
@@ -59,5 +62,35 @@ public sealed class QueuedEmailSender(
         log.LogInformation(
             "Queued a sign-in link for {PersonId}. {event}",
             personId, Events.MagicLinkRequested);
+    }
+
+    public async Task SendOrganizerWelcomeAsync(
+        Guid personId, string email, string console, CancellationToken ct = default)
+    {
+        var template = await templates.FindAsync(WelcomeTemplateKey, ct);
+        if (template is null)
+        {
+            // Same shape as above, and for a softer reason: nobody is locked
+            // out by this email going missing, so a missing template must not
+            // turn adding somebody to a team into a failed request.
+            log.LogError(
+                "No '{Key}' template, so no welcome was queued.", WelcomeTemplateKey);
+            return;
+        }
+
+        await queue.EnqueueTransactionalAsync(
+            template, email, personId,
+            new Dictionary<string, string>
+            {
+                ["console"] = console,
+                // The address is the point of the email, so it is a value
+                // rather than something the copy has to know.
+                ["email"] = email,
+            },
+            http.HttpContext?.CorrelationId(), ct);
+
+        log.LogInformation(
+            "Queued a console welcome for {PersonId}. {event}",
+            personId, Events.OrganizerWelcomed);
     }
 }

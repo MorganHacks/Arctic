@@ -261,6 +261,12 @@ cookie the forms site is never sent, so the person arrives at the form still
 signed out while their browser holds a perfectly good session for a different
 hostname.
 
+A third, `ConsoleBaseUrl`, is where the **organizer console** is: it defaults to
+`http://localhost:3001` and is set from `CONSOLE_BASE_URL` when deployed. Only
+one email uses it — the welcome a new organizer gets when they join their first
+team — so an unset value in a deployed environment is not an outage, it is a
+link in that email pointing at a machine nobody is running.
+
 ---
 
 ## Google sign-in for organizers

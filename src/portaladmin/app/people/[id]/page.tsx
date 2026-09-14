@@ -16,6 +16,7 @@ import {
   type GrantRow,
   type TeamRow,
 } from "./controls";
+import { Invite } from "./invite";
 import { Effective, type EffectiveRow, type Source } from "./provenance";
 
 /**
@@ -208,6 +209,21 @@ export default async function PersonPage({
           <span className="meta"> since {person.revokedAt.slice(0, 10)}</span>
         ) : null}
       </p>
+
+      {/*
+        Only for somebody who can actually sign in. A revoked person has a
+        message to send them too, and it is not this one — theirs is that they
+        were revoked, which is not a sentence the console should be handing
+        anybody a Copy button for.
+
+        Organizers only: hackers do not use Google and never see this console,
+        so the instruction would be wrong in both halves.
+      */}
+      {mine.has("people.manage_teams") &&
+      person.kind === "organizer" &&
+      !person.revoked ? (
+        <Invite email={person.email} />
+      ) : null}
 
       <Effective rows={effective} />
 

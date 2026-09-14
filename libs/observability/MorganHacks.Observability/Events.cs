@@ -245,6 +245,16 @@ public static class Events
     /// <summary>A team membership was added, retimed, or removed.</summary>
     public const string TeamChanged = "access.team_changed";
 
+    /// <summary>
+    /// A new organizer was told their console works.
+    /// </summary>
+    /// <remarks>
+    /// Queued once per person, on their first team. A rate that climbs while
+    /// nobody is onboarding means somebody is being mailed repeatedly, which
+    /// would mean the once-per-person rule has stopped holding.
+    /// </remarks>
+    public const string OrganizerWelcomed = "access.organizer_welcomed";
+
     /// <summary>An individual grant was added, retimed, or removed.</summary>
     public const string GrantChanged = "access.grant_changed";
 

@@ -562,6 +562,116 @@ public class PeopleAdminTests(IdentityDatabase db)
         Assert.Equal(Permission.Sensitive.Select(p => p.Value).ToHashSet(), sensitive);
     }
 
+    // ------------------------------------------------------- the welcome ---
+
+    [Fact]
+    public async Task Joining_a_first_team_queues_a_welcome()
+    {
+        // Being on the allowlist grants nothing, so this is the moment the
+        // access becomes real and the only moment worth telling somebody
+        // about.
+        var (person, address) = await NewOrganizer("welcomed");
+        var admin = await SuperAdmin("closer");
+
+        var joined = await Send(
+            HttpMethod.Post, $"/admin/people/{person}/teams", admin.Cookie,
+            new { slug = "logistics" });
+
+        Assert.Equal(HttpStatusCode.NoContent, joined.StatusCode);
+        Assert.Equal(1, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task Being_added_to_the_allowlist_alone_queues_nothing()
+    {
+        // The other half of the rule, and the reason the trigger is not on the
+        // add endpoint: an organizer with no teams signs in to a console that
+        // shows them nothing, and an email at that moment reads as a broken
+        // account rather than as access.
+        var (_, address) = await NewOrganizer("quiet");
+
+        Assert.Equal(0, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task A_second_team_does_not_welcome_them_again()
+    {
+        // Once per person. Somebody who joins logistics in September and
+        // judging in March is not new in March, and an email saying they are
+        // teaches people to ignore this one.
+        var (person, address) = await NewOrganizer("twice-teamed");
+        var admin = await SuperAdmin("closer");
+
+        var first = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie, new { slug = "logistics" });
+        var second = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie, new { slug = "comms" });
+
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.Equal(1, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task Retiming_a_membership_does_not_welcome_them_again()
+    {
+        // The same endpoint is how an admin changes an expiry — "until the
+        // Sunday after the event", then "make that the Monday" — and an upsert
+        // that mailed on every correction would be unusable.
+        var (person, address) = await NewOrganizer("retimed");
+        var admin = await SuperAdmin("closer");
+
+        var first = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie, new { slug = "logistics" });
+        var second = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie,
+            new { slug = "logistics", expiresAt = DateTimeOffset.UtcNow.AddDays(7) });
+
+        // Both asserted, because a second call that quietly failed would leave
+        // one welcome behind and make this test pass for the wrong reason.
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.Equal(1, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task A_revoked_person_put_on_a_team_is_not_welcomed()
+    {
+        // Setting somebody up before restoring them is legitimate, and they
+        // still cannot sign in. Mailing "you have access" to an account that
+        // will turn them away is worse than saying nothing.
+        var (person, address) = await NewOrganizer("locked");
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{person}/revoke", admin.Cookie);
+        var joined = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie, new { slug = "logistics" });
+
+        // The join has to have worked. A test that proves "no email" by way of
+        // a failed request proves nothing at all.
+        Assert.Equal(HttpStatusCode.NoContent, joined.StatusCode);
+        Assert.Equal(0, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task The_welcome_names_the_console_and_the_address_to_use()
+    {
+        // The whole job of this email. Somebody added as name@morgan.edu who
+        // signs in with a personal Gmail is turned away by a message that
+        // cannot explain itself without telling strangers who is on the
+        // allowlist — so the explanation has to arrive before the refusal, in
+        // the inbox that works.
+        var (person, address) = await NewOrganizer("named");
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{person}/teams", admin.Cookie,
+            new { slug = "logistics" });
+
+        var body = await WelcomeBody(address);
+        Assert.Contains(address, body);
+        Assert.Contains("localhost:3001", body);
+    }
+
     // ------------------------------------------------------ the store only ---
 
     [Fact]
@@ -620,6 +730,35 @@ public class PeopleAdminTests(IdentityDatabase db)
 
     private Task<Guid> Organizer(string prefix) =>
         db.AddPersonAsync(Unique(prefix), "organizer");
+
+    /// <summary>An organizer whose address the test needs to look mail up by.</summary>
+    private async Task<(Guid Id, string Email)> NewOrganizer(string prefix)
+    {
+        var email = Unique(prefix);
+        return (await db.AddPersonAsync(email, "organizer"), email);
+    }
+
+    private const string WelcomesQueued = """
+        SELECT count(*) FROM notify.messages m
+          JOIN notify.campaigns c ON c.id = m.campaign_id
+          JOIN notify.templates t ON t.id = c.template_id
+         WHERE t.key = 'organizer_welcome' AND m.to_email = @email
+        """;
+
+    private async Task<int> Welcomes(string email)
+    {
+        await using var cmd = db.DataSource.CreateCommand(WelcomesQueued);
+        cmd.Parameters.AddWithValue("email", email);
+        return (int)(long)(await cmd.ExecuteScalarAsync())!;
+    }
+
+    private async Task<string> WelcomeBody(string email)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            WelcomesQueued.Replace("count(*)", "m.rendered_body_html"));
+        cmd.Parameters.AddWithValue("email", email);
+        return (string)(await cmd.ExecuteScalarAsync())!;
+    }
 
     private async Task<(Guid Id, string Cookie)> SuperAdmin(string prefix)
     {

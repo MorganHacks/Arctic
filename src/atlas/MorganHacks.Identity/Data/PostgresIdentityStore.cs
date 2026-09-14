@@ -614,28 +614,65 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             : AddOrganizerResult.Reject(AddOrganizerRejection.AlreadyAnOrganizer);
     }
 
-    public async Task<bool> AddToTeamAsync(
+    public async Task<JoinTeamResult> AddToTeamAsync(
         Guid personId, string teamSlug, DateTimeOffset? expiresAt,
         Guid actorId, CancellationToken ct)
     {
         // Selecting the two ids rather than passing them in means an unknown
         // person or an unknown team inserts nothing and returns nothing,
         // instead of raising a foreign-key error the caller has to decode.
+        //
+        // `held` counts what was there before the insert. A CTE sees the
+        // snapshot the statement started with, so this is the count as it was
+        // even though the insert in the same statement changes it — which is
+        // what makes "was this their first team" answerable at all without a
+        // second query that another admin could slip between.
         const string sql = """
-            INSERT INTO identity.team_members (person_id, team_id, expires_at)
-            SELECT p.id, t.id, @expiresAt
-              FROM identity.people p, identity.teams t
-             WHERE p.id = @personId AND t.slug = @slug
-            ON CONFLICT (person_id, team_id) DO UPDATE SET expires_at = EXCLUDED.expires_at
-            RETURNING person_id
+            WITH held AS (
+                SELECT count(*) AS n FROM identity.team_members
+                 WHERE person_id = @personId
+            ), joined AS (
+                INSERT INTO identity.team_members (person_id, team_id, expires_at)
+                SELECT p.id, t.id, @expiresAt
+                  FROM identity.people p, identity.teams t
+                 WHERE p.id = @personId AND t.slug = @slug
+                ON CONFLICT (person_id, team_id)
+                    DO UPDATE SET expires_at = EXCLUDED.expires_at
+                RETURNING person_id
+            )
+            SELECT p.email, held.n = 0, p.revoked_at IS NULL
+              FROM joined
+              JOIN identity.people p ON p.id = joined.person_id
+             CROSS JOIN held
             """;
 
-        return await WriteAsync(actorId, sql, ct, cmd =>
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await AuditContext.SetActorAsync(conn, tx, actorId, ct);
+
+        await using var cmd = new NpgsqlCommand(sql, conn, tx);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("slug", teamSlug);
+        cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
+
+        var result = JoinTeamResult.NoSuchThing;
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
         {
-            cmd.Parameters.AddWithValue("personId", personId);
-            cmd.Parameters.AddWithValue("slug", teamSlug);
-            cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
-        });
+            if (await reader.ReadAsync(ct))
+            {
+                result = new JoinTeamResult(
+                    Matched: true,
+                    FirstTeam: reader.GetBoolean(1),
+                    Email: reader.GetString(0),
+                    Active: reader.GetBoolean(2));
+            }
+        }
+
+        // Committed either way, like every other write here: a statement that
+        // matched nothing wrote nothing, and a rollback would say the same
+        // thing at the cost of a second code path.
+        await tx.CommitAsync(ct);
+        return result;
     }
 
     public async Task<bool> RemoveFromTeamAsync(

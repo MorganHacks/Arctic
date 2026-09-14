@@ -178,8 +178,12 @@ public interface IIdentityStore
     /// same intent expressed twice, and an admin should not have to remove a
     /// membership in order to shorten it.
     /// </remarks>
-    /// <returns>False when no such person or no such team.</returns>
-    Task<bool> AddToTeamAsync(
+    /// <returns>
+    /// What happened, including whether this was the person's first team.
+    /// <see cref="JoinTeamResult.Matched"/> is false when there is no such
+    /// person or no such team.
+    /// </returns>
+    Task<JoinTeamResult> AddToTeamAsync(
         Guid personId, string teamSlug, DateTimeOffset? expiresAt,
         Guid actorId, CancellationToken ct);
 

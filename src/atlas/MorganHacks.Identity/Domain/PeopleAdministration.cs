@@ -69,6 +69,40 @@ public readonly record struct AddOrganizerResult
 }
 
 /// <summary>
+/// What adding somebody to a team turned out to be.
+/// </summary>
+/// <remarks>
+/// More than a bool because one caller needs to know whether this was the
+/// moment the person's access became real. Joining a first team is when an
+/// organizer goes from "on the allowlist, can see nothing" to "can do the job"
+/// — the only point at which telling them so is worth an email.
+/// <para>
+/// <see cref="FirstTeam"/> is decided against the memberships that existed
+/// before the insert, in the same statement, so re-adding somebody to a team
+/// they are already on is not a first and cannot mail them twice.
+/// </para>
+/// </remarks>
+/// <param name="Matched">
+/// False when there is no such person or no such team, which is the only
+/// failure this write has.
+/// </param>
+/// <param name="Email">
+/// Theirs, carried back so a caller that is about to write to them does not
+/// need a second query and cannot race a change of address. Empty when
+/// nothing matched.
+/// </param>
+/// <param name="Active">
+/// False when the person is revoked. Adding a revoked person to a team is
+/// legitimate — it is how somebody is set up before being restored — but they
+/// cannot sign in, so nothing should tell them they can.
+/// </param>
+public readonly record struct JoinTeamResult(
+    bool Matched, bool FirstTeam, string Email, bool Active)
+{
+    public static readonly JoinTeamResult NoSuchThing = new(false, false, "", false);
+}
+
+/// <summary>
 /// One person, as the admin detail screen needs them.
 /// </summary>
 /// <remarks>

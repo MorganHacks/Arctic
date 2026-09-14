@@ -63,6 +63,13 @@ deployed environment means every link points at a machine nobody is running.
 param publicBaseUrl string = ''
 
 @description('''
+Where the organizer console is: the portaladmin origin. A new organizer's
+welcome email links to it, and an empty value means that email links nowhere.
+Not the same as googleRedirectUri, which is this origin plus a callback path.
+''')
+param consoleBaseUrl string = ''
+
+@description('''
 The origin the public forms site is on — portalforms, not portalweb and not
 harbor.
 
@@ -223,6 +230,9 @@ var googleEnv = hasGoogle ? [
 var portalEnv = concat(
   empty(publicBaseUrl) ? [] : [
     { name: 'PublicBaseUrl', value: publicBaseUrl }
+  ],
+  empty(consoleBaseUrl) ? [] : [
+    { name: 'ConsoleBaseUrl', value: consoleBaseUrl }
   ],
   empty(formsBaseUrl) ? [] : [
     { name: 'FormsBaseUrl', value: formsBaseUrl }

@@ -231,6 +231,8 @@ public static class PeopleEndpoints
         JoinTeamRequest? request,
         HttpContext http,
         IIdentityStore store,
+        IEmailSender email,
+        IConfiguration config,
         TimeProvider clock,
         ILogger<JoinTeamRequest> log,
         CancellationToken ct)
@@ -245,8 +247,10 @@ public static class PeopleEndpoints
             return Results.BadRequest(new { error = ExpiryInThePast });
         }
 
-        if (!await store.AddToTeamAsync(
-                id, request.Slug.Trim(), request.ExpiresAt, http.PersonId(), ct))
+        var joined = await store.AddToTeamAsync(
+            id, request.Slug.Trim(), request.ExpiresAt, http.PersonId(), ct);
+
+        if (!joined.Matched)
         {
             return Results.NotFound(new { error = "No such person, or no such team." });
         }
@@ -254,6 +258,11 @@ public static class PeopleEndpoints
         log.LogInformation(
             "Team membership changed. {actor} {subject} {team} {event}",
             http.PersonId(), id, request.Slug, Events.TeamChanged);
+
+        if (joined.FirstTeam && joined.Active)
+        {
+            await WelcomeAsync(email, config, id, joined.Email, log, ct);
+        }
 
         return Results.NoContent();
     }
@@ -405,6 +414,60 @@ public static class PeopleEndpoints
 
         return Results.NoContent();
     }
+
+    /// <summary>
+    /// Tells a new organizer their console works, without letting that failure
+    /// reach the admin who just granted the access.
+    /// </summary>
+    /// <remarks>
+    /// The membership is already committed by the time this runs. A queue
+    /// insert that throws would turn a successful grant into a 500, and the
+    /// admin would re-add somebody who is already on the team while the real
+    /// problem — lark's queue — went unnamed. Logged at error so it is visible
+    /// as itself.
+    /// <para>
+    /// Still inline rather than on a background queue: this is one row insert
+    /// against the same database the membership was just written to, and a
+    /// background job to defer a millisecond would be a second thing that can
+    /// be down.
+    /// </para>
+    /// </remarks>
+    private static async Task WelcomeAsync(
+        IEmailSender email,
+        IConfiguration config,
+        Guid personId,
+        string address,
+        ILogger log,
+        CancellationToken ct)
+    {
+        try
+        {
+            await email.SendOrganizerWelcomeAsync(personId, address, ConsoleUrl(config), ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogError(
+                ex,
+                "The console welcome could not be queued for {PersonId}.", personId);
+        }
+    }
+
+    /// <summary>
+    /// Where the console is, for an email that has to link to it.
+    /// </summary>
+    /// <remarks>
+    /// Its own setting rather than <c>PublicBaseUrl</c>, which is the hacker
+    /// portal and a different origin entirely. Deriving it from the Google
+    /// redirect URI would be closer to true — that really is the console — but
+    /// it carries a callback path, and a welcome email that links somebody
+    /// into an OAuth callback is worse than one that links nowhere.
+    /// <para>
+    /// The localhost default is the port <c>dev.sh</c> starts the console on,
+    /// so a developer who sends one of these locally gets a link that works.
+    /// </para>
+    /// </remarks>
+    private static string ConsoleUrl(IConfiguration config) =>
+        (config["ConsoleBaseUrl"] ?? "http://localhost:3001").TrimEnd('/');
 
     /// <summary>
     /// Why the address could not be added, said so the admin knows what to do.
