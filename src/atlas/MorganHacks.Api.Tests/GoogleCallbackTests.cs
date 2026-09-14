@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Hosting;
+using MorganHacks.Identity.Data;
 using MorganHacks.Identity.Domain;
 using MorganHacks.Identity.Services;
 
@@ -132,7 +133,48 @@ public class GoogleCallbackTests(IdentityDatabase db)
         var response = await SignInAsync(app);
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
-        Assert.Equal("/sign-in?error=1", response.Headers.Location?.ToString());
+        Assert.Equal("/sign-in?error=unknown", response.Headers.Location?.ToString());
+    }
+
+    [Fact]
+    public async Task A_revoked_organizer_is_told_it_was_revoked()
+    {
+        // Not the same as never having been an organizer, and the difference
+        // decides what the person does next: one of them is fixed by an admin
+        // restoring them, and the other by signing in with a different
+        // account. One message for both sends people to the wrong person.
+        var email = Unique("revoked");
+        var person = await db.AddPersonAsync(email, "organizer");
+        var sub = $"sub-{Guid.NewGuid():N}";
+
+        using var app = AppReturning(new GoogleIdentity(sub, email));
+        await SignInAsync(app);
+
+        await new PostgresIdentityStore(db.DataSource).RevokePersonAsync(
+            person, DateTimeOffset.UtcNow, person, CancellationToken.None);
+
+        var response = await SignInAsync(app);
+
+        Assert.Equal("/sign-in?error=revoked", response.Headers.Location?.ToString());
+    }
+
+    [Fact]
+    public async Task An_address_bound_to_another_google_account_says_so()
+    {
+        // The allowlist is by address; the binding is by Google subject id.
+        // Somebody signing in with a second Google account on an allowlisted
+        // address is refused, and telling them "not an organizer" would have
+        // them asking to be added to a list they are already on.
+        var email = Unique("bound");
+        await db.AddPersonAsync(email, "organizer");
+
+        using var first = AppReturning(new GoogleIdentity($"sub-{Guid.NewGuid():N}", email));
+        await SignInAsync(first);
+
+        using var second = AppReturning(new GoogleIdentity($"sub-{Guid.NewGuid():N}", email));
+        var response = await SignInAsync(second);
+
+        Assert.Equal("/sign-in?error=bound", response.Headers.Location?.ToString());
     }
 
     [Fact]
