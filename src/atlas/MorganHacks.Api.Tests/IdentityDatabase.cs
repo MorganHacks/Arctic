@@ -100,6 +100,16 @@ public sealed class IdentityDatabase : IAsyncLifetime
         await cmd.ExecuteNonQueryAsync();
     }
 
+    /// <summary>Binds a Google account, the way a first sign-in would.</summary>
+    public async Task BindGoogleAsync(Guid personId, string subject)
+    {
+        await using var cmd = DataSource.CreateCommand(
+            "UPDATE identity.people SET google_sub = @sub WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", personId);
+        cmd.Parameters.AddWithValue("sub", subject);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public async Task<string?> GoogleSubOf(Guid personId)
     {
         await using var cmd = DataSource.CreateCommand(

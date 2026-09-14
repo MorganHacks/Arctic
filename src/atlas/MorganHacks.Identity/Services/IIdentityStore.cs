@@ -253,4 +253,31 @@ public interface IIdentityStore
     /// is the state the caller asked for.
     /// </returns>
     Task<bool> RestorePersonAsync(Guid personId, Guid actorId, CancellationToken ct);
+
+    /// <summary>
+    /// Unbinds the Google account an organizer signs in with, and ends their
+    /// sessions, in one transaction.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to the binding that first sign-in creates, and until
+    /// this existed there was none: an address bound to a Google account
+    /// nobody could reach any more was an organizer nobody could fix.
+    /// <para>
+    /// Allowlisting is unchanged — the person stays on the list, keeps their
+    /// teams and grants, and the next sign-in from any Google account that
+    /// proves control of the address binds afresh. That is the same trust the
+    /// first binding was given, handed back deliberately rather than by
+    /// accident.
+    /// </para>
+    /// <para>
+    /// Sessions go with it. Leaving them alive would let the account being
+    /// unlinked keep a working console while another claims the row.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// False when no such person. True for somebody who had nothing bound,
+    /// which is the state the caller asked for.
+    /// </returns>
+    Task<bool> UnlinkGoogleAsync(
+        Guid personId, DateTimeOffset now, Guid actorId, CancellationToken ct);
 }

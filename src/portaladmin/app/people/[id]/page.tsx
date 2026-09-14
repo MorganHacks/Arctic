@@ -13,6 +13,7 @@ import {
   Restore,
   Revoke,
   Teams,
+  Unlink,
   type GrantRow,
   type TeamRow,
 } from "./controls";
@@ -249,6 +250,17 @@ export default async function PersonPage({
         to be one-way: the screen that knows they are locked out was also the
         screen with nothing to do about it.
       */}
+      {/* Only when there is a binding to take away. On somebody who has never
+          signed in there is nothing to unlink, and a button that does nothing
+          is a button somebody presses twice. */}
+      {mine.has("people.manage_teams") && person.linked ? (
+        <Unlink
+          personId={person.id}
+          email={person.email}
+          isSelf={person.id === viewer.personId}
+        />
+      ) : null}
+
       {mine.has("people.manage_teams") ? (
         person.revoked ? (
           <Restore

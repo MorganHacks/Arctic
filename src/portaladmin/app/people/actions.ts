@@ -238,3 +238,32 @@ export async function restorePerson(
   revalidatePath("/people");
   return {};
 }
+
+/**
+ * Unbinds the Google account an organizer signs in with.
+ *
+ * For the person whose Google account is gone: locked out of it, graduated out
+ * of it, or bound to the wrong one of the three they were signed into at the
+ * time. The binding is made by the first sign-in, and until this existed there
+ * was no way to undo it short of the database.
+ *
+ * They keep their place on the allowlist and everything they were granted. The
+ * next sign-in from any Google account that proves control of the address
+ * binds afresh — the same trust the first binding was given, handed back on
+ * purpose. Their sessions end, because the account losing the binding must not
+ * keep a working console while another claims the row.
+ */
+export async function unlinkGoogle(
+  _previous: FormState,
+  form: FormData,
+): Promise<FormState> {
+  const id = text(form, "id");
+
+  const error = await apiWrite("POST", `/admin/people/${id}/unlink`);
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath(`/people/${id}`);
+  return {};
+}

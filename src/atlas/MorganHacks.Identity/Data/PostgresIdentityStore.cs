@@ -462,12 +462,14 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
     public async Task<PersonDetail?> FindPersonAsync(Guid personId, CancellationToken ct)
     {
         const string sql = """
-            SELECT kind, email, revoked_at FROM identity.people WHERE id = @id
+            SELECT kind, email, revoked_at, google_sub IS NOT NULL
+              FROM identity.people WHERE id = @id
             """;
 
         string kind;
         string email;
         DateTimeOffset? revokedAt;
+        bool linked;
 
         await using (var cmd = dataSource.CreateCommand(sql))
         {
@@ -483,6 +485,11 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             revokedAt = await reader.IsDBNullAsync(2, ct)
                 ? null
                 : reader.GetFieldValue<DateTimeOffset>(2);
+
+            // Whether a Google account is bound, never which one. The subject
+            // id has no use on a screen and every use in a log somebody should
+            // not be reading.
+            linked = reader.GetBoolean(3);
         }
 
         // Reuses the permission-context query rather than repeating its two
@@ -491,7 +498,8 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         // two copies of a membership query that would have to be kept in step.
         var (memberships, grants, _) = await GetPermissionContextAsync(personId, ct);
 
-        return new PersonDetail(personId, kind, email, revokedAt, memberships, grants);
+        return new PersonDetail(
+            personId, kind, email, revokedAt, memberships, grants, linked);
     }
 
     public async Task<IReadOnlyList<TeamSummary>> ListTeamsAsync(CancellationToken ct)
@@ -783,6 +791,45 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         // Unconditional, not skipped when the person was already revoked. The
         // failure this guards against is the first attempt having written the
         // flag and died before it cut the sessions.
+        await RevokeSessionsAsync(conn, tx, personId, now, ct);
+
+        await tx.CommitAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> UnlinkGoogleAsync(
+        Guid personId, DateTimeOffset now, Guid actorId, CancellationToken ct)
+    {
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await AuditContext.SetActorAsync(conn, tx, actorId, ct);
+
+        // Unconditional rather than `WHERE google_sub IS NOT NULL`, so that
+        // unlinking somebody who is already unlinked reports the state the
+        // caller asked for instead of "no such person".
+        const string unlink = """
+            UPDATE identity.people
+               SET google_sub = NULL, updated_at = now()
+             WHERE id = @id
+            RETURNING id
+            """;
+
+        await using (var cmd = new NpgsqlCommand(unlink, conn, tx))
+        {
+            cmd.Parameters.AddWithValue("id", personId);
+            if (await cmd.ExecuteScalarAsync(ct) is not Guid)
+            {
+                await tx.RollbackAsync(ct);
+                return false;
+            }
+        }
+
+        // In the same transaction, and not optional. The sessions that exist
+        // were started by the Google account being unlinked, and leaving them
+        // alive means the account somebody is taking the binding away from
+        // keeps a working console until its cookie expires — while a different
+        // account is free to claim the row. One of those two is meant to have
+        // access and it is not both.
         await RevokeSessionsAsync(conn, tx, personId, now, ct);
 
         await tx.CommitAsync(ct);
