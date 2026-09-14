@@ -160,10 +160,25 @@ public static partial class EmailHtml
     internal static readonly HashSet<string> Discarded =
         new(StringComparer.Ordinal)
         {
-            "script", "style", "iframe", "frame", "frameset", "object", "embed",
+            "script", "iframe", "frame", "frameset", "object", "embed",
             "applet", "noscript", "svg", "math", "template", "textarea", "title",
-            "head", "xmp",
+            "xmp",
         };
+
+    // `style` and `head` used to be on that list and are deliberately not any
+    // more.
+    //
+    // `style` is read instead of thrown away — see the branch in Sanitize —
+    // because a designed email is a stylesheet and a skeleton, and dropping
+    // the stylesheet does not produce the email unstyled. It produces a
+    // different email, drawn with whatever margins the reader's client
+    // defaults to.
+    //
+    // `head` had to go with it, and is the reason the first attempt at this
+    // changed nothing: a stylesheet lives in the head, and discarding the head
+    // wholesale meant the style branch was never reached. Unwrapped, its
+    // children are each judged on their own — `title` still goes with its
+    // text, `meta` and `link` are still dropped, and the stylesheet survives.
 
     /// <summary>
     /// Disallowed tags that never have a closing tag to search for.
@@ -271,6 +286,26 @@ public static partial class EmailHtml
                 continue;
             }
 
+            // Kept, and read. Every other tag whose body is code is thrown
+            // away with its body; this one is a stylesheet, and throwing it
+            // away leaves the email to be drawn with whatever margins the
+            // reader's client defaults to — which is not the email unstyled,
+            // it is a different email with gaps nobody put there.
+            if (tag.Name == "style" && !tag.SelfClosing)
+            {
+                var after = SkipPast(html, tag.Name, i);
+                var css = EmailStylesheet.Sanitize(Between(html, i, after, tag.Name));
+
+                if (css.Length > 0)
+                {
+                    Flush(output, text);
+                    output.Append("<style>").Append(css).Append("</style>");
+                }
+
+                i = after;
+                continue;
+            }
+
             if (Discarded.Contains(tag.Name) && !tag.SelfClosing)
             {
                 i = SkipPast(html, tag.Name, i);
@@ -335,7 +370,14 @@ public static partial class EmailHtml
             }
         }
 
-        return output.ToString();
+        // Trimmed at the two ends only. A document that opened with a doctype
+        // and a head leaves their whitespace behind once they are gone, which
+        // renders as blank lines above the email and appears in no editor the
+        // author checked it in. Inner whitespace is left exactly as written:
+        // between two inline elements it is a space the reader can see, and
+        // collapsing it would be this sanitiser editing the design rather than
+        // checking it.
+        return output.ToString().Trim();
     }
 
     /// <summary>
@@ -502,6 +544,25 @@ public static partial class EmailHtml
     }
 
     /// <summary>Where the contents of a discarded element end.</summary>
+    /// <summary>
+    /// What sat between an opening tag and its closing one.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="after"/> is what <see cref="SkipPast"/> returned, which
+    /// is the index past the closing tag rather than the index of it. Walking
+    /// back to the <c>&lt;</c> is how the body is found without searching the
+    /// string a second time and finding a different closing tag than the one
+    /// that was skipped to.
+    /// </remarks>
+    private static string Between(string html, int from, int after, string name)
+    {
+        var close = after - name.Length - 3;
+
+        return close > from && close <= html.Length
+            ? html[from..close]
+            : string.Empty;
+    }
+
     internal static int SkipPast(string html, string name, int from)
     {
         var close = html.IndexOf("</" + name, from, StringComparison.OrdinalIgnoreCase);
