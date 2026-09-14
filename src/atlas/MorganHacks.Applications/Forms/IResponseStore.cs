@@ -104,3 +104,33 @@ public interface IResponseStore
         FormQuestions questions,
         CancellationToken ct = default);
 }
+
+/// <summary>
+/// Reading back answers to a form that is not an application.
+/// </summary>
+/// <remarks>
+/// Scoped by form rather than by event, which is the difference that keeps it
+/// out of <see cref="IResponseStore"/>. A survey is answered once per person
+/// per form and belongs to the form; an application belongs to the event and
+/// is read across every form of that cycle.
+/// <para>
+/// No <see cref="FormQuestions"/> parameter, because nothing is promoted to a
+/// column: the answers were written keyed by question and read back the same
+/// way. The version comes with each row so a reader can still say which
+/// questions were on the page at the time.
+/// </para>
+/// </remarks>
+public interface ISurveyResponseStore
+{
+    /// <summary>One page, newest first.</summary>
+    Task<ResponsePage> PageAsync(
+        Guid formId, ResponseCursor? after, int limit, CancellationToken ct = default);
+
+    /// <summary>One response on that form, or null.</summary>
+    Task<FormResponse?> ByIdAsync(
+        Guid formId, Guid responseId, CancellationToken ct = default);
+
+    /// <summary>Every response, in the same order, streamed.</summary>
+    IAsyncEnumerable<FormResponse> AllAsync(
+        Guid formId, CancellationToken ct = default);
+}

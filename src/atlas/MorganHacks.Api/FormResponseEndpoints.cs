@@ -94,6 +94,7 @@ public static class FormResponseEndpoints
         Guid id,
         IFormStore forms,
         IResponseStore responses,
+        ISurveyResponseStore surveys,
         CancellationToken ct,
         string? cursor = null,
         int limit = DefaultLimit)
@@ -114,7 +115,7 @@ public static class FormResponseEndpoints
         }
 
         var questions = FormQuestions.From(await forms.HistoryAsync(id, ct));
-        var page = await ResponsesOf(form, questions, responses, after, Clamp(limit), ct);
+        var page = await ResponsesOf(form, questions, responses, surveys, after, Clamp(limit), ct);
 
         return Results.Ok(new
         {
@@ -149,6 +150,7 @@ public static class FormResponseEndpoints
         HttpContext http,
         IFormStore forms,
         IResponseStore responses,
+        ISurveyResponseStore surveys,
         IResumeStore resumes,
         PermissionService permissions,
         ILogger<FormResponse> log,
@@ -164,7 +166,7 @@ public static class FormResponseEndpoints
 
         var response = form.IsApplication
             ? await responses.ByIdAsync(form.EventId, responseId, questions, ct)
-            : null;
+            : await surveys.ByIdAsync(form.Id, responseId, ct);
 
         if (response is null)
         {
@@ -240,6 +242,7 @@ public static class FormResponseEndpoints
         HttpContext http,
         IFormStore forms,
         IResponseStore responses,
+        ISurveyResponseStore surveys,
         ILogger<FormResponse> log,
         CancellationToken ct)
     {
@@ -290,25 +293,31 @@ public static class FormResponseEndpoints
                  .. columns.Select(f => f.Key),
                  "resume_filename", "resume_size", "other_answers"]));
 
-            if (form.IsApplication)
-            {
-                await foreach (var response in responses.AllAsync(form.EventId, questions, ct))
-                {
-                    await writer.WriteLineAsync(Row([
-                        response.Id.ToString(),
-                        response.SubmittedAt.ToString("O", CultureInfo.InvariantCulture),
-                        response.FormVersion.ToString(CultureInfo.InvariantCulture),
-                        .. columns.Select(f => response.Answers.TryGetValue(f.Key, out var a)
-                            ? Text(a)
-                            : string.Empty),
-                        response.Resume?.Filename ?? string.Empty,
-                        response.Resume?.Size?.ToString(CultureInfo.InvariantCulture)
-                            ?? string.Empty,
-                        Leftovers(response, known),
-                    ]));
+            // Both kinds, from whichever table holds them. This used to be
+            // wrapped in a check for an application form, so a survey
+            // exported as a file with headings and no rows — which reads
+            // as nobody having answered rather than as an export that
+            // could not see them.
+            var source = form.IsApplication
+                ? responses.AllAsync(form.EventId, questions, ct)
+                : surveys.AllAsync(form.Id, ct);
 
-                    rows++;
-                }
+            await foreach (var response in source)
+            {
+                await writer.WriteLineAsync(Row([
+                    response.Id.ToString(),
+                    response.SubmittedAt.ToString("O", CultureInfo.InvariantCulture),
+                    response.FormVersion.ToString(CultureInfo.InvariantCulture),
+                    .. columns.Select(f => response.Answers.TryGetValue(f.Key, out var a)
+                        ? Text(a)
+                        : string.Empty),
+                    response.Resume?.Filename ?? string.Empty,
+                    response.Resume?.Size?.ToString(CultureInfo.InvariantCulture)
+                        ?? string.Empty,
+                    Leftovers(response, known),
+                ]));
+
+                rows++;
             }
         }
 
@@ -393,16 +402,33 @@ public static class FormResponseEndpoints
     /// survey's id.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Where this form's answers live.
+    /// </summary>
+    /// <remarks>
+    /// Two tables, and which one depends on the kind of form. An application
+    /// is a row in <c>applications.applications</c>; everything else a
+    /// signed-in person fills in is a row in
+    /// <c>applications.form_submissions</c>.
+    /// <para>
+    /// The second branch used to return an empty page. Answers were being
+    /// written to it the whole time, so an organizer could publish a survey,
+    /// watch somebody answer it, and find the responses screen empty — with
+    /// nothing anywhere to say the answer had been kept. That is worse than an
+    /// error, because there is nothing to look up.
+    /// </para>
+    /// </remarks>
     private static Task<ResponsePage> ResponsesOf(
         Form form,
         FormQuestions questions,
         IResponseStore responses,
+        ISurveyResponseStore surveys,
         ResponseCursor? after,
         int limit,
         CancellationToken ct) =>
         form.IsApplication
             ? responses.PageAsync(form.EventId, questions, after, limit, ct)
-            : Task.FromResult(new ResponsePage([], null));
+            : surveys.PageAsync(form.Id, after, limit, ct);
 
     private static int Clamp(int limit) =>
         limit <= 0 ? DefaultLimit : Math.Min(limit, MaxLimit);
