@@ -176,11 +176,22 @@ public static class GoogleEndpoints
             // not worth storing PII for.
             log.LogInformation("Organizer sign-in refused: {Reason}", organizer.Rejection);
 
-            // Back to the sign-in page, which says the same thing in a place
-            // the person can act on. The reason is deliberately not passed
-            // along: "not an organizer" and "revoked" and "bound to another
-            // account" are all the same instruction — ask an admin.
-            return Results.Redirect($"{SignInPath}?error=1");
+            // Back to the sign-in page, carrying which of the three it was.
+            //
+            // This used to send the same code for all of them, on the reading
+            // that every refusal means "ask an admin". That reading is wrong:
+            // the commonest case by far is somebody signed into the wrong
+            // Google account, which they can fix themselves in ten seconds and
+            // which no admin can fix for them at all. Sending one message for
+            // three causes sent people to the wrong person with the wrong
+            // question.
+            //
+            // Naming the reason leaks nothing. Google has verified that this
+            // person controls this address, so the only reader of "that access
+            // was revoked" is the account holder it is about. The refusal an
+            // unverified stranger can reach is still the generic one, because
+            // they never get this far.
+            return Results.Redirect($"{SignInPath}?error={Code(organizer.Rejection)}");
         }
 
         var sessionToken = await sessions.StartAsync(
@@ -232,6 +243,22 @@ public static class GoogleEndpoints
     /// </para>
     /// </remarks>
     private const string SignedInPath = "/";
+    /// <summary>
+    /// What the sign-in page is told, so it can say something useful.
+    /// </summary>
+    /// <remarks>
+    /// Words rather than numbers because the only thing that ever reads them
+    /// is a screen written by hand, and <c>?error=2</c> in a bug report tells
+    /// nobody anything. An unrecognised value falls back to the generic
+    /// sentence, so a stale bookmark cannot produce a blank page.
+    /// </remarks>
+    private static string Code(OrganizerRejection? why) => why switch
+    {
+        OrganizerRejection.Revoked => "revoked",
+        OrganizerRejection.BoundToAnotherAccount => "bound",
+        _ => "unknown",
+    };
+
     private const string SignInPath = "/sign-in";
 
     private static string Base64Url(byte[] bytes) =>
