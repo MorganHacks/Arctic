@@ -8,7 +8,15 @@ import {
 } from "@/lib/api";
 import { Shell } from "../../shell";
 import styles from "../people.module.css";
-import { Grants, Revoke, Teams, type GrantRow, type TeamRow } from "./controls";
+import {
+  Grants,
+  Restore,
+  Revoke,
+  Teams,
+  type GrantRow,
+  type TeamRow,
+} from "./controls";
+import { Invite } from "./invite";
 import { Effective, type EffectiveRow, type Source } from "./provenance";
 
 /**
@@ -202,6 +210,21 @@ export default async function PersonPage({
         ) : null}
       </p>
 
+      {/*
+        Only for somebody who can actually sign in. A revoked person has a
+        message to send them too, and it is not this one — theirs is that they
+        were revoked, which is not a sentence the console should be handing
+        anybody a Copy button for.
+
+        Organizers only: hackers do not use Google and never see this console,
+        so the instruction would be wrong in both halves.
+      */}
+      {mine.has("people.manage_teams") &&
+      person.kind === "organizer" &&
+      !person.revoked ? (
+        <Invite email={person.email} />
+      ) : null}
+
       <Effective rows={effective} />
 
       <div className="columns">
@@ -220,12 +243,26 @@ export default async function PersonPage({
         />
       </div>
 
-      {mine.has("people.manage_teams") && !person.revoked ? (
-        <Revoke
-          personId={person.id}
-          email={person.email}
-          isSelf={person.id === viewer.personId}
-        />
+      {/*
+        One panel or the other, never both and never neither. A revoked person
+        used to have no control at all on this page, which is how revoking came
+        to be one-way: the screen that knows they are locked out was also the
+        screen with nothing to do about it.
+      */}
+      {mine.has("people.manage_teams") ? (
+        person.revoked ? (
+          <Restore
+            personId={person.id}
+            email={person.email}
+            revokedAt={person.revokedAt}
+          />
+        ) : (
+          <Revoke
+            personId={person.id}
+            email={person.email}
+            isSelf={person.id === viewer.personId}
+          />
+        )
       ) : null}
     </Shell>
   );

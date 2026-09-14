@@ -570,12 +570,26 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         // changes what the admin should do about it, so it is worth the second
         // query — this is a message for a person, not a security decision.
         const string existing = """
-            SELECT kind FROM identity.people WHERE lower(email) = lower(@email)
+            SELECT id, kind, revoked_at IS NOT NULL AS revoked
+              FROM identity.people
+             WHERE lower(email) = lower(@email)
             """;
 
-        await using var lookup = new NpgsqlCommand(existing, conn, tx);
-        lookup.Parameters.AddWithValue("email", email.Trim());
-        var kind = await lookup.ExecuteScalarAsync(ct) as string;
+        var id = Guid.Empty;
+        string? kind = null;
+        var revoked = false;
+
+        await using (var lookup = new NpgsqlCommand(existing, conn, tx))
+        {
+            lookup.Parameters.AddWithValue("email", email.Trim());
+            await using var reader = await lookup.ExecuteReaderAsync(ct);
+            if (await reader.ReadAsync(ct))
+            {
+                id = reader.GetGuid(0);
+                kind = reader.GetString(1);
+                revoked = reader.GetBoolean(2);
+            }
+        }
 
         // Nothing was written, so there is nothing to commit and nothing for
         // the trail to say. A refused request is not a change to anybody's
@@ -585,33 +599,80 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         // A null kind means the row was deleted between the two statements,
         // which nothing in this system does. Reporting the conflict we already
         // proved is better than inventing a third outcome for it.
-        return kind == "hacker"
-            ? AddOrganizerResult.Reject(AddOrganizerRejection.AddressIsAHackerAccount)
+        if (kind == "hacker")
+        {
+            return AddOrganizerResult.Reject(AddOrganizerRejection.AddressIsAHackerAccount);
+        }
+
+        // The case this second query is really for. The insert above did
+        // nothing because the row is already there, which from the console
+        // looks exactly like adding somebody who is already set up — except
+        // that they cannot sign in, and nothing an admin does in the add box
+        // will change that.
+        return revoked
+            ? AddOrganizerResult.Reject(AddOrganizerRejection.AlreadyAnOrganizerButRevoked, id)
             : AddOrganizerResult.Reject(AddOrganizerRejection.AlreadyAnOrganizer);
     }
 
-    public async Task<bool> AddToTeamAsync(
+    public async Task<JoinTeamResult> AddToTeamAsync(
         Guid personId, string teamSlug, DateTimeOffset? expiresAt,
         Guid actorId, CancellationToken ct)
     {
         // Selecting the two ids rather than passing them in means an unknown
         // person or an unknown team inserts nothing and returns nothing,
         // instead of raising a foreign-key error the caller has to decode.
+        //
+        // `held` counts what was there before the insert. A CTE sees the
+        // snapshot the statement started with, so this is the count as it was
+        // even though the insert in the same statement changes it — which is
+        // what makes "was this their first team" answerable at all without a
+        // second query that another admin could slip between.
         const string sql = """
-            INSERT INTO identity.team_members (person_id, team_id, expires_at)
-            SELECT p.id, t.id, @expiresAt
-              FROM identity.people p, identity.teams t
-             WHERE p.id = @personId AND t.slug = @slug
-            ON CONFLICT (person_id, team_id) DO UPDATE SET expires_at = EXCLUDED.expires_at
-            RETURNING person_id
+            WITH held AS (
+                SELECT count(*) AS n FROM identity.team_members
+                 WHERE person_id = @personId
+            ), joined AS (
+                INSERT INTO identity.team_members (person_id, team_id, expires_at)
+                SELECT p.id, t.id, @expiresAt
+                  FROM identity.people p, identity.teams t
+                 WHERE p.id = @personId AND t.slug = @slug
+                ON CONFLICT (person_id, team_id)
+                    DO UPDATE SET expires_at = EXCLUDED.expires_at
+                RETURNING person_id
+            )
+            SELECT p.email, held.n = 0, p.revoked_at IS NULL
+              FROM joined
+              JOIN identity.people p ON p.id = joined.person_id
+             CROSS JOIN held
             """;
 
-        return await WriteAsync(actorId, sql, ct, cmd =>
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await AuditContext.SetActorAsync(conn, tx, actorId, ct);
+
+        await using var cmd = new NpgsqlCommand(sql, conn, tx);
+        cmd.Parameters.AddWithValue("personId", personId);
+        cmd.Parameters.AddWithValue("slug", teamSlug);
+        cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
+
+        var result = JoinTeamResult.NoSuchThing;
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
         {
-            cmd.Parameters.AddWithValue("personId", personId);
-            cmd.Parameters.AddWithValue("slug", teamSlug);
-            cmd.Parameters.AddWithValue("expiresAt", (object?)expiresAt ?? DBNull.Value);
-        });
+            if (await reader.ReadAsync(ct))
+            {
+                result = new JoinTeamResult(
+                    Matched: true,
+                    FirstTeam: reader.GetBoolean(1),
+                    Email: reader.GetString(0),
+                    Active: reader.GetBoolean(2));
+            }
+        }
+
+        // Committed either way, like every other write here: a statement that
+        // matched nothing wrote nothing, and a rollback would say the same
+        // thing at the cost of a second code path.
+        await tx.CommitAsync(ct);
+        return result;
     }
 
     public async Task<bool> RemoveFromTeamAsync(
@@ -726,6 +787,22 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
 
         await tx.CommitAsync(ct);
         return true;
+    }
+
+    public Task<bool> RestorePersonAsync(Guid personId, Guid actorId, CancellationToken ct)
+    {
+        // No session work to undo. Revoking cut the sessions that existed, and
+        // this does not bring them back — the person signs in again, which is
+        // the only way the system learns they are still who they were.
+        const string restore = """
+            UPDATE identity.people
+               SET revoked_at = NULL, updated_at = now()
+             WHERE id = @id
+            RETURNING id
+            """;
+
+        return WriteAsync(actorId, restore, ct, cmd =>
+            cmd.Parameters.AddWithValue("id", personId));
     }
 
     /// <summary>

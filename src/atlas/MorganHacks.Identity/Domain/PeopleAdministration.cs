@@ -16,6 +16,20 @@ public enum AddOrganizerRejection
     AlreadyAnOrganizer,
 
     /// <summary>
+    /// The address belongs to an organizer whose access was revoked.
+    /// </summary>
+    /// <remarks>
+    /// Told apart from <see cref="AlreadyAnOrganizer"/> because the two need
+    /// opposite actions and look identical from the outside. Adding a revoked
+    /// colleague back is the obvious thing to try, and it cannot work: the row
+    /// already exists, so the insert matches nothing and the revocation stays
+    /// where it was. Without this case the admin is told "already an
+    /// organizer" about somebody who cannot sign in, and has no way to find
+    /// out why from the console.
+    /// </remarks>
+    AlreadyAnOrganizerButRevoked,
+
+    /// <summary>
     /// The address already has a hacker account.
     /// </summary>
     /// <remarks>
@@ -40,6 +54,52 @@ public readonly record struct AddOrganizerResult
 
     public static AddOrganizerResult Accept(Guid personId) => new(personId, null);
     public static AddOrganizerResult Reject(AddOrganizerRejection why) => new(Guid.Empty, why);
+
+    /// <summary>
+    /// Refused, naming the person already holding the address.
+    /// </summary>
+    /// <remarks>
+    /// Only the revoked case carries an id, and only because the fix is a
+    /// second request against that person. Telling an admin "restore them
+    /// instead" without saying which row to restore leaves them searching a
+    /// list for an address the console has just refused to show them.
+    /// </remarks>
+    public static AddOrganizerResult Reject(AddOrganizerRejection why, Guid personId) =>
+        new(personId, why);
+}
+
+/// <summary>
+/// What adding somebody to a team turned out to be.
+/// </summary>
+/// <remarks>
+/// More than a bool because one caller needs to know whether this was the
+/// moment the person's access became real. Joining a first team is when an
+/// organizer goes from "on the allowlist, can see nothing" to "can do the job"
+/// — the only point at which telling them so is worth an email.
+/// <para>
+/// <see cref="FirstTeam"/> is decided against the memberships that existed
+/// before the insert, in the same statement, so re-adding somebody to a team
+/// they are already on is not a first and cannot mail them twice.
+/// </para>
+/// </remarks>
+/// <param name="Matched">
+/// False when there is no such person or no such team, which is the only
+/// failure this write has.
+/// </param>
+/// <param name="Email">
+/// Theirs, carried back so a caller that is about to write to them does not
+/// need a second query and cannot race a change of address. Empty when
+/// nothing matched.
+/// </param>
+/// <param name="Active">
+/// False when the person is revoked. Adding a revoked person to a team is
+/// legitimate — it is how somebody is set up before being restored — but they
+/// cannot sign in, so nothing should tell them they can.
+/// </param>
+public readonly record struct JoinTeamResult(
+    bool Matched, bool FirstTeam, string Email, bool Active)
+{
+    public static readonly JoinTeamResult NoSuchThing = new(false, false, "", false);
 }
 
 /// <summary>

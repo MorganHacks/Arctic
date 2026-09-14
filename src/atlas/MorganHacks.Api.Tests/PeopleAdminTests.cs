@@ -172,6 +172,150 @@ public class PeopleAdminTests(IdentityDatabase db)
         Assert.Equal(first, await RevokedAt(leaver));
     }
 
+    [Fact]
+    public async Task Restoring_lets_a_revoked_organizer_work_again()
+    {
+        // The bug this endpoint exists for: revoking is one-way without it.
+        // Adding the address back does nothing, because the row is already
+        // there, so a colleague revoked by mistake stays locked out of a
+        // system that will cheerfully report them as "already an organizer".
+        var leaver = await Organizer("returner");
+        await db.GrantAsync(leaver, Permission.PeopleView.Value);
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/revoke", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Send(HttpMethod.Get, "/admin/people", await SignIn(leaver))).StatusCode);
+
+        var restored = await Send(
+            HttpMethod.Post, $"/admin/people/{leaver}/restore", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NoContent, restored.StatusCode);
+        Assert.Null(await RevokedAt(leaver));
+
+        // Signing in afresh, because that is what the person actually does.
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(HttpMethod.Get, "/admin/people", await SignIn(leaver))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Restoring_does_not_bring_the_old_sessions_back()
+    {
+        // Revoking cut the sessions on purpose, and a laptop that was taken
+        // away must not start working again because somebody was later put
+        // back on the allowlist. Restoring is permission to sign in, not a
+        // reissue of the cookies that were killed.
+        var leaver = await Organizer("stale");
+        await db.GrantAsync(leaver, Permission.PeopleView.Value);
+        var oldCookie = await SignIn(leaver);
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/revoke", admin.Cookie);
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/restore", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Send(HttpMethod.Get, "/admin/people", oldCookie)).StatusCode);
+        Assert.Equal(0, await LiveSessions(leaver));
+    }
+
+    [Fact]
+    public async Task Restoring_returns_the_teams_they_already_had()
+    {
+        // Revoking closes the door in front of a person's access rather than
+        // deleting it, so restoring hands back what they had. The alternative
+        // — an empty account — looks like a working restore and quietly makes
+        // every reinstatement a re-onboarding nobody was told to do.
+        var leaver = await Organizer("teams");
+        await db.AddToTeamAsync(leaver, "super-admin");
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/revoke", admin.Cookie);
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/restore", admin.Cookie);
+
+        var detail = await Detail(leaver, admin.Cookie);
+        Assert.False(detail.GetProperty("revoked").GetBoolean());
+        Assert.Contains(
+            detail.GetProperty("teams").EnumerateArray(),
+            t => t.GetProperty("slug").GetString() == "super-admin");
+    }
+
+    [Fact]
+    public async Task Adding_a_revoked_organizer_back_points_at_the_restore()
+    {
+        // The dead end this pair of changes removes. The admin's first instinct
+        // is to type the address in again; the answer they used to get was
+        // "already an organizer", which is true, unhelpful, and identical to
+        // what a working account looks like.
+        var admin = await SuperAdmin("closer");
+        var email = Unique("returning");
+
+        var added = await Send(
+            HttpMethod.Post, "/admin/people", admin.Cookie, new { email });
+        var id = (await Body(added)).GetProperty("id").GetGuid();
+
+        await Send(HttpMethod.Post, $"/admin/people/{id}/revoke", admin.Cookie);
+
+        var again = await Send(
+            HttpMethod.Post, "/admin/people", admin.Cookie, new { email });
+
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+
+        var body = await Body(again);
+        Assert.Contains("restore", body.GetProperty("error").GetString()!);
+        Assert.Equal(id, body.GetProperty("personId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Adding_an_address_that_is_a_working_organizer_still_just_says_so()
+    {
+        // The other half of the same sentence. If every conflict started
+        // talking about revocation, the message would stop meaning anything on
+        // the case it was written for.
+        var admin = await SuperAdmin("closer");
+        var email = Unique("present");
+
+        await Send(HttpMethod.Post, "/admin/people", admin.Cookie, new { email });
+        var again = await Send(
+            HttpMethod.Post, "/admin/people", admin.Cookie, new { email });
+
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+
+        var body = await Body(again);
+        Assert.DoesNotContain("restore", body.GetProperty("error").GetString()!);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("personId").ValueKind);
+    }
+
+    [Fact]
+    public async Task Restoring_somebody_who_is_not_revoked_leaves_them_alone()
+    {
+        // Safe to repeat, for the same reason revoking is: a half-failed job
+        // gets finished by doing it again. It must not read as an error, and
+        // it must not disturb the sessions of somebody who is working.
+        var working = await Organizer("fine");
+        await db.GrantAsync(working, Permission.PeopleView.Value);
+        var theirCookie = await SignIn(working);
+        var admin = await SuperAdmin("closer");
+
+        var response = await Send(
+            HttpMethod.Post, $"/admin/people/{working}/restore", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(HttpMethod.Get, "/admin/people", theirCookie)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Restoring_an_id_that_does_not_exist_is_a_404()
+    {
+        var admin = await SuperAdmin("closer");
+
+        var response = await Send(
+            HttpMethod.Post, $"/admin/people/{Guid.NewGuid()}/restore", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     // ------------------------------------------------------- the allowlist ---
 
     [Fact]
@@ -418,6 +562,116 @@ public class PeopleAdminTests(IdentityDatabase db)
         Assert.Equal(Permission.Sensitive.Select(p => p.Value).ToHashSet(), sensitive);
     }
 
+    // ------------------------------------------------------- the welcome ---
+
+    [Fact]
+    public async Task Joining_a_first_team_queues_a_welcome()
+    {
+        // Being on the allowlist grants nothing, so this is the moment the
+        // access becomes real and the only moment worth telling somebody
+        // about.
+        var (person, address) = await NewOrganizer("welcomed");
+        var admin = await SuperAdmin("closer");
+
+        var joined = await Send(
+            HttpMethod.Post, $"/admin/people/{person}/teams", admin.Cookie,
+            new { slug = "logistics" });
+
+        Assert.Equal(HttpStatusCode.NoContent, joined.StatusCode);
+        Assert.Equal(1, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task Being_added_to_the_allowlist_alone_queues_nothing()
+    {
+        // The other half of the rule, and the reason the trigger is not on the
+        // add endpoint: an organizer with no teams signs in to a console that
+        // shows them nothing, and an email at that moment reads as a broken
+        // account rather than as access.
+        var (_, address) = await NewOrganizer("quiet");
+
+        Assert.Equal(0, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task A_second_team_does_not_welcome_them_again()
+    {
+        // Once per person. Somebody who joins logistics in September and
+        // judging in March is not new in March, and an email saying they are
+        // teaches people to ignore this one.
+        var (person, address) = await NewOrganizer("twice-teamed");
+        var admin = await SuperAdmin("closer");
+
+        var first = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie, new { slug = "logistics" });
+        var second = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie, new { slug = "comms" });
+
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.Equal(1, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task Retiming_a_membership_does_not_welcome_them_again()
+    {
+        // The same endpoint is how an admin changes an expiry — "until the
+        // Sunday after the event", then "make that the Monday" — and an upsert
+        // that mailed on every correction would be unusable.
+        var (person, address) = await NewOrganizer("retimed");
+        var admin = await SuperAdmin("closer");
+
+        var first = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie, new { slug = "logistics" });
+        var second = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie,
+            new { slug = "logistics", expiresAt = DateTimeOffset.UtcNow.AddDays(7) });
+
+        // Both asserted, because a second call that quietly failed would leave
+        // one welcome behind and make this test pass for the wrong reason.
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+        Assert.Equal(1, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task A_revoked_person_put_on_a_team_is_not_welcomed()
+    {
+        // Setting somebody up before restoring them is legitimate, and they
+        // still cannot sign in. Mailing "you have access" to an account that
+        // will turn them away is worse than saying nothing.
+        var (person, address) = await NewOrganizer("locked");
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{person}/revoke", admin.Cookie);
+        var joined = await Send(HttpMethod.Post, $"/admin/people/{person}/teams",
+            admin.Cookie, new { slug = "logistics" });
+
+        // The join has to have worked. A test that proves "no email" by way of
+        // a failed request proves nothing at all.
+        Assert.Equal(HttpStatusCode.NoContent, joined.StatusCode);
+        Assert.Equal(0, await Welcomes(address));
+    }
+
+    [Fact]
+    public async Task The_welcome_names_the_console_and_the_address_to_use()
+    {
+        // The whole job of this email. Somebody added as name@morgan.edu who
+        // signs in with a personal Gmail is turned away by a message that
+        // cannot explain itself without telling strangers who is on the
+        // allowlist — so the explanation has to arrive before the refusal, in
+        // the inbox that works.
+        var (person, address) = await NewOrganizer("named");
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{person}/teams", admin.Cookie,
+            new { slug = "logistics" });
+
+        var body = await WelcomeBody(address);
+        Assert.Contains(address, body);
+        Assert.Contains("localhost:3001", body);
+    }
+
     // ------------------------------------------------------ the store only ---
 
     [Fact]
@@ -442,6 +696,7 @@ public class PeopleAdminTests(IdentityDatabase db)
         (HttpMethod.Post, $"/admin/people/{target}/grants"),
         (HttpMethod.Delete, $"/admin/people/{target}/grants/people.view"),
         (HttpMethod.Post, $"/admin/people/{target}/revoke"),
+        (HttpMethod.Post, $"/admin/people/{target}/restore"),
     ];
 
     private HttpClient Client() => _app.CreateClient(
@@ -475,6 +730,35 @@ public class PeopleAdminTests(IdentityDatabase db)
 
     private Task<Guid> Organizer(string prefix) =>
         db.AddPersonAsync(Unique(prefix), "organizer");
+
+    /// <summary>An organizer whose address the test needs to look mail up by.</summary>
+    private async Task<(Guid Id, string Email)> NewOrganizer(string prefix)
+    {
+        var email = Unique(prefix);
+        return (await db.AddPersonAsync(email, "organizer"), email);
+    }
+
+    private const string WelcomesQueued = """
+        SELECT count(*) FROM notify.messages m
+          JOIN notify.campaigns c ON c.id = m.campaign_id
+          JOIN notify.templates t ON t.id = c.template_id
+         WHERE t.key = 'organizer_welcome' AND m.to_email = @email
+        """;
+
+    private async Task<int> Welcomes(string email)
+    {
+        await using var cmd = db.DataSource.CreateCommand(WelcomesQueued);
+        cmd.Parameters.AddWithValue("email", email);
+        return (int)(long)(await cmd.ExecuteScalarAsync())!;
+    }
+
+    private async Task<string> WelcomeBody(string email)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            WelcomesQueued.Replace("count(*)", "m.rendered_body_html"));
+        cmd.Parameters.AddWithValue("email", email);
+        return (string)(await cmd.ExecuteScalarAsync())!;
+    }
 
     private async Task<(Guid Id, string Cookie)> SuperAdmin(string prefix)
     {

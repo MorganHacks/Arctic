@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { addOrganizer } from "./actions";
 
@@ -43,6 +44,15 @@ export function AddOrganizer() {
       {state.error ? (
         <p className="error" style={{ marginTop: "0.9rem", marginBottom: 0 }}>
           {state.error}
+          {/* The one refusal with somewhere to go. Typing the address of a
+              revoked colleague back into this box is the obvious thing to try
+              and cannot work, so the refusal carries the page that can. */}
+          {state.personId ? (
+            <>
+              {" "}
+              <Link href={`/people/${state.personId}`}>Open their page</Link>
+            </>
+          ) : null}
         </p>
       ) : null}
     </form>

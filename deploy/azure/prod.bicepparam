@@ -24,6 +24,7 @@ param googleRedirectUri = readEnvironmentVariable('GOOGLE_REDIRECT_URI', '')
 
 // The portalweb origin. Emailed sign-in links are built from it.
 param publicBaseUrl = readEnvironmentVariable('PUBLIC_BASE_URL', '')
+param consoleBaseUrl = readEnvironmentVariable('CONSOLE_BASE_URL', '')
 
 // The portalforms origin. A sign-in link for a form lands here instead, so the
 // session cookie is set on the host the form is actually served from.

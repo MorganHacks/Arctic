@@ -18,4 +18,22 @@ public interface IEmailSender
     /// </param>
     Task SendMagicLinkAsync(
         Guid personId, string email, string link, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tells somebody they can now use the organizer console.
+    /// </summary>
+    /// <remarks>
+    /// Sent when a person joins their first team, not when their address is
+    /// added. Being on the allowlist grants nothing, so an email at that
+    /// moment would be true and would read as a broken account.
+    /// <para>
+    /// The address is in the body as well as in the envelope on purpose. The
+    /// failure this exists to prevent is somebody signing in with the wrong
+    /// Google account, and the refusal they would get cannot explain itself
+    /// without telling strangers which addresses are on the allowlist.
+    /// </para>
+    /// </remarks>
+    /// <param name="console">Where the console is, absolute.</param>
+    Task SendOrganizerWelcomeAsync(
+        Guid personId, string email, string console, CancellationToken ct = default);
 }

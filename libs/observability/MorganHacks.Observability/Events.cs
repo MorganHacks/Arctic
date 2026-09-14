@@ -245,11 +245,31 @@ public static class Events
     /// <summary>A team membership was added, retimed, or removed.</summary>
     public const string TeamChanged = "access.team_changed";
 
+    /// <summary>
+    /// A new organizer was told their console works.
+    /// </summary>
+    /// <remarks>
+    /// Queued once per person, on their first team. A rate that climbs while
+    /// nobody is onboarding means somebody is being mailed repeatedly, which
+    /// would mean the once-per-person rule has stopped holding.
+    /// </remarks>
+    public const string OrganizerWelcomed = "access.organizer_welcomed";
+
     /// <summary>An individual grant was added, retimed, or removed.</summary>
     public const string GrantChanged = "access.grant_changed";
 
     /// <summary>Somebody was taken off the allowlist and their sessions cut.</summary>
     public const string PersonRevoked = "access.person_revoked";
+
+    /// <summary>Somebody revoked was put back on the allowlist.</summary>
+    /// <remarks>
+    /// Worth its own name rather than folding into <see cref="OrganizerAdded"/>.
+    /// Restoring returns a person to the teams and grants they already had,
+    /// so the line "access was given back" carries more than "an account
+    /// exists" — and a restore nobody can account for is the one an access
+    /// review needs to find.
+    /// </remarks>
+    public const string PersonRestored = "access.person_restored";
 
     /// <summary>A form was made, and got the code that goes on a flyer.</summary>
     public const string FormCreated = "form.created";

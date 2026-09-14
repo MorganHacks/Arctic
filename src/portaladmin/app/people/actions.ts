@@ -8,7 +8,18 @@ import { apiFetch, apiWrite } from "@/lib/api";
  * What a form got back. An empty object is the state before anything was
  * submitted, which is why `error` is optional rather than nullable.
  */
-export type FormState = { error?: string };
+export type FormState = {
+  error?: string;
+  /**
+   * Somebody the refusal was about, when there is one.
+   *
+   * Only the add form sets it, and only for the one refusal that has an action
+   * behind it: the address belongs to a revoked organizer, and the way out is
+   * their page rather than this box. An error sentence cannot carry a link, so
+   * the id travels beside it.
+   */
+  personId?: string;
+};
 
 /**
  * Turns a date input into the instant access should end.
@@ -65,10 +76,14 @@ export async function addOrganizer(
       return { error: "You do not have people.manage_teams. Ask an admin." };
     }
 
-    const { error } = (await response.json().catch(() => ({}))) as {
+    const { error, personId } = (await response.json().catch(() => ({}))) as {
       error?: string;
+      personId?: string;
     };
-    return { error: error ?? "That organizer could not be added." };
+    return {
+      error: error ?? "That organizer could not be added.",
+      personId,
+    };
   }
 
   const { id } = (await response.json()) as { id: string };
@@ -187,6 +202,34 @@ export async function revokePerson(
   const id = text(form, "id");
 
   const error = await apiWrite("POST", `/admin/people/${id}/revoke`);
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath(`/people/${id}`);
+  revalidatePath("/people");
+  return {};
+}
+
+/**
+ * Puts a revoked person back on the allowlist.
+ *
+ * The only way back. Adding the address again does nothing — the row is
+ * already there — so without this a revocation is permanent, and a colleague
+ * revoked by mistake is a colleague who never gets back in.
+ *
+ * Their teams and grants are untouched by revoking and untouched by this, so
+ * they return to the access they had rather than to a blank account. An admin
+ * who wants them back with less takes the memberships off afterwards, on the
+ * screen they are already looking at.
+ */
+export async function restorePerson(
+  _previous: FormState,
+  form: FormData,
+): Promise<FormState> {
+  const id = text(form, "id");
+
+  const error = await apiWrite("POST", `/admin/people/${id}/restore`);
   if (error) {
     return { error };
   }

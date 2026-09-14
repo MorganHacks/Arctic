@@ -5,6 +5,7 @@ import {
   grant,
   joinTeam,
   leaveTeam,
+  restorePerson,
   revokePerson,
   ungrant,
   type FormState,
@@ -354,6 +355,77 @@ export function Revoke({
       ) : (
         <button type="button" className="danger" onClick={() => setAsked(true)}>
           Revoke access
+        </button>
+      )}
+
+      {state.error ? <p className="error">{state.error}</p> : null}
+    </section>
+  );
+}
+
+/**
+ * Putting somebody back, and the only way to do it.
+ *
+ * Revoking is otherwise one-way. Re-adding the address does nothing — the row
+ * already exists, so the insert that would create it matches nothing — and the
+ * console answers "already an organizer" about somebody who cannot sign in.
+ * This panel is the answer to that, and it is on the revoked person's page
+ * because that is where an admin ends up looking for it.
+ *
+ * Confirmed the same way revoking is, and for the same reason rather than out
+ * of symmetry: restoring hands back every team and grant the person held. It
+ * is a smaller act than revoking and still not one to do by brushing a key, so
+ * the question names the address before anything happens.
+ *
+ * Not dressed as a danger. The accent is right here — on this page, for a
+ * person who is revoked, this is the thing to do next.
+ */
+export function Restore({
+  personId,
+  email,
+  revokedAt,
+}: {
+  personId: string;
+  email: string;
+  revokedAt: string | null;
+}) {
+  const [state, submit, pending] = useActionState(restorePerson, {});
+  const [asked, setAsked] = useState(false);
+  const question = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (asked) {
+      question.current?.focus();
+    }
+  }, [asked]);
+
+  return (
+    // COPY: everything visible in this component needs sign-off.
+    <section className="panel">
+      <h2>Restore access</h2>
+      <p className="meta" style={{ marginBottom: "0.75rem" }}>
+        Puts them back on the allowlist with the teams and grants below, which
+        revoking left alone. They sign in again themselves — the sessions that
+        were cut stay cut.
+        {revokedAt ? ` Revoked ${revokedAt.slice(0, 10)}.` : null}
+      </p>
+
+      {asked ? (
+        <form action={submit} className={styles.confirm}>
+          <input type="hidden" name="id" value={personId} />
+          <p className={styles.asking} ref={question} tabIndex={-1}>
+            Restore <strong>{email}</strong>?
+          </p>
+          <button type="submit" className="primary" disabled={pending}>
+            {pending ? "Restoring…" : "Yes, restore"}
+          </button>
+          <button type="button" onClick={() => setAsked(false)}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="primary" onClick={() => setAsked(true)}>
+          Restore access
         </button>
       )}
 

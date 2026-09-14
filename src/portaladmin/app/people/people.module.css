@@ -283,3 +283,26 @@
     transform: translateY(-0.2rem);
   }
 }
+
+/* The sentence an admin sends a new organizer.
+
+   Set apart from the surrounding prose because it is not prose to be read on
+   this page — it is a thing to be taken off it. Looking quotable is the point:
+   somebody should be able to tell at a glance where the message starts and
+   ends before they paste it into a channel. */
+.invite {
+  margin: 0 0 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-left: 3px solid var(--line);
+  background: var(--sunken);
+  line-height: 1.5;
+  /* Wraps rather than scrolling. The origin inside it is a URL, and a URL that
+     has to be scrolled to be read is one nobody checks before sending. */
+  overflow-wrap: anywhere;
+}
+
+.inviteActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
