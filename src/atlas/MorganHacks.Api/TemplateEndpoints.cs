@@ -154,7 +154,8 @@ public static partial class TemplateEndpoints
         string? Markdown,
         string? FromLocal,
         string? FromDomain,
-        string? ReplyTo);
+        string? ReplyTo,
+        string? FromName);
 
     /// <summary>
     /// The body <see cref="Preview"/> takes.
@@ -538,6 +539,20 @@ public static partial class TemplateEndpoints
             return false;
         }
 
+        var fromName = request?.FromName?.Trim();
+        if (fromName?.Length == 0)
+        {
+            fromName = null;
+        }
+
+        if (fromName is not null && !IsSenderName(fromName))
+        {
+            refusal = "That sender name cannot go in an email header. Keep it to "
+                      + "plain text, no more than 64 characters, and leave out "
+                      + "quotes and angle brackets.";
+            return false;
+        }
+
         var replyTo = request?.ReplyTo?.Trim();
         if (replyTo?.Length == 0)
         {
@@ -567,7 +582,8 @@ public static partial class TemplateEndpoints
         }
 
         draft = new TemplateDraft(
-            key, kind, subject, format, source, html, text, fromLocal, fromDomain, replyTo);
+            key, kind, subject, format, source, html, text, fromLocal, fromDomain,
+            replyTo, fromName);
         return true;
     }
 
@@ -618,6 +634,32 @@ public static partial class TemplateEndpoints
 
     private static int Longest(string format) =>
         format == TemplateBody.Html ? MaxHtmlLength : MaxMarkdownLength;
+
+    /// <summary>
+    /// Whether a display name can be put in a From header safely.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately narrow. <see cref="MailAddress"/> will quote most things
+    /// and RFC 2047 has an encoding for the rest, but a sender name is read by
+    /// a person deciding in half a second whether an email is real — and a
+    /// name that arrives as <c>=?utf-8?B?TW9yZ2FuSGFja3M=?=</c> in the one
+    /// client that does not decode it is worse than no name at all.
+    /// <para>
+    /// Control characters are refused because they end the header. Quotes and
+    /// angle brackets are refused because they are the header's own
+    /// punctuation, and a name that has to be escaped to be safe is a name
+    /// somebody should rewrite.
+    /// </para>
+    /// </remarks>
+    private static bool IsSenderName(string name) =>
+        name.Length <= MaxSenderNameLength
+        && name.All(c => c is >= ' ' and <= '~' && c is not ('"' or '<' or '>'));
+
+    /// <summary>
+    /// Long enough for an organisation's name, short enough to survive the
+    /// truncation every mail client does to the sender column.
+    /// </summary>
+    private const int MaxSenderNameLength = 64;
 
     private static bool IsAddress(string address)
     {
@@ -718,6 +760,7 @@ public static partial class TemplateEndpoints
         markdown = template.Format == TemplateBody.Html ? null : template.Source,
         html = template.Html,
         text = template.Text,
+        fromName = template.FromName,
         fromLocal = template.FromLocal,
         fromDomain = template.FromDomain,
         replyTo = template.ReplyTo,

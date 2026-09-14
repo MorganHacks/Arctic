@@ -45,6 +45,7 @@ export type Template = {
 
   html: string;
   text: string;
+  fromName: string | null;
   fromLocal: string;
   fromDomain: string;
   replyTo: string | null;
@@ -93,6 +94,7 @@ export type TemplateDraft = {
   subject: string;
   body: string;
   format: TemplateFormat;
+  fromName: string | null;
   fromLocal: string;
   fromDomain: string;
   replyTo: string | null;
