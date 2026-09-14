@@ -126,18 +126,35 @@ export function EmailPreview({
 function page(html: string): string {
   return [
     "<!doctype html><html><head><meta charset=\"utf-8\">",
-    // The ground and the ink, inside the document. Setting them on the
-    // iframe element is not enough: the embedded document follows the
-    // reader's operating system unless told otherwise, which on a dark
-    // machine gave light text on the white ground the frame provides.
-    "<style>",
-    ":root{color-scheme:light}",
-    "html,body{background:#ffffff;color:#14161a}",
-    "body{margin:0;padding:1rem 1.1rem;line-height:1.55;",
-    "font-family:system-ui,-apple-system,\"Segoe UI\",Roboto,sans-serif}",
-    "img{max-width:100%;height:auto}",
-    "table{max-width:100%}",
-    "</style></head><body>",
+    /*
+     * Two declarations, and deliberately not a third.
+     *
+     * This used to set the typeface, the line height, a page padding and a
+     * max-width on images and tables. All four were improvements to how the
+     * preview looked and all four were lies: the body shown here is the body
+     * that gets sent, and a template that inherited its font from this frame
+     * arrived in a real inbox with a different one. The bug that started this
+     * was somebody asking why valid HTML "looks weird in that sandbox" — it
+     * was not the HTML, it was the four rules underneath it.
+     *
+     * What is left is one declaration, and even that one is chosen carefully.
+     * An embedded document follows the reader's operating system unless told
+     * otherwise, and on a dark machine that gave light text on the white
+     * ground the frame provides — which no mail client would have done. Naming
+     * the colour scheme fixes that by telling the browser which defaults to
+     * use, rather than by painting over them.
+     *
+     * It replaced an explicit `html,body{background:#fff}`, which fixed the
+     * same problem and broke a subtler one: a background set on `html` stops
+     * the body's own background propagating to the canvas, so an email whose
+     * body is a colour filled its own box and left the rest of the frame
+     * white. It looked like a short background in the preview and was correct
+     * in every real client.
+     *
+     * Everything else is the email's own business. If it looks unstyled here,
+     * it will arrive unstyled, and that is the preview working.
+     */
+    "<style>:root{color-scheme:light}</style></head><body>",
     html,
     "</body></html>",
   ].join("");

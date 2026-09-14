@@ -145,15 +145,29 @@ public class EmailHtmlTests
     }
 
     [Fact]
-    public void A_style_block_goes_with_its_contents()
+    public void A_style_block_is_kept_and_read()
     {
-        // The judgement call, and it is about the mail rather than the risk:
-        // Gmail drops the block on forward, so a template that depends on one
-        // looks right until somebody passes it on.
+        // This test used to assert the opposite, and the reason it gave was
+        // true: Gmail drops the block when a message is forwarded, so a
+        // template that depends on one looks right until somebody passes it
+        // on.
+        //
+        // It was answering that by deleting the stylesheet for everybody, on
+        // every send, in every client — trading a rare wrong render for a
+        // certain one. What arrived was not the email unstyled; it was a
+        // different email, drawn with whatever margins the reader's client
+        // defaulted to, and nothing the author could open showed them that.
+        //
+        // The forwarding case is real and is not answered here. Answering it
+        // means inlining these declarations onto the elements they match, so
+        // that the block is a bonus rather than the only copy. Until that
+        // exists, a stylesheet that survives is strictly closer to what the
+        // author wrote than one that does not.
         var html = EmailHtml.Sanitize(
             "<style>p { color: red }</style><p>placeholder</p>");
 
-        Assert.Equal("<p>placeholder</p>", html);
+        Assert.Contains("<style>p{color: red", html, StringComparison.Ordinal);
+        Assert.Contains("<p>placeholder</p>", html, StringComparison.Ordinal);
     }
 
     // ----------------------------------------------------------- style values ---
@@ -275,5 +289,53 @@ public class EmailHtmlTests
             """);
 
         Assert.Equal("one placeholder\n\ntwo", text);
+    }
+
+    [Fact]
+    public void A_stylesheet_in_the_head_survives_the_head_being_unwrapped()
+    {
+        // The bug behind all of this. `head` was discarded wholesale, so the
+        // branch that reads a stylesheet was never reached, and a designed
+        // email lost every margin it had — which showed up as gaps nobody put
+        // there rather than as anything an author could see was missing.
+        var html = EmailHtml.Sanitize(
+            "<!doctype html><html><head><title>x</title>"
+            + "<style>p{margin:0 0 12px}</style></head>"
+            + "<body><p>Hello.</p></body></html>");
+
+        Assert.Contains("<style>", html, StringComparison.Ordinal);
+        Assert.Contains("margin: 0 0 12px", html, StringComparison.Ordinal);
+        Assert.Contains("<p>Hello.</p>", html, StringComparison.Ordinal);
+
+        // The title goes with its text, as it always did. Unwrapping the head
+        // must not start printing what was in the tab.
+        Assert.DoesNotContain("x<", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_script_in_the_head_still_goes_with_its_body()
+    {
+        // The head is unwrapped now, which would be a way in if anything else
+        // on the discarded list stopped being checked on its own.
+        var html = EmailHtml.Sanitize(
+            "<html><head><script>alert(1)</script></head><body><p>Hi.</p></body></html>");
+
+        Assert.DoesNotContain("alert", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<p>Hi.</p>", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_whole_document_comes_back_without_blank_lines_above_it()
+    {
+        // A doctype and a head leave their whitespace behind once they are
+        // gone. It renders as empty space above the email and appears in no
+        // editor the author checked it in.
+        var html = EmailHtml.Sanitize(
+            "<!doctype html>\n<html>\n<head>\n<title>x</title>\n</head>\n"
+            + "<body>\n<p>Hello.</p>\n</body>\n</html>");
+
+        Assert.StartsWith("<p>", html, StringComparison.Ordinal);
+        Assert.EndsWith("</p>", html, StringComparison.Ordinal);
     }
 }
