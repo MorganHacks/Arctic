@@ -1,48 +1,32 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { addTemplate, editTemplate, previewBody } from "@/app/templates/actions";
 import { EmailPreview } from "./email-preview";
-import { PlaceholderField } from "./placeholder-field";
+import { Body, Identity, Placeholders } from "./fields";
 import styles from "./templates.module.css";
-import {
-  formatLabel,
-  placeholdersIn,
-  type Placeholder,
-  type Rendered,
-  type Template,
-  type TemplateDraft,
-  type TemplateFormat,
-  type TemplateKind,
-} from "./types";
-
-/** How long to wait after the last keystroke before rendering. */
-const DEBOUNCE_MS = 600;
+import { useDraft, FROM_DOMAIN, FROM_LOCAL } from "./use-draft";
+import { usePreview } from "./use-preview";
+import { useSave } from "./use-save";
+import type { Placeholder, Template } from "./types";
 
 /**
- * Writing an email.
+ * Writing one email template, with the message drawn beside it.
  *
- * One component for both the new template and the existing one, because they
- * are the same screen with one difference: the key. On a new template it is a
- * field, and on an existing one it is the address the save is written to and
- * cannot move — there is no rename, and a key that drifted would create a
- * second template while looking like it was editing the first.
+ * This file is the arrangement and nothing else. What is being typed lives in
+ * useDraft, what the API makes of it in usePreview, and what happens when
+ * somebody presses the button in useSave — three concerns that used to share
+ * one four-hundred-line component and, through it, each other's re-renders. A
+ * keystroke in the reply-to box scheduled a render of a body that had not
+ * moved, because the effect that renders sat next to the state that changed.
  *
- * The preview is the API's. Everything typed on the left is sent to the render
- * endpoint after a pause and comes back as the html and text a send would
- * build. There is no markdown in this file on purpose: two renderers agree
- * until the day somebody types the thing they disagree about, and the one that
- * matters is the one that sends.
+ * The three are split along what they depend on rather than by what they are
+ * called. useDraft touches every field; usePreview touches three of them;
+ * useSave touches all of them once, when asked. That is the seam, and it is
+ * why they are separable at all.
+ *
+ * The preview is the API's. There is no markdown in this file on purpose: two
+ * renderers agree until the day somebody types the thing they disagree about,
+ * and the one that matters is the one that sends.
  */
-const FROM_LOCAL = "mail";
-const FROM_DOMAIN = "morganhacks.com";
-
-/* What a new template says it is from, so that nobody has to remember to set
-   it. The address is fixed for the reason above it; the name is not, because
-   it is copy and copy changes. */
-const DEFAULT_FROM_NAME = "MorganHacks";
-
 export function Editor({
   template,
   canManage,
@@ -59,434 +43,119 @@ export function Editor({
    *
    * Null is not an empty list. Empty means the API answered and there is
    * nothing to offer; null means nobody knows, and the difference decides
-   * whether a name the author typed can be called unknown — accusing a
-   * perfectly good placeholder of being wrong is worse than saying nothing.
+   * whether a name the author typed can be called unknown.
    */
   available: Placeholder[] | null;
 }) {
-  const router = useRouter();
+  const handle = useDraft(template, available);
+  const { draft } = handle;
 
-  const [key, setKey] = useState(template?.key ?? "");
-  // Broadcast only, here. The API still serves both kinds -- the sign-in link
-  // is a transactional template and is sent by atlas, not written here -- but
-  // the console has no reason to offer a kind nobody composes by hand.
-  const kind: TemplateKind = template?.kind ?? "broadcast";
-  const [subject, setSubject] = useState(template?.subject ?? "");
-  // One sending identity, not a field. An address somebody types is an address
-  // that can be wrong, and a from address that is not verified in SES does not
-  // bounce -- it fails to send at all. An existing template keeps whatever it
-  // already had, so editing one never silently re-addresses it.
-  // The name a mail client shows instead of the address, and the one part of
-  // the sending identity that is safe to type: it changes nothing about where
-  // mail comes from or whether SES will accept it, only what a person reads.
-  const [fromName, setFromName] = useState(template?.fromName ?? DEFAULT_FROM_NAME);
-  const fromLocal = template?.fromLocal ?? FROM_LOCAL;
-  const fromDomain = template?.fromDomain ?? FROM_DOMAIN;
-  const [replyTo, setReplyTo] = useState(template?.replyTo ?? "");
-  const [body, setBody] = useState(template?.body ?? "");
-
-  /*
-   * Markdown unless the template says otherwise.
-   *
-   * A new template is prose until somebody decides it is a design, and prose is
-   * the one that cannot be got wrong -- there is no way to write a stylesheet
-   * in Markdown and therefore no way to lose one.
-   */
-  const [format, setFormat] = useState<TemplateFormat>(
-    template?.format ?? "markdown",
-  );
-
-  /*
-   * Seeded from what the API already rendered.
-   *
-   * An existing template arrives with its html and text on it, so the message
-   * on the right is drawn on the first paint rather than after a round trip
-   * that would render exactly what the server already sent.
-   */
-  const [rendered, setRendered] = useState<Rendered | null>(
-    template
-      ? {
-          subject: template.subject,
-          html: template.html,
-          text: template.text,
-          // Carried through the seed as well, so a template that was already
-          // written with a stylesheet says so on first paint rather than only
-          // after the next keystroke triggers a render.
-          notes: template.notes,
-        }
-      : null,
-  );
-
-  const [renderError, setRenderError] = useState<string | null>(null);
-  const [rendering, setRendering] = useState(false);
-  const [asked, setAsked] = useState(false);
-  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(
-    null,
-  );
-  const [saving, startSaving] = useTransition();
-
-  /**
-   * The render this component is waiting on.
-   *
-   * Debouncing makes overlapping renders rare rather than impossible. A slow
-   * one and a fast one started after it can land out of order, and the older
-   * answer would then be the email on screen. Only the newest may speak.
-   */
-  const attempt = useRef(0);
-
-  /** The names the body asks for, derived from what is typed rather than stored. */
-  const used = useMemo(
-    () => placeholdersIn(subject, body),
-    [subject, body],
-  );
-
-  /**
-   * The names that resolve, for looking one up.
-   *
-   * Null all the way through where the API could not be read, so the list
-   * below the editor keeps its old behaviour — every name simply listed — and
-   * nothing is marked wrong on the strength of a list nobody has.
-   */
-  const resolves = useMemo(
-    () =>
-      available === null
-        ? null
-        : new Set(available.map((placeholder) => placeholder.name)),
-    [available],
-  );
-
-  useEffect(() => {
-    if (body.trim() === "" && subject.trim() === "") {
-      setRendered(null);
-      setRenderError(null);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      const mine = (attempt.current += 1);
-      setRendering(true);
-
-      void previewBody({ subject, body, format }).then((result) => {
-        if (mine !== attempt.current) {
-          return;
-        }
-
-        setRendering(false);
-
-        if (result.ok) {
-          setRendered(result.rendered);
-          setRenderError(null);
-        } else {
-          setRenderError(result.error);
-        }
-      });
-    }, DEBOUNCE_MS);
-
-    return () => clearTimeout(timer);
-  }, [subject, body, format]);
-
-  function draft(): TemplateDraft {
-    return {
-      key,
-      kind,
-      subject,
-      body,
-      format,
-      fromName: fromName.trim() === "" ? null : fromName.trim(),
-      fromLocal,
-      fromDomain,
-      replyTo: replyTo.trim() === "" ? null : replyTo,
-    };
-  }
-
-  function save() {
-    setOutcome(null);
-
-    startSaving(async () => {
-      const result = template
-        ? await editTemplate(template.key, draft())
-        : await addTemplate(draft());
-
-      setAsked(false);
-
-      if (!result.ok) {
-        setOutcome({ ok: false, text: result.error });
-        return;
-      }
-
-      // A template that has just been created is opened, because everything
-      // after this point — the version, the key it answers to — belongs to the
-      // page that edits it.
-      if (!template) {
-        router.push(`/templates/${encodeURIComponent(result.key)}`);
-        router.refresh();
-        return;
-      }
-
-      setOutcome({
-        ok: true,
-        text: [
-          result.version === null
-            ? "Saved."
-            : `Saved. Now version ${result.version}.`,
-          result.note,
-        ]
-          .filter(Boolean)
-          .join(" "),
-      });
-      router.refresh();
-    });
-  }
+  const preview = usePreview(template, draft.subject, draft.body, draft.format);
+  const saving = useSave(template, handle.toRequest);
 
   return (
     <div className={styles.editor}>
       <div>
         <fieldset className={styles.form} disabled={!canManage}>
-          <div className={styles.field}>
-            <label htmlFor="key">Key</label>
-            {template ? (
-              <p className="mono" style={{ margin: 0 }}>
-                {template.key}
-              </p>
-            ) : (
-              <>
-                <input
-                  id="key"
-                  value={key}
-                  onChange={(event) => setKey(event.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className={styles.wide}
-                />
-                <p className={styles.medium}>A key cannot be changed later.</p>
-              </>
-            )}
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="subject">Subject</label>
-            {/* The subject goes through the same renderer as the body, so it
-                offers the same names. A menu on one and not the other would
-                read as the subject not supporting placeholders at all. */}
-            <PlaceholderField
-              id="subject"
-              value={subject}
-              onChange={setSubject}
-              available={available}
-              className={styles.wide}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="fromName">Sender name</label>
-            {/* COPY: needs sign-off. */}
-            <p className="meta">
-              What the inbox shows instead of the address. Left empty, a mail
-              client has only the address to display, so a message from
-              mail@morganhacks.com arrives from somebody called
-              &ldquo;mail&rdquo;.
-            </p>
-            <input
-              id="fromName"
-              value={fromName}
-              onChange={(event) => setFromName(event.target.value)}
-              autoComplete="off"
-              maxLength={64}
-              className={styles.wide}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label htmlFor="replyTo">Reply-to</label>
-            <input
-              id="replyTo"
-              value={replyTo}
-              onChange={(event) => setReplyTo(event.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-              className={styles.wide}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <div className={styles.bodyHead}>
-              <label htmlFor="body">Body</label>
-
-              {/*
-                Switching does not touch what is typed. Converting between the
-                two would mean guessing, and a guess that rewrites somebody's
-                body is worse than leaving it alone: Markdown in an HTML
-                template renders as the plain text it is, which is visible in
-                the preview and undone by switching back.
-              */}
-              <div
-                className={styles.formats}
-                role="group"
-                aria-label="Body language"
-              >
-                {(["markdown", "html"] as TemplateFormat[]).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={format === option ? "tab on" : "tab"}
-                    aria-pressed={format === option}
-                    onClick={() => setFormat(option)}
-                  >
-                    {formatLabel(option)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <PlaceholderField
-              id="body"
-              value={body}
-              onChange={setBody}
-              available={available}
-              multiline
-              spellCheck
-              className={styles.body}
-            />
-            {/* The answer to "what can this carry", where somebody would
-                otherwise spend an afternoon finding out -- or find out from an
-                email that has already gone. */}
-            <p className={styles.medium}>
-              {format === "html" ? (
-                <>
-                  HTML, with styling inline: <code>style=&quot;...&quot;</code>{" "}
-                  on each element. A &lt;style&gt; block is removed, because mail
-                  clients strip or ignore stylesheets. Tables are how email lays
-                  out.
-                </>
-              ) : (
-                <>
-                  Markdown. Switch to HTML for a design you want control of, a
-                  button or a coloured panel.
-                </>
-              )}
-            </p>
-            {/* Said out loud because a menu nobody knows to summon is the same
-                as no menu, which is the state this screen was in. */}
-            {available !== null && available.length > 0 ? (
-              <p className={styles.medium}>
-                Type <span className="mono">{"{{"}</span> to insert a
-                placeholder.
-              </p>
-            ) : null}
-          </div>
-
-          {/*
-            What the body asks for, against what a send can give it.
-
-            The same list as before, now able to disagree with itself. A name
-            the API does not know is the one that will come back refused, and
-            until now the only place that showed up was a campaign that would
-            not go — long after the person who typed it had moved on.
-          */}
-          <div className={styles.field}>
-            <span className="meta">Placeholders</span>
-            {resolves === null ? (
-              <p className={styles.medium}>
-                Placeholder names could not be loaded.
-              </p>
-            ) : null}
-            {used.length === 0 ? (
-              <p className={styles.medium}>None.</p>
-            ) : (
-              <ul className={styles.placeholders}>
-                {used.map((name) => {
-                  const unknown = resolves !== null && !resolves.has(name);
-
-                  return (
-                    <li key={name} className={unknown ? styles.unknown : ""}>
-                      {name}
-                      {unknown ? (
-                        <span className={styles.mark}>Unknown</span>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {resolves !== null && used.some((name) => !resolves.has(name)) ? (
-              <p className={styles.medium}>
-                A campaign refuses to send a placeholder that does not resolve.
-              </p>
-            ) : null}
-          </div>
+          <Identity
+            handle={handle}
+            existingKey={template?.key ?? null}
+            available={available}
+          />
+          <Body handle={handle} available={available} />
+          <Placeholders handle={handle} />
         </fieldset>
 
-        {canManage ? (
-          <>
-            {asked ? (
-              <div className={styles.confirm}>
-                {/* Not a warning about this screen. A campaign renders its
-                    messages when it is queued, so what has already gone out
-                    keeps the wording it had — which means an edit here can
-                    leave the template disagreeing with the email somebody
-                    received. */}
-                <p>
-                  Saving writes a new version. A campaign that has already gone
-                  out sent the wording this template had then, not this.
-                </p>
-                <div className={styles.actions} style={{ marginTop: 0 }}>
-                  <button
-                    type="button"
-                    className="button primary"
-                    onClick={save}
-                    disabled={saving}
-                  >
-                    {saving ? "Saving…" : "Confirm save"}
-                  </button>
-                  <button type="button" onClick={() => setAsked(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className={styles.actions}>
-                <button
-                  type="button"
-                  className="button primary"
-                  onClick={template ? () => setAsked(true) : save}
-                  disabled={saving}
-                >
-                  {template
-                    ? "Save changes"
-                    : saving
-                      ? "Creating…"
-                      : "Create template"}
-                </button>
-                {template ? (
-                  <span className="meta">Version {template.version}</span>
-                ) : null}
-              </div>
-            )}
-
-            {outcome ? (
-              <p
-                className={
-                  outcome.ok ? styles.saved : `${styles.saved} ${styles.failed}`
-                }
-              >
-                {outcome.text}
-              </p>
-            ) : null}
-          </>
-        ) : null}
+        {canManage ? <Actions template={template} saving={saving} /> : null}
       </div>
 
       <div className={styles.sticky}>
         <EmailPreview
-          fromName={fromName.trim() === "" ? null : fromName.trim()}
-          fromLocal={fromLocal}
-          fromDomain={fromDomain}
-          replyTo={replyTo.trim() === "" ? null : replyTo}
-          rendered={rendered}
-          pending={rendering}
-          error={renderError}
+          fromName={draft.fromName.trim() === "" ? null : draft.fromName.trim()}
+          fromLocal={FROM_LOCAL}
+          fromDomain={FROM_DOMAIN}
+          replyTo={draft.replyTo.trim() === "" ? null : draft.replyTo}
+          rendered={preview.rendered}
+          pending={preview.pending}
+          error={preview.error}
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * The button, and the question an edit has to answer first.
+ *
+ * Creating does not ask. There is nothing yet to disagree with, and a
+ * confirmation in front of the first save is a step that teaches people to
+ * click through confirmations.
+ */
+function Actions({
+  template,
+  saving,
+}: {
+  template: Template | null;
+  saving: ReturnType<typeof useSave>;
+}) {
+  return (
+    <>
+      {saving.asked ? (
+        <div className={styles.confirm}>
+          {/* Not a warning about this screen. A campaign renders its messages
+              when it is queued, so what has already gone out keeps the wording
+              it had — which means an edit here can leave the template
+              disagreeing with the email somebody received. */}
+          <p>
+            Saving writes a new version. A campaign that has already gone out
+            sent the wording this template had then, not this.
+          </p>
+          <div className={styles.actions} style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              className="button primary"
+              onClick={saving.save}
+              disabled={saving.saving}
+            >
+              {saving.saving ? "Saving…" : "Confirm save"}
+            </button>
+            <button type="button" onClick={() => saving.ask(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className="button primary"
+            onClick={template ? () => saving.ask(true) : saving.save}
+            disabled={saving.saving}
+          >
+            {template
+              ? "Save changes"
+              : saving.saving
+                ? "Creating…"
+                : "Create template"}
+          </button>
+          {template ? (
+            <span className="meta">Version {template.version}</span>
+          ) : null}
+        </div>
+      )}
+
+      {saving.outcome ? (
+        <p
+          role="status"
+          className={
+            saving.outcome.ok
+              ? styles.saved
+              : `${styles.saved} ${styles.failed}`
+          }
+        >
+          {saving.outcome.text}
+        </p>
+      ) : null}
+    </>
   );
 }
