@@ -38,6 +38,11 @@ const DEBOUNCE_MS = 600;
 const FROM_LOCAL = "mail";
 const FROM_DOMAIN = "morganhacks.com";
 
+/* What a new template says it is from, so that nobody has to remember to set
+   it. The address is fixed for the reason above it; the name is not, because
+   it is copy and copy changes. */
+const DEFAULT_FROM_NAME = "MorganHacks";
+
 export function Editor({
   template,
   canManage,
@@ -71,6 +76,10 @@ export function Editor({
   // that can be wrong, and a from address that is not verified in SES does not
   // bounce -- it fails to send at all. An existing template keeps whatever it
   // already had, so editing one never silently re-addresses it.
+  // The name a mail client shows instead of the address, and the one part of
+  // the sending identity that is safe to type: it changes nothing about where
+  // mail comes from or whether SES will accept it, only what a person reads.
+  const [fromName, setFromName] = useState(template?.fromName ?? DEFAULT_FROM_NAME);
   const fromLocal = template?.fromLocal ?? FROM_LOCAL;
   const fromDomain = template?.fromDomain ?? FROM_DOMAIN;
   const [replyTo, setReplyTo] = useState(template?.replyTo ?? "");
@@ -183,6 +192,7 @@ export function Editor({
       subject,
       body,
       format,
+      fromName: fromName.trim() === "" ? null : fromName.trim(),
       fromLocal,
       fromDomain,
       replyTo: replyTo.trim() === "" ? null : replyTo,
@@ -263,6 +273,25 @@ export function Editor({
               value={subject}
               onChange={setSubject}
               available={available}
+              className={styles.wide}
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor="fromName">Sender name</label>
+            {/* COPY: needs sign-off. */}
+            <p className="meta">
+              What the inbox shows instead of the address. Left empty, a mail
+              client has only the address to display, so a message from
+              mail@morganhacks.com arrives from somebody called
+              &ldquo;mail&rdquo;.
+            </p>
+            <input
+              id="fromName"
+              value={fromName}
+              onChange={(event) => setFromName(event.target.value)}
+              autoComplete="off"
+              maxLength={64}
               className={styles.wide}
             />
           </div>
@@ -449,6 +478,7 @@ export function Editor({
 
       <div className={styles.sticky}>
         <EmailPreview
+          fromName={fromName.trim() === "" ? null : fromName.trim()}
           fromLocal={fromLocal}
           fromDomain={fromDomain}
           replyTo={replyTo.trim() === "" ? null : replyTo}

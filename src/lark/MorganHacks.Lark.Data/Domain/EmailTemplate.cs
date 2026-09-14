@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Mail;
 using System.Text.RegularExpressions;
 
 namespace MorganHacks.Lark.Data.Domain;
@@ -13,14 +14,37 @@ public sealed record EmailTemplate(
     string BodyText,
     string FromLocal,
     string FromDomain,
-    string? ReplyTo)
+    string? ReplyTo,
+    string? FromName = null)
 {
     /// <summary>Transactional sends jump the queue; broadcasts wait behind them.</summary>
     public bool IsTransactional => Kind == "transactional";
 
     public short Priority => IsTransactional ? (short)0 : (short)10;
 
-    public string From => $"{FromLocal}@{FromDomain}";
+    public string Address => $"{FromLocal}@{FromDomain}";
+
+    public string From => Sender(FromName, Address);
+
+    /// <summary>
+    /// The From header: a name and an address, or just an address.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="MailAddress"/> rather than string concatenation,
+    /// because a display name is free text and the header it goes into is not.
+    /// A name containing a comma or a full stop has to be quoted or it changes
+    /// what the header means, and "MorganHacks, Inc." is exactly the kind of
+    /// name somebody types without thinking about RFC 5322.
+    /// <para>
+    /// Shared so that the queue and the catalogue cannot disagree about it.
+    /// Two places building this by hand is how mail starts arriving from one
+    /// sender in one client and another in the next.
+    /// </para>
+    /// </remarks>
+    public static string Sender(string? name, string address) =>
+        string.IsNullOrWhiteSpace(name)
+            ? address
+            : new MailAddress(address, name.Trim()).ToString();
 }
 
 /// <summary>One email, already rendered.</summary>

@@ -36,7 +36,8 @@ public sealed record TemplateVersion(
     string? ReplyTo,
     int Version,
     DateTimeOffset UpdatedAt,
-    Guid? CreatedBy)
+    Guid? CreatedBy,
+    string? FromName = null)
 {
     /// <summary>
     /// The same template in the shape the renderer understands.
@@ -69,7 +70,8 @@ public sealed record TemplateDraft(
     string Text,
     string FromLocal,
     string FromDomain,
-    string? ReplyTo);
+    string? ReplyTo,
+    string? FromName);
 
 /// <summary>How a save ended.</summary>
 public enum TemplateWriteResult

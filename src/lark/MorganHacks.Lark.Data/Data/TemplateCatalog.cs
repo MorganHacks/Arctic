@@ -28,7 +28,8 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
 
     private const string Columns = """
         id, key, kind, subject, body_format, body_markdown, body_html, body_text,
-        from_local, from_domain, reply_to, version, created_at, created_by
+        from_local, from_domain, reply_to, version, created_at, created_by,
+        from_name
         """;
 
     /// <summary>
@@ -84,9 +85,11 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         var sql = $"""
             INSERT INTO notify.templates
                 (key, kind, subject, body_format, body_markdown, body_html,
-                 body_text, from_local, from_domain, reply_to, version, created_by)
+                 body_text, from_local, from_domain, reply_to, version, created_by,
+                 from_name)
             VALUES (@key, @kind, @subject, @format, @source, @html,
-                    @text, @fromLocal, @fromDomain, @replyTo, 1, @author)
+                    @text, @fromLocal, @fromDomain, @replyTo, 1, @author,
+                    @fromName)
             RETURNING {Columns}
             """;
 
@@ -182,9 +185,11 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
             $"""
             INSERT INTO notify.templates
                 (key, kind, subject, body_format, body_markdown, body_html,
-                 body_text, from_local, from_domain, reply_to, version, created_by)
+                 body_text, from_local, from_domain, reply_to, version, created_by,
+                 from_name)
             VALUES (@key, @kind, @subject, @format, @source, @html,
-                    @text, @fromLocal, @fromDomain, @replyTo, @version, @author)
+                    @text, @fromLocal, @fromDomain, @replyTo, @version, @author,
+                    @fromName)
             RETURNING {Columns}
             """,
             connection,
@@ -234,6 +239,7 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         cmd.Parameters.AddWithValue("fromLocal", draft.FromLocal);
         cmd.Parameters.AddWithValue("fromDomain", draft.FromDomain);
         cmd.Parameters.AddWithValue("replyTo", (object?)draft.ReplyTo ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("fromName", (object?)draft.FromName ?? DBNull.Value);
         cmd.Parameters.AddWithValue("author", author);
     }
 
@@ -251,5 +257,6 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         reader.IsDBNull(10) ? null : reader.GetString(10),
         reader.GetInt32(11),
         reader.GetFieldValue<DateTimeOffset>(12),
-        reader.IsDBNull(13) ? null : reader.GetGuid(13));
+        reader.IsDBNull(13) ? null : reader.GetGuid(13),
+        reader.IsDBNull(14) ? null : reader.GetString(14));
 }

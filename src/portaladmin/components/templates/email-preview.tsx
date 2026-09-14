@@ -19,6 +19,7 @@ import type { Rendered } from "./types";
  * email client does with one.
  */
 export function EmailPreview({
+  fromName,
   fromLocal,
   fromDomain,
   replyTo,
@@ -26,6 +27,7 @@ export function EmailPreview({
   pending,
   error,
 }: {
+  fromName: string | null;
   fromLocal: string;
   fromDomain: string;
   replyTo: string | null;
@@ -76,7 +78,13 @@ export function EmailPreview({
         <div className={styles.envelope}>
           <header>
             <p className={styles.from}>
-              {fromLocal || fromDomain ? `${fromLocal}@${fromDomain}` : "—"}
+              {/* Name first, address after, the way an inbox shows it. Seeing
+                  only the address here is how a sender name nobody set goes
+                  unnoticed until the mail has gone out. */}
+              {fromName ? `${fromName} ` : null}
+              {fromLocal || fromDomain
+                ? `${fromName ? "<" : ""}${fromLocal}@${fromDomain}${fromName ? ">" : ""}`
+                : "—"}
               {replyTo ? ` · Reply-to ${replyTo}` : null}
             </p>
             <p className={styles.subject}>{rendered?.subject || "—"}</p>

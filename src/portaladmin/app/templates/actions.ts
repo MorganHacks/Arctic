@@ -57,6 +57,7 @@ function checked(draft: TemplateDraft): string | null {
 
 function trimmed(draft: TemplateDraft): TemplateDraft {
   const replyTo = draft.replyTo?.trim() ?? "";
+  const fromName = draft.fromName?.trim() ?? "";
 
   return {
     key: draft.key.trim(),
@@ -67,6 +68,9 @@ function trimmed(draft: TemplateDraft): TemplateDraft {
     // thing that decides what the body means.
     body: draft.body.replace(/\s+$/, ""),
     format: draft.format,
+    // Empty and unset are the same thing here: both mean the inbox shows the
+    // address on its own.
+    fromName: fromName === "" ? null : fromName,
     fromLocal: draft.fromLocal.trim(),
     fromDomain: draft.fromDomain.trim(),
     replyTo: replyTo === "" ? null : replyTo,

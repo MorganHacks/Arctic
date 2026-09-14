@@ -131,7 +131,8 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
              )
             RETURNING m.id, m.campaign_id, m.to_email, m.priority, m.attempts,
                       m.rendered_subject, m.rendered_body_html, m.rendered_body_text,
-                      t.from_local || '@' || t.from_domain, t.reply_to,
+                      t.from_local || '@' || t.from_domain, t.from_name,
+                      t.reply_to,
                       m.correlation_id
             """;
 
@@ -148,9 +149,14 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2),
                 reader.GetInt16(3), reader.GetInt16(4),
                 reader.GetString(5), reader.GetString(6), reader.GetString(7),
-                reader.GetString(8),
-                await reader.IsDBNullAsync(9, ct) ? null : reader.GetString(9),
-                await reader.IsDBNullAsync(10, ct) ? null : reader.GetString(10)));
+                // Composed here rather than concatenated in the SQL above,
+                // because a display name has to be quoted when it contains
+                // anything the header treats as punctuation.
+                EmailTemplate.Sender(
+                    await reader.IsDBNullAsync(9, ct) ? null : reader.GetString(9),
+                    reader.GetString(8)),
+                await reader.IsDBNullAsync(10, ct) ? null : reader.GetString(10),
+                await reader.IsDBNullAsync(11, ct) ? null : reader.GetString(11)));
         }
 
         return claimed;

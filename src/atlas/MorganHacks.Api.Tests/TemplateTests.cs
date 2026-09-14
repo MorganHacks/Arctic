@@ -791,6 +791,59 @@ public class TemplateTests(ApplicationsDatabase db)
         return key;
     }
 
+    [Fact]
+    public async Task A_template_keeps_the_sender_name_it_was_saved_with()
+    {
+        // What an inbox shows in the sender column. Without one, a client has
+        // only the local part to display, so mail from news@… arrives from
+        // somebody called "news".
+        var (_, cookie) = await Comms();
+
+        var saved = await Body(await Post(cookie, Named(Key(), "MorganHacks")));
+
+        Assert.Equal("MorganHacks", saved.GetProperty("fromName").GetString());
+    }
+
+    [Fact]
+    public async Task A_sender_name_that_would_break_the_header_is_refused()
+    {
+        // Angle brackets are the From header's own punctuation. MailAddress
+        // would quote its way out of this, and the result is a sender nobody
+        // can read — refusing is better than sending something valid and
+        // unintelligible.
+        var (_, cookie) = await Comms();
+
+        var refused = await Post(cookie, Named(Key(), "MorganHacks <x@y.invalid>"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+    }
+
+    [Fact]
+    public async Task No_sender_name_is_allowed_and_stays_empty()
+    {
+        // A bare address is a legitimate choice, and an empty field must not
+        // become the string " " — which shows as a blank sender rather than as
+        // no sender.
+        var (_, cookie) = await Comms();
+
+        var saved = await Body(await Post(cookie, Named(Key(), "   ")));
+
+        Assert.Equal(
+            JsonValueKind.Null, saved.GetProperty("fromName").ValueKind);
+    }
+
+    private static object Named(string key, string fromName) => new
+    {
+        key,
+        kind = "broadcast",
+        subject = "Placeholder one",
+        markdown = "First placeholder body.",
+        fromName,
+        fromLocal = "news",
+        fromDomain = "news.example.invalid",
+        replyTo = (string?)null,
+    };
+
     private static object Draft(
         string key,
         string kind = "broadcast",
