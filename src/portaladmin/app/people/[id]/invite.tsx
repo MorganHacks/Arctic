@@ -38,7 +38,8 @@ export function Invite({ email }: { email: string }) {
     [],
   );
 
-  // COPY: needs sign-off.
+  // Signed off 2026-09-13. Shorter than the email on purpose: this goes
+  // into a chat, where the long version reads as a form letter.
   const message =
     `You have been added to the MorganHacks organizer console. ` +
     `Sign in at ${origin} with Google, using ${email} — a different Google ` +

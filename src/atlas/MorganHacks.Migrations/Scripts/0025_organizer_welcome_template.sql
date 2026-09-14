@@ -20,7 +20,7 @@
 -- which addresses are on the allowlist. This email arrives in the inbox that
 -- works, so "use the account this was sent to" is unambiguous.
 --
--- COPY: the wording below needs signing off before any real send.
+-- The wording below was signed off on 2026-09-13, as it reads here.
 --
 -- The from address stays on auth.morganhacks.com with the sign-in link. It is
 -- transactional, it is about getting into an account, and the whole point of
