@@ -1,23 +1,6 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-
-/**
- * The sections, in the order the work happens in.
- *
- * A list rather than five hand-written links so the bar cannot end up marking
- * two sections current, or none.
- */
-const SECTIONS = [
-  { href: "/events", label: "Events" },
-  { href: "/people", label: "People" },
-  { href: "/forms", label: "Forms" },
-  { href: "/applicants", label: "Applicants" },
-  { href: "/mail", label: "Mail" },
-  { href: "/templates", label: "Templates" },
-  { href: "/audit", label: "Audit" },
-];
+import { currentPerson } from "@/lib/api";
+import { Nav } from "./nav";
+import { sectionsFor } from "./sections";
 
 /**
  * What to call the person reading, and what to put in the square beside it.
@@ -44,8 +27,22 @@ function signedInAs(personId: string, fullName?: string | null, email?: string |
   return { label: personId.slice(0, 8), initials: personId.slice(0, 2).toUpperCase(), isId: true };
 }
 
-/** The frame every signed-in page sits in. */
-export function Shell({
+/**
+ * The frame every signed-in page sits in.
+ *
+ * Rendered on the server so that it can ask what this person may do, which is
+ * what decides the sections in the bar. Only the bar itself runs in the
+ * browser, and only because marking the current section needs the path.
+ *
+ * It reads the viewer itself rather than taking the permission set as a prop.
+ * Fifteen screens render this component and every one of them has already
+ * asked who is signed in, so a prop would be fifteen places to pass the answer
+ * from — and the one that forgot, or passed a stale set, would draw a bar that
+ * does not match the person in front of it. `currentPerson` is memoised for
+ * the length of a request, so asking a second time here is not a second call
+ * to /auth/me.
+ */
+export async function Shell({
   personId,
   fullName,
   email,
@@ -64,8 +61,18 @@ export function Shell({
   email?: string | null;
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
   const who = signedInAs(personId, fullName, email);
+
+  /*
+   * No viewer means no sections, rather than every section.
+   *
+   * Every screen redirects to /sign-in before it renders this, so null here is
+   * the session ending between that check and this one, or /auth/me being
+   * unreachable for a moment. Both are states where nothing is known about
+   * what this person may do, and a bar drawn optimistically out of that would
+   * be offering links whose screens are about to send them to sign in anyway.
+   */
+  const mine = (await currentPerson())?.permissions ?? new Set<string>();
 
   return (
     <div className="shell">
@@ -73,29 +80,16 @@ export function Shell({
         <div className="brand">
           MorganHacks <span>console</span>
         </div>
-        {/* Shown to everybody, including the people whose permissions will
-            turn it into a "you do not have audit.view" page. Hiding a link is
-            a courtesy where the reader could have it and does not; hiding this
-            one would mean an organizer cannot discover the trail exists in
-            order to ask for it. */}
-        <nav>
-          {SECTIONS.map((section) => (
-            <Link
-              key={section.href}
-              href={section.href}
-              // Marked rather than merely underlined. Which section you are in
-              // is not decoration, and a reader who cannot see the accent
-              // should still be told.
-              aria-current={
-                pathname === section.href || pathname.startsWith(`${section.href}/`)
-                  ? "page"
-                  : undefined
-              }
-            >
-              {section.label}
-            </Link>
-          ))}
-        </nav>
+        {/* Only the sections this person can open. A link whose screen answers
+            them with "you do not have people.view" is not a discovery that the
+            screen exists, it is a door with nothing behind it, and after the
+            second one the reader stops believing the bar.
+
+            Cosmetic, and only cosmetic. The screens each gate themselves
+            against atlas and go on doing so — the refusal an address typed by
+            hand still lands on is the boundary, this is the courtesy. See
+            ./sections.ts for which permission each one is and why. */}
+        <Nav sections={sectionsFor(mine)} />
         {/* Their own name, not their person id.
             Everything in this system logs person_id instead of PII, and that
             rule is about what we record about other people — a trail that

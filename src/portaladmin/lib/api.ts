@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 /**
  * Where the API lives as far as the server is concerned.
@@ -335,8 +336,15 @@ export type Catalogue = {
  * That set is cosmetic. Hiding a button is a courtesy; the API refuses the
  * request whether or not the button was there, and that refusal is the actual
  * boundary. Anything that treats this set as the gate has the model backwards.
+ *
+ * Memoised for the length of one request. Every screen asks once, and the
+ * shell around it asks again to decide which sections belong in the nav —
+ * without this that is two calls to /auth/me on every render for an answer
+ * that cannot have changed between them. React's cache is per-request, so this
+ * is not one person's permissions being held anywhere another request could
+ * read them.
  */
-export async function currentPerson(): Promise<Person | null> {
+export const currentPerson = cache(async function currentPerson(): Promise<Person | null> {
   try {
     const response = await apiFetch("/auth/me");
     if (!response.ok) {
@@ -352,4 +360,4 @@ export async function currentPerson(): Promise<Person | null> {
   } catch {
     return null;
   }
-}
+});

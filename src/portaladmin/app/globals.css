@@ -254,6 +254,17 @@ th {
   border-bottom-color: var(--accent);
 }
 
+/* The bar when the reader can open none of the sections. Muted and plainly not
+   a link, because it is the explanation for an empty bar rather than another
+   place to go. */
+.topbar nav .no-sections {
+  display: flex;
+  align-items: center;
+  padding: 0 0.7rem;
+  color: var(--muted);
+  font-size: var(--step-1);
+}
+
 /* Who is signed in ------------------------------------------------------ */
 
 .identity {
