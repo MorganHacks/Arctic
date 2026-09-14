@@ -45,6 +45,8 @@ public static class PeopleEndpoints
              .RequirePermission(Permission.PeopleManageTeams);
         admin.MapPost("/people/{id:guid}/revoke", RevokePerson)
              .RequirePermission(Permission.PeopleManageTeams);
+        admin.MapPost("/people/{id:guid}/restore", RestorePerson)
+             .RequirePermission(Permission.PeopleManageTeams);
 
         // The two that hand out a permission directly are gated separately,
         // because being trusted to put somebody on the logistics team is not
@@ -201,10 +203,12 @@ public static class PeopleEndpoints
             // is "that person needs a second address".
             return Results.Conflict(new
             {
-                error = result.Rejection == AddOrganizerRejection.AddressIsAHackerAccount
-                    ? "That address already has a hacker account. An organizer "
-                      + "account has to use a different address."
-                    : "That address is already an organizer.",
+                error = Refusal(result.Rejection),
+                // Only the revoked case has somebody to point at, and the
+                // console needs the id to offer the one action that helps.
+                personId = result.Rejection == AddOrganizerRejection.AlreadyAnOrganizerButRevoked
+                    ? result.PersonId
+                    : (Guid?)null,
             });
         }
 
@@ -369,6 +373,62 @@ public static class PeopleEndpoints
 
         return Results.NoContent();
     }
+
+    /// <summary>Requires <c>people.manage_teams</c>.</summary>
+    /// <remarks>
+    /// Separate from <see cref="AddOrganizer"/> rather than folded into it.
+    /// Adding an address is a clerical act; handing somebody back the teams
+    /// and grants they held before they were revoked is not, and the two
+    /// should not share a button. Making it its own request also means the
+    /// audit trail records "this person was restored" instead of an add that
+    /// quietly did more than it said.
+    /// <para>
+    /// No self-check, unlike revoking. A revoked person has no session, so
+    /// nobody can reach this endpoint to restore themselves.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> RestorePerson(
+        Guid id,
+        HttpContext http,
+        IIdentityStore store,
+        ILogger<AddOrganizerRequest> log,
+        CancellationToken ct)
+    {
+        if (!await store.RestorePersonAsync(id, http.PersonId(), ct))
+        {
+            return Results.NotFound(new { error = "No such person." });
+        }
+
+        log.LogInformation(
+            "Access restored. {actor} {subject} {event}",
+            http.PersonId(), id, Events.PersonRestored);
+
+        return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Why the address could not be added, said so the admin knows what to do.
+    /// </summary>
+    /// <remarks>
+    /// COPY: needs sign-off.
+    /// <para>
+    /// The revoked sentence names the fix because without it the screen is a
+    /// dead end. "Already an organizer" is true of a revoked colleague and
+    /// tells the admin to stop, when the thing they wanted — that person able
+    /// to sign in — is one button away and nothing else will get them there.
+    /// </para>
+    /// </remarks>
+    private static string Refusal(AddOrganizerRejection? why) => why switch
+    {
+        AddOrganizerRejection.AddressIsAHackerAccount =>
+            "That address already has a hacker account. An organizer account "
+            + "has to use a different address.",
+        AddOrganizerRejection.AlreadyAnOrganizerButRevoked =>
+            "That address belongs to an organizer whose access was revoked. "
+            + "Adding them again will not let them back in — restore them "
+            + "instead, which returns the teams they had.",
+        _ => "That address is already an organizer.",
+    };
 
     private const string ExpiryInThePast =
         "That expiry has already passed, which would grant nothing at all.";

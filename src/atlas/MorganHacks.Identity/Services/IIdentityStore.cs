@@ -224,4 +224,29 @@ public interface IIdentityStore
     /// <returns>False when no such person.</returns>
     Task<bool> RevokePersonAsync(
         Guid personId, DateTimeOffset now, Guid actorId, CancellationToken ct);
+
+    /// <summary>
+    /// Puts a revoked person back on the allowlist.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to <see cref="RevokePersonAsync"/>, and the only way
+    /// back: re-adding the address cannot work, because the row still exists
+    /// and the insert that would create it does nothing.
+    /// <para>
+    /// Teams and grants are left exactly as they were. Revoking never removed
+    /// them — it closed the door in front of them — so restoring returns the
+    /// person to the access they had rather than to a blank account. An admin
+    /// who wants them back with less takes the memberships off afterwards,
+    /// which is visible on the screen they are already looking at.
+    /// </para>
+    /// <para>
+    /// Sessions are not restored. There are none to restore: revoking deleted
+    /// them, and the person signs in again like anybody else.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// False when no such person. True for somebody who was not revoked, which
+    /// is the state the caller asked for.
+    /// </returns>
+    Task<bool> RestorePersonAsync(Guid personId, Guid actorId, CancellationToken ct);
 }

@@ -16,6 +16,20 @@ public enum AddOrganizerRejection
     AlreadyAnOrganizer,
 
     /// <summary>
+    /// The address belongs to an organizer whose access was revoked.
+    /// </summary>
+    /// <remarks>
+    /// Told apart from <see cref="AlreadyAnOrganizer"/> because the two need
+    /// opposite actions and look identical from the outside. Adding a revoked
+    /// colleague back is the obvious thing to try, and it cannot work: the row
+    /// already exists, so the insert matches nothing and the revocation stays
+    /// where it was. Without this case the admin is told "already an
+    /// organizer" about somebody who cannot sign in, and has no way to find
+    /// out why from the console.
+    /// </remarks>
+    AlreadyAnOrganizerButRevoked,
+
+    /// <summary>
     /// The address already has a hacker account.
     /// </summary>
     /// <remarks>
@@ -40,6 +54,18 @@ public readonly record struct AddOrganizerResult
 
     public static AddOrganizerResult Accept(Guid personId) => new(personId, null);
     public static AddOrganizerResult Reject(AddOrganizerRejection why) => new(Guid.Empty, why);
+
+    /// <summary>
+    /// Refused, naming the person already holding the address.
+    /// </summary>
+    /// <remarks>
+    /// Only the revoked case carries an id, and only because the fix is a
+    /// second request against that person. Telling an admin "restore them
+    /// instead" without saying which row to restore leaves them searching a
+    /// list for an address the console has just refused to show them.
+    /// </remarks>
+    public static AddOrganizerResult Reject(AddOrganizerRejection why, Guid personId) =>
+        new(personId, why);
 }
 
 /// <summary>

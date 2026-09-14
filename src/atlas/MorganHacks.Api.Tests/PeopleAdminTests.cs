@@ -172,6 +172,150 @@ public class PeopleAdminTests(IdentityDatabase db)
         Assert.Equal(first, await RevokedAt(leaver));
     }
 
+    [Fact]
+    public async Task Restoring_lets_a_revoked_organizer_work_again()
+    {
+        // The bug this endpoint exists for: revoking is one-way without it.
+        // Adding the address back does nothing, because the row is already
+        // there, so a colleague revoked by mistake stays locked out of a
+        // system that will cheerfully report them as "already an organizer".
+        var leaver = await Organizer("returner");
+        await db.GrantAsync(leaver, Permission.PeopleView.Value);
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/revoke", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Send(HttpMethod.Get, "/admin/people", await SignIn(leaver))).StatusCode);
+
+        var restored = await Send(
+            HttpMethod.Post, $"/admin/people/{leaver}/restore", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NoContent, restored.StatusCode);
+        Assert.Null(await RevokedAt(leaver));
+
+        // Signing in afresh, because that is what the person actually does.
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(HttpMethod.Get, "/admin/people", await SignIn(leaver))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Restoring_does_not_bring_the_old_sessions_back()
+    {
+        // Revoking cut the sessions on purpose, and a laptop that was taken
+        // away must not start working again because somebody was later put
+        // back on the allowlist. Restoring is permission to sign in, not a
+        // reissue of the cookies that were killed.
+        var leaver = await Organizer("stale");
+        await db.GrantAsync(leaver, Permission.PeopleView.Value);
+        var oldCookie = await SignIn(leaver);
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/revoke", admin.Cookie);
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/restore", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await Send(HttpMethod.Get, "/admin/people", oldCookie)).StatusCode);
+        Assert.Equal(0, await LiveSessions(leaver));
+    }
+
+    [Fact]
+    public async Task Restoring_returns_the_teams_they_already_had()
+    {
+        // Revoking closes the door in front of a person's access rather than
+        // deleting it, so restoring hands back what they had. The alternative
+        // — an empty account — looks like a working restore and quietly makes
+        // every reinstatement a re-onboarding nobody was told to do.
+        var leaver = await Organizer("teams");
+        await db.AddToTeamAsync(leaver, "super-admin");
+        var admin = await SuperAdmin("closer");
+
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/revoke", admin.Cookie);
+        await Send(HttpMethod.Post, $"/admin/people/{leaver}/restore", admin.Cookie);
+
+        var detail = await Detail(leaver, admin.Cookie);
+        Assert.False(detail.GetProperty("revoked").GetBoolean());
+        Assert.Contains(
+            detail.GetProperty("teams").EnumerateArray(),
+            t => t.GetProperty("slug").GetString() == "super-admin");
+    }
+
+    [Fact]
+    public async Task Adding_a_revoked_organizer_back_points_at_the_restore()
+    {
+        // The dead end this pair of changes removes. The admin's first instinct
+        // is to type the address in again; the answer they used to get was
+        // "already an organizer", which is true, unhelpful, and identical to
+        // what a working account looks like.
+        var admin = await SuperAdmin("closer");
+        var email = Unique("returning");
+
+        var added = await Send(
+            HttpMethod.Post, "/admin/people", admin.Cookie, new { email });
+        var id = (await Body(added)).GetProperty("id").GetGuid();
+
+        await Send(HttpMethod.Post, $"/admin/people/{id}/revoke", admin.Cookie);
+
+        var again = await Send(
+            HttpMethod.Post, "/admin/people", admin.Cookie, new { email });
+
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+
+        var body = await Body(again);
+        Assert.Contains("restore", body.GetProperty("error").GetString()!);
+        Assert.Equal(id, body.GetProperty("personId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Adding_an_address_that_is_a_working_organizer_still_just_says_so()
+    {
+        // The other half of the same sentence. If every conflict started
+        // talking about revocation, the message would stop meaning anything on
+        // the case it was written for.
+        var admin = await SuperAdmin("closer");
+        var email = Unique("present");
+
+        await Send(HttpMethod.Post, "/admin/people", admin.Cookie, new { email });
+        var again = await Send(
+            HttpMethod.Post, "/admin/people", admin.Cookie, new { email });
+
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+
+        var body = await Body(again);
+        Assert.DoesNotContain("restore", body.GetProperty("error").GetString()!);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("personId").ValueKind);
+    }
+
+    [Fact]
+    public async Task Restoring_somebody_who_is_not_revoked_leaves_them_alone()
+    {
+        // Safe to repeat, for the same reason revoking is: a half-failed job
+        // gets finished by doing it again. It must not read as an error, and
+        // it must not disturb the sessions of somebody who is working.
+        var working = await Organizer("fine");
+        await db.GrantAsync(working, Permission.PeopleView.Value);
+        var theirCookie = await SignIn(working);
+        var admin = await SuperAdmin("closer");
+
+        var response = await Send(
+            HttpMethod.Post, $"/admin/people/{working}/restore", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await Send(HttpMethod.Get, "/admin/people", theirCookie)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Restoring_an_id_that_does_not_exist_is_a_404()
+    {
+        var admin = await SuperAdmin("closer");
+
+        var response = await Send(
+            HttpMethod.Post, $"/admin/people/{Guid.NewGuid()}/restore", admin.Cookie);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     // ------------------------------------------------------- the allowlist ---
 
     [Fact]
@@ -442,6 +586,7 @@ public class PeopleAdminTests(IdentityDatabase db)
         (HttpMethod.Post, $"/admin/people/{target}/grants"),
         (HttpMethod.Delete, $"/admin/people/{target}/grants/people.view"),
         (HttpMethod.Post, $"/admin/people/{target}/revoke"),
+        (HttpMethod.Post, $"/admin/people/{target}/restore"),
     ];
 
     private HttpClient Client() => _app.CreateClient(
