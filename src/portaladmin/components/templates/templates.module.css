@@ -427,3 +427,133 @@
   display: flex;
   gap: 0.25rem;
 }
+
+/*
+ * Motion, and the two things it is for here.
+ *
+ * Nothing below decorates. Each one answers a question the screen was leaving
+ * a person to work out for themselves: is what I am looking at current, and
+ * did the thing I just pressed do anything. Durations and easing come from the
+ * shared tokens, so reduced motion collapses them with everything else rather
+ * than needing a rule of its own — except the one keyframe animation, which is
+ * switched off by name at the bottom, because a loop at 0.01ms is a strobe
+ * rather than a stillness.
+ */
+
+/*
+ * The message, while a render is in flight.
+ *
+ * Dimmed rather than removed. The author is comparing what they typed against
+ * what it renders as, and taking the message away mid-comparison loses the
+ * thing being compared — a preview that blinks on every keystroke cannot be
+ * read while typing. Fading in only one direction on purpose: going stale is
+ * instant so the feedback is immediate, and coming back is eased so the eye
+ * is not pulled to it once the answer has already arrived.
+ */
+.envelope {
+  transition: opacity var(--dur-slow) var(--ease);
+}
+
+.envelope[data-stale] {
+  opacity: 0.55;
+  transition-duration: var(--dur-fast);
+}
+
+/*
+ * The line that says a render is happening.
+ *
+ * Given its own class rather than borrowing the one that reports a save. They
+ * were the same class, which meant changing how a save reads changed how
+ * rendering reads, and the two are not the same kind of news.
+ */
+.rendering {
+  margin: 0.6rem 0 0;
+  min-height: 1.2em;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.rendering:not(:empty)::after {
+  content: "";
+  display: inline-block;
+  width: 0.45em;
+  height: 0.45em;
+  margin-left: 0.45em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.1s var(--ease) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+/*
+ * What a save came back with.
+ *
+ * Rises as it appears, because it arrives in the place the button just was and
+ * an answer that simply materialises there reads as having always been there.
+ * The movement is what says this is new.
+ */
+.saved {
+  animation: rise var(--dur-slow) var(--ease);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+}
+
+/*
+ * The confirmation in front of a save.
+ *
+ * Same reason, one step larger: it replaces the button rather than appearing
+ * under it, and a swap with no motion at all leaves people unsure whether they
+ * pressed the thing they meant to.
+ */
+.confirm {
+  animation: rise var(--dur-slow) var(--ease);
+}
+
+/*
+ * The two language tabs, so the change of state is visibly a change.
+ *
+ * :global because `tab` is one of the console's own classes, declared in
+ * globals.css and used by four other screens. Written plainly it would be
+ * scoped like everything else in this file and match nothing — a rule that
+ * looks right in the source and does nothing in the browser.
+ */
+.formats :global(.tab) {
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+/*
+ * A placeholder the API does not know.
+ *
+ * Marked as it appears, because it appears while somebody is mid-word: the
+ * name is unknown for every keystroke until it is finished, and a chip that
+ * snaps in and out on each one is noise. Easing it in takes the flicker off
+ * the transition without hiding the answer.
+ */
+.placeholders li.unknown {
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.mark {
+  animation: rise var(--dur) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rendering:not(:empty)::after {
+    animation: none;
+    opacity: 0.6;
+  }
+}

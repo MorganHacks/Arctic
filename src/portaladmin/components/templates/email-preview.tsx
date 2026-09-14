@@ -75,7 +75,13 @@ export function EmailPreview({
       ) : null}
 
       <div className={styles.tray}>
-        <div className={styles.envelope}>
+        {/*
+          Marked while a render is in flight, so the message can say it is out
+          of date without being taken away. Replacing it with a spinner loses
+          the thing the author is comparing against, and a preview that blinks
+          on every keystroke is one nobody can read while typing.
+        */}
+        <div className={styles.envelope} data-stale={pending ? "" : undefined}>
           <header>
             <p className={styles.from}>
               {/* Name first, address after, the way an inbox shows it. Seeing
@@ -110,7 +116,11 @@ export function EmailPreview({
           {error}
         </p>
       ) : (
-        <p className={styles.saved}>{pending ? "Rendering…" : null}</p>
+        // Announced rather than only shown. Somebody hearing this screen has
+        // no other way to know the message beside them is a moment behind.
+        <p role="status" className={styles.rendering}>
+          {pending ? "Rendering…" : null}
+        </p>
       )}
     </div>
   );
