@@ -45,7 +45,11 @@ public static class TemplateBody
     {
         if (format == Html)
         {
-            var html = EmailHtml.Sanitize(source);
+            // Inlined after sanitising and never before. The inliner works on
+            // known tags and already-checked declarations, which is what lets
+            // it scan rather than parse — and means it only ever moves things
+            // the allow-list has already passed.
+            var html = CssInliner.Inline(EmailHtml.Sanitize(source));
             return (html, EmailText.From(html));
         }
 
