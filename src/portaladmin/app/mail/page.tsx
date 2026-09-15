@@ -51,6 +51,20 @@ export default async function Mail() {
   // Cosmetic. The API refuses the write whether or not this panel rendered, so
   // hiding it is a courtesy to somebody who cannot use it rather than a
   // control over anything.
+  //
+  // Two permissions, because atlas splits the work into two acts and this
+  // screen used to check the wrong one for the first of them. Drafting a
+  // campaign -- picking a template and an audience -- is authoring, and
+  // POST /admin/campaigns is gated on email.manage_templates. Sending it is
+  // the act that cannot be taken back, and POST .../send is gated on
+  // email.send_broadcast.
+  //
+  // Checking send_broadcast for both meant somebody who could draft was shown
+  // no way to, and somebody who could send but not author was shown a form
+  // whose Create button the API would refuse. Nobody hit it because comms
+  // holds both -- which is exactly how a mismatch like this survives until an
+  // event weekend when somebody is given one of them.
+  const canCompose = person.permissions.has("email.manage_templates");
   const canSend = person.permissions.has("email.send_broadcast");
 
   return (
@@ -70,7 +84,7 @@ export default async function Mail() {
         </p>
       ) : null}
 
-      {canSend ? (
+      {canCompose ? (
         <NewCampaign
           forms={forms}
           events={events}
