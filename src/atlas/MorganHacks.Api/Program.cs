@@ -120,6 +120,13 @@ builder.Services.AddSingleton<ISurveyResponseStore, PostgresSurveyResponseStore>
 // request.
 builder.Services.AddSingleton<IRespondentStore, PostgresRespondentStore>();
 
+// And the case with nobody on the other side of it: a survey whose audience
+// does not require signing in. It writes the same table the respondent store
+// does with the person left out, and is kept apart from it because the
+// paragraph above is a promise that path makes and this one cannot.
+builder.Services
+    .AddSingleton<IAnonymousSubmissionStore, PostgresAnonymousSubmissionStore>();
+
 builder.Services.AddScoped<IEmailSender, QueuedEmailSender>();
 
 // Singletons, because both hold nothing but the data source — which is itself
@@ -249,9 +256,23 @@ builder.Services.AddRateLimiter(options =>
     // campus that is an entire building behind one NAT: a launch meeting where
     // sixty people submit in the same five minutes is the exact traffic this
     // must not refuse.
+    //
+    // Partitioned on the caller rather than on the socket, which this did not
+    // used to be and had to become. Both front ends call the API from their own
+    // server, so the connection atlas sees comes from Vercel — every applicant
+    // in the world arriving in one bucket. As written before, this policy was
+    // not a loose limit on each caller, it was a limit of sixty submissions
+    // every five minutes for the entire internet, which during registration
+    // week is a limiter that refuses real applicants and stops nobody.
+    //
+    // It matters more now than it did: the submit below this can write a row
+    // to an anonymous survey, so this is the outer cap on an endpoint that no
+    // longer has a unique index doing the real work. See ClientAddress for why
+    // the forwarded header is only believed with the shared secret, and why no
+    // secret means the old behaviour rather than an open door.
     options.AddPolicy("form-submit", http =>
         RateLimitPartition.GetFixedWindowLimiter(
-            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            ClientAddress.ForRateLimit(http, proxySecret),
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 60,

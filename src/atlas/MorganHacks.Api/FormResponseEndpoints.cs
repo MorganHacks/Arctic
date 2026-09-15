@@ -288,8 +288,15 @@ public static class FormResponseEndpoints
             // which machine produced it.
             writer.NewLine = "\r\n";
 
+            // `anonymous` sits with the other metadata rather than at the end,
+            // because it is a fact about the row and not an answer on it. A
+            // column in every export including an application form's, where it
+            // reads "no" on every line — an export whose shape depends on its
+            // contents is one where two runs cannot be compared, and a column
+            // that appears only sometimes is the thing that makes a reader
+            // wonder whether the last file was missing something.
             await writer.WriteLineAsync(Row(
-                ["id", "submitted_at", "form_version",
+                ["id", "submitted_at", "form_version", "anonymous",
                  .. columns.Select(f => f.Key),
                  "resume_filename", "resume_size", "other_answers"]));
 
@@ -308,6 +315,14 @@ public static class FormResponseEndpoints
                     response.Id.ToString(),
                     response.SubmittedAt.ToString("O", CultureInfo.InvariantCulture),
                     response.FormVersion.ToString(CultureInfo.InvariantCulture),
+
+                    // Words rather than true/false. This file is opened in a
+                    // spreadsheet by a person, and a column of TRUEs against a
+                    // heading called "anonymous" is one somebody has to stop
+                    // and reason about.
+                    //
+                    // COPY: needs sign-off.
+                    response.Anonymous ? "yes" : "no",
                     .. columns.Select(f => response.Answers.TryGetValue(f.Key, out var a)
                         ? Text(a)
                         : string.Empty),
@@ -371,6 +386,19 @@ public static class FormResponseEndpoints
         id = response.Id,
         submittedAt = response.SubmittedAt,
         formVersion = response.FormVersion,
+
+        // Whether anybody is behind it. Stated rather than left to be inferred
+        // from what is missing, because a survey's answers name nobody either
+        // way: a gated form gets the respondent from their session and does
+        // not put their address in the answer set, so an anonymous answer and
+        // a signed-in one are indistinguishable on this payload without it.
+        //
+        // Those are different facts and they lead different places. An
+        // organizer can go back to somebody who signed in and cannot go back
+        // to somebody who did not, and a row that merely looks like it is
+        // missing a name is one somebody will spend an afternoon trying to
+        // match up against the applicant list.
+        anonymous = response.Anonymous,
         answers = response.Answers,
         resume = response.Resume is null ? null : new
         {
@@ -387,35 +415,33 @@ public static class FormResponseEndpoints
     };
 
     /// <summary>
-    /// The responses on a form, or none at all.
-    /// </summary>
-    /// <remarks>
-    /// Only an application form has any. A survey's answers are refused at
-    /// submit — <see cref="PublicFormEndpoints"/> answers 501 rather than
-    /// accepting them and dropping them — so there is genuinely nothing
-    /// stored, and an empty page is the honest answer.
-    /// <para>
-    /// It also has to be an explicit check rather than a query that finds
-    /// nothing. Responses are found by event, because an application carries
-    /// no form id, so a survey sitting on an event beside the application form
-    /// would otherwise answer with the application's responses under the
-    /// survey's id.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// Where this form's answers live.
     /// </summary>
     /// <remarks>
     /// Two tables, and which one depends on the kind of form. An application
-    /// is a row in <c>applications.applications</c>; everything else a
-    /// signed-in person fills in is a row in
-    /// <c>applications.form_submissions</c>.
+    /// is a row in <c>applications.applications</c>; everything else anybody
+    /// fills in is a row in <c>applications.form_submissions</c>.
     /// <para>
     /// The second branch used to return an empty page. Answers were being
     /// written to it the whole time, so an organizer could publish a survey,
     /// watch somebody answer it, and find the responses screen empty — with
     /// nothing anywhere to say the answer had been kept. That is worse than an
     /// error, because there is nothing to look up.
+    /// </para>
+    /// <para>
+    /// The survey branch does not split again for anonymous answers, and that
+    /// is deliberate down in the schema: 0027 put them in the same table with a
+    /// null <c>person_id</c> rather than in one of their own, so one query
+    /// returns everything a form was answered with. A list that quietly held
+    /// back half of a survey would be the same bug this branch was written to
+    /// fix, one layer lower down.
+    /// </para>
+    /// <para>
+    /// It also has to be an explicit check rather than a query that finds
+    /// nothing. Applications are found by event, because an application carries
+    /// no form id, so a survey sitting on an event beside the application form
+    /// would otherwise answer with the application's responses under the
+    /// survey's id.
     /// </para>
     /// </remarks>
     private static Task<ResponsePage> ResponsesOf(

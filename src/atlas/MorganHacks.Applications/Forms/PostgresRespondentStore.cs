@@ -228,11 +228,19 @@ public sealed class PostgresRespondentStore(NpgsqlDataSource dataSource) : IResp
         // Upserted against form_submissions_form_person_key. Somebody changing
         // their mind about an RSVP is not a second reply, and a double-tapped
         // Submit on a slow phone is not one either.
+        //
+        // The WHERE clause is not decoration. 0027 made person_id nullable so
+        // an anonymous survey has somewhere to land, and narrowed this index to
+        // the rows that still have a person. An arbiter for a partial index has
+        // to repeat that index's predicate, and without it Postgres refuses to
+        // plan the statement — which is the right way for this to fail if
+        // somebody changes the index and not this, rather than an upsert that
+        // quietly stops upserting.
         const string sql = """
             INSERT INTO applications.form_submissions
                 (form_id, form_version, person_id, application_id, answers)
             VALUES (@formId, @version, @personId, @applicationId, @answers)
-            ON CONFLICT (form_id, person_id) DO UPDATE
+            ON CONFLICT (form_id, person_id) WHERE person_id IS NOT NULL DO UPDATE
                 SET answers = excluded.answers,
                     form_version = excluded.form_version,
                     application_id = excluded.application_id,

@@ -103,7 +103,24 @@ public static class PublicFormEndpoints
     /// malformed request into a 400 decided before this handler can answer it
     /// in its own words.
     /// </remarks>
-    public sealed record SubmitRequest(Dictionary<string, JsonElement>? Answers);
+    /// <param name="SubmissionKey">
+    /// Which submission attempt this is, on a form nobody signed in to fill in.
+    /// <para>
+    /// The page mints one random value when somebody first presses Submit and
+    /// sends it with every retry of that attempt, so a double tap on a slow
+    /// phone and a retry after a response that never arrived both carry the
+    /// key the first request carried. Two different people carry different
+    /// keys, because they loaded the page separately.
+    /// </para>
+    /// <para>
+    /// Ignored entirely on a form that requires sign-in, where the person is
+    /// the key and a caller-supplied one would be a second deduplication rule
+    /// with nothing to say which wins.
+    /// </para>
+    /// </param>
+    public sealed record SubmitRequest(
+        Dictionary<string, JsonElement>? Answers,
+        string? SubmissionKey = null);
 
     /// <summary>
     /// The published version of a form, or nothing.
@@ -474,7 +491,10 @@ public static class PublicFormEndpoints
         IFormStore forms,
         ISubmissionStore submissions,
         IRespondentStore respondents,
+        IAnonymousSubmissionStore anonymous,
         SessionService sessions,
+        IConfiguration config,
+        IMemoryCache cache,
         TimeProvider clock,
         ILogger<SubmitRequest> log,
         CancellationToken ct)
@@ -509,16 +529,8 @@ public static class PublicFormEndpoints
 
         if (!form.IsApplication)
         {
-            // Survey answers have nowhere to go yet. Answering 200 and
-            // dropping them would be the worst of the options: somebody would
-            // believe they had replied.
-            log.LogWarning(
-                "A submission arrived for a form that has nowhere to store answers. {code}",
-                form.Code);
-
-            return Results.Json(
-                new { error = "This form is not accepting responses yet." },
-                statusCode: StatusCodes.Status501NotImplemented);
+            return await SubmitAnonymous(
+                form, published, request, http, anonymous, config, cache, log, ct);
         }
 
         var answers = request?.Answers
@@ -673,6 +685,222 @@ public static class PublicFormEndpoints
             form.Code, id, respondent.PersonId);
 
         return Results.Ok(new { submitted = true });
+    }
+
+    /// <summary>
+    /// Takes an answer from somebody we will never know the name of.
+    /// </summary>
+    /// <remarks>
+    /// A survey whose audience does not require sign-in: a feedback form on a
+    /// poster at the back of the room, a link read out at the end of a talk.
+    /// Until now this answered 501 and the answers were lost, which was the
+    /// honest thing to do while there was nowhere to put them and is not the
+    /// honest thing to do now that there is.
+    /// <para>
+    /// Everything the signed-in path gets from the session is simply absent
+    /// here, and none of it is reconstructed from the request. There is no
+    /// prefill, no fixed answer, no eligibility check and no application to
+    /// join to — an ungated form has no audience to belong to, which is what
+    /// "ungated" means. The one thing that arrives with the request and is
+    /// used is the submission key, and what it is trusted for is bounded: see
+    /// <see cref="IAnonymousSubmissionStore"/>.
+    /// </para>
+    /// <para>
+    /// Nothing about the caller is stored. Not the address the request came
+    /// from, not a cookie, not a fingerprint. The rate limiter below holds an
+    /// address in memory for an hour and the row holds nothing at all, because
+    /// a survey that quietly identifies its respondents is worse than one that
+    /// asks.
+    /// </para>
+    /// </remarks>
+    private static async Task<IResult> SubmitAnonymous(
+        Form form,
+        FormVersion published,
+        SubmitRequest? request,
+        HttpContext http,
+        IAnonymousSubmissionStore anonymous,
+        IConfiguration config,
+        IMemoryCache cache,
+        ILogger<SubmitRequest> log,
+        CancellationToken ct)
+    {
+        // Before any database work, like the sign-in step above it and for the
+        // same reason: the point of a limiter on an unauthenticated write is
+        // that a refused request costs a dictionary lookup and not a row.
+        //
+        // Counted whatever the answers turn out to be, including a submission
+        // that is about to fail validation. A script posting rubbish is
+        // hammering this endpoint exactly as hard as one posting valid
+        // answers, and a limiter that only counts the successful ones is one
+        // that can be walked straight past.
+        if (TooManyAnonymous(cache, config, form.Id, ClientAddress.ForRateLimit(
+                http, config["Network:ProxySecret"])))
+        {
+            log.LogWarning(
+                "Anonymous submissions to one form were throttled. {code}", form.Code);
+
+            // 429 and a sentence that does not blame them. Somebody who really
+            // is the hundred-and-first person in one building to answer one
+            // survey within the hour has done nothing wrong and needs to be
+            // told to come back, not told they were refused.
+            //
+            // COPY: needs sign-off.
+            return Results.Json(
+                new { error = "Too many answers have come from your network. Try again later." },
+                statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        // Parsed before anything is stored, and refused rather than ignored.
+        //
+        // Quietly dropping a key we cannot read would leave the page believing
+        // its retries are being collapsed while every one of them writes
+        // another row — a protection that is off and says nothing, which is
+        // the kind that survives for a year. A key that does not parse means
+        // the caller is not the page, and the page has nothing to fix.
+        Guid? submissionKey = null;
+        if (!string.IsNullOrWhiteSpace(request?.SubmissionKey))
+        {
+            if (!Guid.TryParse(request.SubmissionKey, out var parsed))
+            {
+                // COPY: needs sign-off.
+                return Results.BadRequest(new
+                {
+                    error = "That submission could not be identified. Reload the page and "
+                            + "try again.",
+                });
+            }
+
+            submissionKey = parsed;
+        }
+
+        var answers = request?.Answers
+                      ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+
+        // The same validation the other two paths use, against the published
+        // version loaded here rather than any list that arrived. An ungated
+        // form is the one most likely to be posted to by something that is not
+        // the page, so this is where a rule that only existed in the browser
+        // would be discovered to be no rule at all.
+        var problems = SubmissionValidation.Check(published.Fields, answers);
+        if (problems.Count > 0)
+        {
+            return Results.BadRequest(new
+            {
+                error = "Some answers need another look.",
+                problems = problems.Select(p => new { field = p.FieldKey, message = p.Message }),
+            });
+        }
+
+        var id = await anonymous.RecordAsync(
+            form.Id, published.Version, submissionKey, answers, ct);
+
+        // The code and the row id, like every other line here. There is no
+        // person to name and the submission key is deliberately not logged:
+        // it is the one value that links two requests together, and a log that
+        // carries it is a log that can rebuild who answered what.
+        log.LogInformation(
+            "An anonymous form was answered. {code} {submissionId}", form.Code, id);
+
+        return Results.Ok(new { submitted = true });
+    }
+
+    /// <summary>
+    /// How many anonymous answers one caller may put on one form in an hour.
+    /// </summary>
+    /// <remarks>
+    /// Configurable because the right number is a property of the room rather
+    /// than of the code, and the day somebody needs it changed is a day
+    /// somebody is standing in that room.
+    /// </remarks>
+    private const string LimitSetting = "Forms:AnonymousSubmissionsPerHour";
+
+    private const int DefaultAnonymousLimit = 100;
+
+    private static readonly TimeSpan AnonymousWindow = TimeSpan.FromHours(1);
+
+    private sealed class SubmissionCounter
+    {
+        public int Count;
+    }
+
+    /// <summary>
+    /// Whether this caller has already filled this form in enough times.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <see cref="AuthEndpoints.TooManyFor"/> — an
+    /// <see cref="IMemoryCache"/> entry that expires on its own, a counter
+    /// under a lock, checked before any database work — and deliberately not
+    /// the same method. That one counts attempts against an email address over
+    /// fifteen minutes; this counts rows against a form over an hour. Sharing
+    /// one method would mean one window and one limit serving two hazards, and
+    /// the number that is right for "how often may somebody ask for a sign-in
+    /// link" is nowhere near the number that is right for "how many people may
+    /// answer a survey from one building".
+    /// <para>
+    /// Why this exists at all, given the endpoint is already behind the
+    /// <c>form-submit</c> policy: that policy is one bucket per caller across
+    /// every form, and it is loose on purpose because an application form is
+    /// protected by a unique index on (event_id, lower(email)) that stops one
+    /// person applying twice however many requests they make. An anonymous
+    /// survey has no such index. Every request that gets through is a new row,
+    /// for as long as the form is open. So the outer policy stops a burst and
+    /// this stops the slow drip aimed at one survey, which is the shape an
+    /// attack on this actually takes.
+    /// </para>
+    /// <para>
+    /// The partition is a client address, which is a lecture theatre behind
+    /// one NAT as often as it is a person. That is why the limit is a hundred
+    /// rather than five: it has to sit above the largest room that could
+    /// plausibly answer one survey within an hour, and the cost of sitting
+    /// there is that a single host can still write a hundred rows an hour. A
+    /// tighter number would refuse a real room, which is the failure that
+    /// actually happens.
+    /// </para>
+    /// <para>
+    /// What this does not stop, said plainly rather than left to be
+    /// discovered: a botnet. Every partition-by-address limit is a limit on
+    /// one host, and a thousand hosts are a thousand buckets. What stops a
+    /// distributed flood is an organizer closing the form, which the schedule
+    /// already allows and which is visible on the responses screen the moment
+    /// it starts. In memory too, so with several replicas the real limit is
+    /// roughly this times the replica count — the same trade
+    /// <see cref="AuthEndpoints.TooManyFor"/> writes down, for the same reason:
+    /// a shared counter means Redis, and Redis means another thing to have
+    /// fall over during an event.
+    /// </para>
+    /// </remarks>
+    private static bool TooManyAnonymous(
+        IMemoryCache cache, IConfiguration config, Guid formId, string caller)
+    {
+        var limit = config.GetValue(LimitSetting, DefaultAnonymousLimit);
+        if (limit <= 0)
+        {
+            // A zero or negative setting is a typo, not an instruction to
+            // refuse every answer to every ungated form. Falling back is the
+            // safe way round here: the failure of being too generous is some
+            // rows somebody can delete, and the failure of the other way round
+            // is a survey that silently accepts nothing all weekend.
+            limit = DefaultAnonymousLimit;
+        }
+
+        var key = $"anonymous-submit:{formId}:{caller}";
+
+        var counter = cache.GetOrCreate(key, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = AnonymousWindow;
+            return new SubmissionCounter();
+        })!;
+
+        lock (counter)
+        {
+            if (counter.Count >= limit)
+            {
+                return true;
+            }
+
+            counter.Count++;
+            return false;
+        }
     }
 
     /// <summary>

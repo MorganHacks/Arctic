@@ -91,7 +91,22 @@ export function ResponsesTable({
               {/* Which version of the form this was answered on. The reason a
                   row has gaps where its neighbours do not, so it belongs
                   beside them rather than buried in the panel. */}
-              <td className={styles.version}>v{item.formVersion}</td>
+              <td className={styles.version}>
+                  v{item.formVersion}
+                  {/* The anonymous mark sits beside the version because it
+                      explains why a row has nobody behind it, and an
+                      explanation somebody has to open the row to find is one
+                      they will not go looking for. */}
+                  {item.anonymous ? (
+                    // COPY: needs sign-off.
+                    <span
+                      className={styles.anonymous}
+                      title="Answered without signing in"
+                    >
+                      anon
+                    </span>
+                  ) : null}
+                </td>
 
               {columns.map((column) => (
                 <td key={column.key} className={styles.cell}>

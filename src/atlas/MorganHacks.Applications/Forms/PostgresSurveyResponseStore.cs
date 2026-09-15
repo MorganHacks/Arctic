@@ -33,7 +33,27 @@ namespace MorganHacks.Applications.Forms;
 public sealed class PostgresSurveyResponseStore(NpgsqlDataSource dataSource)
     : ISurveyResponseStore
 {
-    private const string Columns = "id, submitted_at, form_version, answers";
+    /// <summary>
+    /// What every read here selects.
+    /// </summary>
+    /// <remarks>
+    /// Note what is <em>not</em> in the WHERE clause of any query below: a
+    /// condition on <c>person_id</c>. Since 0027 that column is nullable and an
+    /// ungated survey writes rows with nothing in it, so every one of these
+    /// reads returns anonymous and signed-in answers together without a branch,
+    /// a union or a second cursor. That was the reason for putting both in one
+    /// table: an organizer reading a survey wants all of it, and a list that
+    /// silently holds back half is worse than one that shows none, because
+    /// nothing on it says a half is missing.
+    /// <para>
+    /// The last column is the flag rather than the id. Which person answered is
+    /// not something this screen shows or needs, and selecting an id nobody
+    /// reads is how it ends up on a payload later by accident. Whether there
+    /// was a person at all is the fact the screen is missing.
+    /// </para>
+    /// </remarks>
+    private const string Columns =
+        "id, submitted_at, form_version, answers, person_id IS NULL";
 
     /// <summary>
     /// Newest first, and by the same two-part key the application reader uses.
@@ -147,6 +167,7 @@ public sealed class PostgresSurveyResponseStore(NpgsqlDataSource dataSource)
             reader.GetFieldValue<DateTimeOffset>(1),
             reader.GetInt32(2),
             answers,
-            Resume: null);
+            Resume: null,
+            Anonymous: reader.GetBoolean(4));
     }
 }
