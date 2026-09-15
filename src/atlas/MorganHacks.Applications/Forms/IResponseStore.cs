@@ -41,12 +41,29 @@ public readonly record struct ResponseCursor(DateTimeOffset SubmittedAt, Guid Id
 /// is <see cref="IResumeStore"/>'s job, and keeping the two apart is what stops
 /// a query that happens to select this also handing out a link.
 /// </param>
+/// <param name="Anonymous">
+/// Whether there is anybody behind this answer.
+/// <para>
+/// Carried rather than inferred, because the two kinds of survey answer now
+/// sit in one list and look identical from outside: an ungated survey has
+/// nobody to name, and a gated one deliberately does not put the respondent's
+/// address in the answers. Without this flag an organizer reading the list
+/// cannot tell an answer nobody signed in to give from one where the name is
+/// merely not on screen, and those are different facts about the data — one
+/// can be chased up and the other cannot.
+/// </para>
+/// <para>
+/// False for an application, always. An application form asks for an address,
+/// so the answer set names its author by construction.
+/// </para>
+/// </param>
 public sealed record FormResponse(
     Guid Id,
     DateTimeOffset SubmittedAt,
     int FormVersion,
     IReadOnlyDictionary<string, JsonElement> Answers,
-    StoredResume? Resume);
+    StoredResume? Resume,
+    bool Anonymous = false);
 
 /// <summary>A page of responses, and where the next one begins.</summary>
 /// <remarks>

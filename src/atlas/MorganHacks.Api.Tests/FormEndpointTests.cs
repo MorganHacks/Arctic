@@ -313,15 +313,44 @@ public class FormEndpointTests(ApplicationsDatabase db)
     }
 
     [Fact]
-    public async Task A_survey_is_told_it_has_nowhere_to_put_an_answer()
+    public async Task A_survey_answer_is_kept_and_is_not_an_application()
     {
-        // Answering 200 and dropping the answers would be the worst option:
-        // somebody would believe they had replied.
+        // This used to answer 501, because there was nowhere to put a survey
+        // answer and returning 200 and dropping it would have been the worst of
+        // the options: somebody would believe they had replied. 0027 gave it
+        // somewhere to go — see AnonymousSurveyTests for what the new path
+        // does.
+        //
+        // What is guarded here is the boundary between the two paths. This
+        // survey is published with the whole MLH question set on it, email and
+        // all, because the builder does not stop somebody doing that. Answering
+        // it must not create an applicant: a survey that quietly enrolled its
+        // respondents would put people in the review queue who never applied,
+        // and take the one seat per address that the real applicant needs.
         var form = await PublishedAsync(kind: "survey");
+        var email = Unique("survey");
 
-        var response = await Submit(form.Code, Answers(Unique("survey")));
+        var response = await Submit(form.Code, Answers(email));
 
-        Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, await SubmissionCountAsync(form.Id));
+        Assert.Equal(0, await ApplicationCountAsync(email));
+    }
+
+    private async Task<int> SubmissionCountAsync(Guid formId)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            "SELECT count(*) FROM applications.form_submissions WHERE form_id = @id");
+        cmd.Parameters.AddWithValue("id", formId);
+        return (int)(long)(await cmd.ExecuteScalarAsync())!;
+    }
+
+    private async Task<int> ApplicationCountAsync(string email)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            "SELECT count(*) FROM applications.applications WHERE lower(email) = lower(@e)");
+        cmd.Parameters.AddWithValue("e", email);
+        return (int)(long)(await cmd.ExecuteScalarAsync())!;
     }
 
     [Fact]

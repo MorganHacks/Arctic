@@ -234,6 +234,9 @@ function exampleRow(fields: FormField[], index: number): ResponseItem {
     id: `example-${index}`,
     submittedAt: exampleStamp(index),
     formVersion: older ? 3 : 4,
+    // Every third one, so the mark is visible in development without being the
+    // only thing on the screen.
+    anonymous: index % 3 === 1,
     answers,
     resume:
       index % 3 === 0

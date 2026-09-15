@@ -103,6 +103,27 @@ export function Questions({
   const summary = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
+  /*
+   * What the API uses to tell a retry from a second person.
+   *
+   * On a form anybody can open there is nobody to file an answer under, so
+   * there is nothing on the server that can decide whether two submissions are
+   * one person pressing twice or two people who both filled it in. Both
+   * available guesses are wrong in a way that throws away somebody's words:
+   * the same network is a lecture theatre behind one NAT, and the same answers
+   * is two people who both ticked yes.
+   *
+   * So this side says. Minted once, on the first press of Submit, and reused
+   * by every retry of that attempt — a double tap on a slow phone, a retry
+   * after a response that never came back. Two different people never share
+   * one, because they loaded the page separately.
+   *
+   * Lazily, and inside the handler rather than at mount, so a form nobody
+   * submits never mints anything and this does not run during the server
+   * render.
+   */
+  const attempt = useRef<string | null>(null);
+
   const { steps, ordinals, questions } = useMemo(() => plan(fields), [fields]);
 
   const locked = useMemo(() => new Set(fixed ?? []), [fixed]);
@@ -405,6 +426,8 @@ export function Questions({
     setSending(true);
     setBanner(null);
 
+    attempt.current ??= attemptKey();
+
     try {
       // Same origin, through the rewrite in next.config.ts. No CORS, no
       // preflight, and harbor is never a hostname this page has to know.
@@ -413,7 +436,16 @@ export function Questions({
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ answers: payload(fields, answers) }),
+          body: JSON.stringify({
+            answers: payload(fields, answers),
+
+            // Omitted rather than sent as null when there is none. The API
+            // reads an absent key as "never collapse this with anything",
+            // which is the direction to fail in: the cost is a duplicate row
+            // an organizer can see and delete, and the cost of the other way
+            // round is an answer that was never stored.
+            ...(attempt.current ? { submissionKey: attempt.current } : {}),
+          }),
         },
       );
 
@@ -721,4 +753,25 @@ function seed(prefill: Record<string, Prefill> | undefined): Answers {
 /** Whether this browser has been asked not to animate anything. */
 function still(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * A random name for one submission attempt, or nothing.
+ *
+ * `crypto.randomUUID` needs a secure context, which every deployment of this
+ * has and a developer serving the build over plain http on a phone does not.
+ * Guarded because of what the failure would cost: an exception thrown here
+ * would take the whole submit with it, and losing every answer on the form to
+ * protect against a duplicate row is the wrong trade by a wide margin.
+ *
+ * Nothing is invented as a fallback. A value that is not random is worse than
+ * none — two people on two phones would send the same one, and the second
+ * submission would overwrite the first.
+ */
+function attemptKey(): string | null {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return null;
+  }
 }

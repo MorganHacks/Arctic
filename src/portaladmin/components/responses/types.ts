@@ -48,6 +48,18 @@ export type ResponseItem = {
   /** Which version of the form was on screen when this was answered. */
   formVersion: number;
 
+  /**
+   * Whether nobody was signed in when this was answered.
+   *
+   * Not the same as "we do not know who this is", which is what a signed-in
+   * survey answer already looks like: a gated form takes the respondent from
+   * their session and deliberately keeps their address out of the answers, so
+   * it names nobody either. One of those can be chased up and the other
+   * cannot, and a row that merely looks like it is missing a name costs
+   * somebody an afternoon against the applicant list.
+   */
+  anonymous: boolean;
+
   answers: AnswerMap;
   resume: ResumeRef | null;
 };

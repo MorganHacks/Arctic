@@ -324,3 +324,20 @@
   padding: 0.2rem 0;
   font-size: 0.9rem;
 }
+
+/* Answered by nobody in particular.
+
+   Beside the version rather than in its own column, because it is true of
+   almost no rows on a gated form and of every row on an open one — a column
+   would be empty or uniform, and in both cases would be a column carrying no
+   information at whatever width it took. */
+.anonymous {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
