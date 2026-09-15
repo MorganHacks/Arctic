@@ -111,6 +111,7 @@ builder.Services.AddSingleton<ISubmissionStore, PostgresSubmissionStore>();
 // from the submission store on purpose: they touch the same table and have
 // opposite risks.
 builder.Services.AddSingleton<IResponseStore, PostgresResponseStore>();
+builder.Services.AddSingleton<ISurveyResponseStore, PostgresSurveyResponseStore>();
 
 // The applicant's own side of a form that is not the application form: who is
 // signed in, what they have already told us, and where their answer lands.

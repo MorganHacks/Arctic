@@ -188,6 +188,145 @@ public class FormResponseTests(ApplicationsDatabase db)
         return $"mh_session={await sessions.StartAsync(personId)}";
     }
 
+    // ------------------------------------------------ forms that are not one ---
+
+    [Fact]
+    public async Task A_survey_answer_appears_on_the_responses_screen()
+    {
+        // The bug. Answers to a signed-in survey go to a different table from
+        // application answers, and the responses screen read only the second
+        // one — so an organizer could publish a survey, watch somebody answer
+        // it, and find the screen empty with nothing anywhere to say the
+        // answer had been kept.
+        var (form, person) = await AnsweredSurveyAsync("Pepperoni");
+
+        var page = await ReadAsync(
+            $"/admin/forms/{form.Id}/responses", await ReaderAsync());
+
+        var items = page.GetProperty("items").EnumerateArray().ToList();
+
+        Assert.Single(items);
+        Assert.Equal(
+            "Pepperoni",
+            items[0].GetProperty("answers").GetProperty("pizza").GetString());
+
+        // The person is on file, so the row is attributable rather than an
+        // anonymous answer floating on a form.
+        Assert.NotEqual(Guid.Empty, person);
+    }
+
+    [Fact]
+    public async Task One_survey_answer_can_be_opened_on_its_own()
+    {
+        var (form, _) = await AnsweredSurveyAsync("Margherita");
+        var cookie = await ReaderAsync();
+
+        var page = await ReadAsync($"/admin/forms/{form.Id}/responses", cookie);
+        var id = page.GetProperty("items").EnumerateArray().First()
+                     .GetProperty("id").GetString();
+
+        var one = await ReadAsync($"/admin/forms/{form.Id}/responses/{id}", cookie);
+
+        Assert.Equal(
+            "Margherita",
+            one.GetProperty("answers").GetProperty("pizza").GetString());
+    }
+
+    [Fact]
+    public async Task A_survey_answer_from_another_form_is_not_found()
+    {
+        // The form is part of the lookup rather than checked afterwards. An id
+        // from one form read through another form's screen must not answer,
+        // because the form in the URL is the only thing the caller was
+        // authorized against.
+        var (mine, _) = await AnsweredSurveyAsync("Mine");
+        var (theirs, _) = await AnsweredSurveyAsync("Theirs");
+        var cookie = await ReaderAsync();
+
+        var page = await ReadAsync($"/admin/forms/{theirs.Id}/responses", cookie);
+        var id = page.GetProperty("items").EnumerateArray().First()
+                     .GetProperty("id").GetString();
+
+        var response = await Client().SendAsync(
+            Request($"/admin/forms/{mine.Id}/responses/{id}", cookie));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Survey_answers_export_like_any_other()
+    {
+        // The same export, because it is the same question set and the same
+        // people. A survey somebody can read on screen and cannot get out of
+        // the system is half a feature.
+        var (form, _) = await AnsweredSurveyAsync("Hawaiian");
+
+        // Exporting is gated apart from reading, so the reader used everywhere
+        // else here is deliberately not enough for this one.
+        var exporter = await db.AddPersonAsync(Unique("exporter"));
+        await db.GrantAsync(exporter, "applications.view_responses");
+        await db.GrantAsync(exporter, "applications.export");
+
+        var csv = await CsvAsync(
+            $"/admin/forms/{form.Id}/responses.csv", await SignIn(exporter));
+
+        Assert.Contains("Hawaiian", csv, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_unanswered_survey_reads_as_empty_rather_than_missing()
+    {
+        var form = await SurveyAsync();
+
+        var page = await ReadAsync(
+            $"/admin/forms/{form.Id}/responses", await ReaderAsync());
+
+        Assert.Empty(page.GetProperty("items").EnumerateArray());
+    }
+
+    /// <summary>A published survey with one question on it.</summary>
+    private async Task<Form> SurveyAsync()
+    {
+        var form = await Forms.CreateAsync(
+            await db.AddEventAsync(), "Feedback", "survey", null);
+
+        await Forms.DraftAsync(form.Id, null);
+        await Forms.SaveDraftAsync(form.Id, [
+            new FormField
+            {
+                Key = "pizza",
+                Type = FieldType.ShortText,
+                Label = "Which pizza?",
+                Required = true,
+            },
+        ]);
+        await Forms.PublishAsync(form.Id, null);
+
+        return form;
+    }
+
+    /// <summary>A survey with one answer on it, written the way a submit writes.</summary>
+    private async Task<(Form Form, Guid Person)> AnsweredSurveyAsync(string answer)
+    {
+        var form = await SurveyAsync();
+        var published = await Forms.PublishedAsync(form.Id);
+        var person = await db.AddPersonAsync(Unique("respondent"));
+
+        var respondent = new Respondent(
+            person, null, Unique("respondent"), null, null, "accepted",
+            AgreedToCodeOfConduct: true, AgreedToDataSharing: true,
+            Known: new Dictionary<string, JsonElement>(StringComparer.Ordinal));
+
+        await new PostgresRespondentStore(db.DataSource).RecordAsync(
+            form.Id, published!.Version, respondent,
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+            {
+                ["pizza"] = JsonSerializer.SerializeToElement(answer),
+            });
+
+        return (form, person);
+    }
+
     /// <summary>Somebody who may read responses and nothing else.</summary>
     private async Task<string> ReaderAsync()
     {
