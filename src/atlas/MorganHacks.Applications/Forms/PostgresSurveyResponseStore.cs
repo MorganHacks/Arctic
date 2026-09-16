@@ -53,7 +53,27 @@ public sealed class PostgresSurveyResponseStore(NpgsqlDataSource dataSource)
     /// </para>
     /// </remarks>
     private const string Columns =
-        "id, submitted_at, form_version, answers, person_id IS NULL";
+        "s.id, s.submitted_at, s.form_version, s.answers, s.person_id IS NULL, p.email";
+
+    /// <summary>
+    /// The submissions, with whoever was signed in when each was written.
+    /// </summary>
+    /// <remarks>
+    /// A left join, not an inner one: an anonymous row has no person and must
+    /// still come back. An inner join would have silently dropped every
+    /// anonymous answer from the screen the moment this column was added,
+    /// which is the same class of bug as the one that hid survey answers in
+    /// the first place.
+    /// <para>
+    /// The address is read from <c>identity.people</c> rather than from the
+    /// answers, so it is the address the session was signed in with. An
+    /// address typed into a question is a different fact — it can be somebody
+    /// else's, and it can be a typo.
+    /// </para>
+    /// </remarks>
+    private const string From =
+        "FROM applications.form_submissions s "
+        + "LEFT JOIN identity.people p ON p.id = s.person_id ";
 
     /// <summary>
     /// Newest first, and by the same two-part key the application reader uses.
@@ -70,10 +90,10 @@ public sealed class PostgresSurveyResponseStore(NpgsqlDataSource dataSource)
     {
         // One more than asked for, so "is there another page" is answered
         // without a round trip that comes back empty.
-        var sql = $"SELECT {Columns} FROM applications.form_submissions "
-                  + "WHERE form_id = @formId"
-                  + (after is null ? string.Empty : " AND (submitted_at, id) < (@at, @after)")
-                  + " ORDER BY submitted_at DESC, id DESC LIMIT @limit";
+        var sql = $"SELECT {Columns} {From}"
+                  + "WHERE s.form_id = @formId"
+                  + (after is null ? string.Empty : " AND (s.submitted_at, s.id) < (@at, @after)")
+                  + " ORDER BY s.submitted_at DESC, s.id DESC LIMIT @limit";
 
         await using var cmd = dataSource.CreateCommand(sql);
         cmd.Parameters.AddWithValue("formId", formId);
@@ -117,8 +137,8 @@ public sealed class PostgresSurveyResponseStore(NpgsqlDataSource dataSource)
         Guid formId, Guid responseId, CancellationToken ct = default)
     {
         await using var cmd = dataSource.CreateCommand(
-            $"SELECT {Columns} FROM applications.form_submissions "
-            + "WHERE form_id = @formId AND id = @id");
+            $"SELECT {Columns} {From}"
+            + "WHERE s.form_id = @formId AND s.id = @id");
 
         cmd.Parameters.AddWithValue("formId", formId);
         cmd.Parameters.AddWithValue("id", responseId);
@@ -132,8 +152,8 @@ public sealed class PostgresSurveyResponseStore(NpgsqlDataSource dataSource)
         Guid formId, [EnumeratorCancellation] CancellationToken ct = default)
     {
         await using var cmd = dataSource.CreateCommand(
-            $"SELECT {Columns} FROM applications.form_submissions "
-            + "WHERE form_id = @formId ORDER BY submitted_at DESC, id DESC");
+            $"SELECT {Columns} {From}"
+            + "WHERE s.form_id = @formId ORDER BY s.submitted_at DESC, s.id DESC");
 
         cmd.Parameters.AddWithValue("formId", formId);
 
@@ -168,6 +188,12 @@ public sealed class PostgresSurveyResponseStore(NpgsqlDataSource dataSource)
             reader.GetInt32(2),
             answers,
             Resume: null,
-            Anonymous: reader.GetBoolean(4));
+            Anonymous: reader.GetBoolean(4),
+
+            // Null for an anonymous row, and null for a signed-in one whose
+            // person has since been deleted. Both are "we cannot say", which
+            // is what the screen shows either way -- the anonymous flag beside
+            // it is what tells the two apart.
+            RespondentEmail: reader.IsDBNull(5) ? null : reader.GetString(5));
     }
 }

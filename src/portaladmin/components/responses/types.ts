@@ -60,6 +60,20 @@ export type ResponseItem = {
    */
   anonymous: boolean;
 
+  /**
+   * Who was signed in when this was answered, or null.
+   *
+   * Only a gated form knows. It takes the respondent from their session and
+   * keeps the address out of the answer set on purpose, so without this the
+   * screen could not say who had replied — and the workaround was to add an
+   * email question to a form that already knew, collecting a second address
+   * that can be mistyped or be somebody else's.
+   *
+   * Null on an application, whose address is already one of its answers
+   * because the form asked for one.
+   */
+  respondent: string | null;
+
   answers: AnswerMap;
   resume: ResumeRef | null;
 };
