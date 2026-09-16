@@ -237,6 +237,9 @@ function exampleRow(fields: FormField[], index: number): ResponseItem {
     // Every third one, so the mark is visible in development without being the
     // only thing on the screen.
     anonymous: index % 3 === 1,
+    // The anonymous ones have nobody behind them, which is the pairing the
+    // screen has to make legible.
+    respondent: index % 3 === 1 ? null : `example-${index}@morgan.edu`,
     answers,
     resume:
       index % 3 === 0

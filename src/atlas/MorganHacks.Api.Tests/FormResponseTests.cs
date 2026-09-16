@@ -216,6 +216,44 @@ public class FormResponseTests(ApplicationsDatabase db)
     }
 
     [Fact]
+    public async Task A_gated_survey_says_who_answered_it()
+    {
+        // A gated form takes the respondent from their session and keeps the
+        // address out of the answer set on purpose. That left this screen
+        // unable to say who had replied, so organizers were adding an email
+        // question to a form that already knew -- and collecting a second
+        // address that somebody can mistype or fill in as a friend.
+        var (form, person) = await AnsweredSurveyAsync("Pepperoni");
+
+        var page = await ReadAsync(
+            $"/admin/forms/{form.Id}/responses", await ReaderAsync());
+
+        var row = page.GetProperty("items").EnumerateArray().First();
+
+        Assert.Equal(await EmailOf(person), row.GetProperty("respondent").GetString());
+        Assert.False(row.GetProperty("anonymous").GetBoolean());
+    }
+
+    [Fact]
+    public async Task The_address_comes_from_the_session_not_from_an_answer()
+    {
+        // The reason it is read from identity.people. An address typed into a
+        // question is a different fact: it can be somebody else's, and it can
+        // be wrong. The one the session was signed in with cannot be either.
+        var (form, person) = await AnsweredSurveyAsync(
+            "Margherita", typedEmail: "someone.else@example.invalid");
+
+        var page = await ReadAsync(
+            $"/admin/forms/{form.Id}/responses", await ReaderAsync());
+
+        var row = page.GetProperty("items").EnumerateArray().First();
+
+        Assert.Equal(await EmailOf(person), row.GetProperty("respondent").GetString());
+        Assert.NotEqual(
+            "someone.else@example.invalid", row.GetProperty("respondent").GetString());
+    }
+
+    [Fact]
     public async Task One_survey_answer_can_be_opened_on_its_own()
     {
         var (form, _) = await AnsweredSurveyAsync("Margherita");
@@ -305,8 +343,17 @@ public class FormResponseTests(ApplicationsDatabase db)
         return form;
     }
 
+    private async Task<string> EmailOf(Guid personId)
+    {
+        await using var cmd = db.DataSource.CreateCommand(
+            "SELECT email FROM identity.people WHERE id = @id");
+        cmd.Parameters.AddWithValue("id", personId);
+        return (string)(await cmd.ExecuteScalarAsync())!;
+    }
+
     /// <summary>A survey with one answer on it, written the way a submit writes.</summary>
-    private async Task<(Form Form, Guid Person)> AnsweredSurveyAsync(string answer)
+    private async Task<(Form Form, Guid Person)> AnsweredSurveyAsync(
+        string answer, string? typedEmail = null)
     {
         var form = await SurveyAsync();
         var published = await Forms.PublishedAsync(form.Id);
@@ -322,6 +369,9 @@ public class FormResponseTests(ApplicationsDatabase db)
             new Dictionary<string, JsonElement>(StringComparer.Ordinal)
             {
                 ["pizza"] = JsonSerializer.SerializeToElement(answer),
+                // An answer that happens to be an address, which must not be
+                // what the screen reports as the respondent.
+                ["typed"] = JsonSerializer.SerializeToElement(typedEmail ?? ""),
             });
 
         return (form, person);
