@@ -24,7 +24,14 @@ public static class FormValidation
     /// One at a time turns fixing a form into a guessing game where each fix
     /// reveals the next complaint.
     /// </remarks>
-    public static IReadOnlyList<FormProblem> Check(IReadOnlyList<FormField> fields)
+    /// <param name="isApplication">
+    /// Whether this form creates an applicant. It decides one rule — whether a
+    /// file question is answerable — and defaults to the permissive reading so
+    /// that a caller which has not been taught the difference behaves as it
+    /// always did rather than refusing forms that were fine yesterday.
+    /// </param>
+    public static IReadOnlyList<FormProblem> Check(
+        IReadOnlyList<FormField> fields, bool isApplication = true)
     {
         var problems = new List<FormProblem>();
 
@@ -178,11 +185,33 @@ public static class FormValidation
                 $"There are {files} file questions. An application stores one file."));
         }
 
+        // And none at all on a form that is not an application, because there
+        // is nowhere for the file to be remembered.
+        //
+        // This is not a restriction somebody chose; it is a gap said out loud.
+        // The upload succeeds, the bytes are stored, and the answer holds an
+        // upload id that nothing ever claims — so the file exists, is paid for,
+        // and cannot be reached from any screen. A survey that collected forty
+        // project submissions would look like it worked and hold none of them.
+        //
+        // Refused at publish rather than at submit, so it is the author who
+        // hears about it while the form is still a draft, rather than forty
+        // people who answered it.
+        //
+        // COPY: needs sign-off.
+        if (!isApplication && files > 0)
+        {
+            problems.Add(new FormProblem(
+                "Only an application can take a file. This form would accept the "
+                + "upload and have nowhere to keep it."));
+        }
+
         return problems;
     }
 
-    public static bool CanPublish(IReadOnlyList<FormField> fields) =>
-        Check(fields).Count == 0;
+    public static bool CanPublish(
+        IReadOnlyList<FormField> fields, bool isApplication = true) =>
+        Check(fields, isApplication).Count == 0;
 
     /// <summary>
     /// Trims a label for an error message.

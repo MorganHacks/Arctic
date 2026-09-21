@@ -284,13 +284,20 @@ builder.Services.AddRateLimiter(options =>
     // submit, and for the same reason: the partition is an IP, and on campus
     // that is a whole building behind one NAT.
     //
+    // Partitioned on the caller rather than on the socket, which this did not
+    // used to be. Both front ends call the API from their own server, so the
+    // connection atlas sees comes from Vercel — which made this one bucket of
+    // sixty uploads every five minutes for everybody at once. The comment
+    // below about five megabytes and a PDF check is what was actually holding
+    // the line; this is now a limit as well as a sentence about one.
+    //
     // What keeps this from being a way to fill a storage account is not the
     // request count — it is that every request is capped at five megabytes and
     // refused unless it is really a PDF. Tightening the count instead would
     // stop a launch meeting and would not stop a script.
     options.AddPolicy("resume-upload", http =>
         RateLimitPartition.GetFixedWindowLimiter(
-            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            ClientAddress.ForRateLimit(http, proxySecret),
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 60,
