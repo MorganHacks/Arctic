@@ -366,6 +366,8 @@ public static class AuthEndpoints
     private static async Task<IResult> WhoAmI(
         SessionService sessions,
         PermissionService permissions,
+        IIdentityStore store,
+        TimeProvider clock,
         HttpContext http,
         CancellationToken ct)
     {
@@ -383,9 +385,35 @@ public static class AuthEndpoints
 
         var effective = await permissions.ForAsync(result.PersonId, ct);
 
+        // Their own address and their own teams, which need no permission to
+        // read because they are facts about the person asking. The console's
+        // home screen is built from this: without the teams it can say what
+        // somebody may do and not where any of it came from, which is the half
+        // of "why can I not do this" that an organizer can act on.
+        //
+        // Their grants are deliberately not here. The teams explain the
+        // ordinary case, an individual grant is the exception, and the screen
+        // that exists to explain exceptions is /people/{id} — which is behind
+        // people.view for everybody including its subject.
+        var me = await store.FindPersonAsync(result.PersonId, ct);
+
         return Results.Ok(new
         {
             personId = result.PersonId,
+            email = me?.Email,
+
+            // Live ones only. A lapsed membership grants nothing, and listing
+            // it here without its expiry — which this payload has no room for
+            // — would say somebody is on a team they are not on.
+            teams = me is null
+                ? []
+                : me.Teams
+                    .Where(t => t.ExpiresAt is null
+                                || t.ExpiresAt > clock.GetUtcNow())
+                    .Select(t => t.TeamSlug)
+                    .OrderBy(slug => slug, StringComparer.Ordinal)
+                    .ToArray(),
+
             permissions = effective.Granted.Select(p => p.Value).OrderBy(p => p),
         });
     }
