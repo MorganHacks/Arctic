@@ -254,7 +254,17 @@ export type VersionRow = {
  * registration team holds `forms.manage` without it — so asking the wrong
  * endpoint got an empty set back and hid every button they were entitled to.
  */
-export type Person = { personId: string; permissions: Set<string> };
+export type Person = {
+  personId: string;
+
+  /** Their own address. Absent only if the row went while the session lived. */
+  email: string | null;
+
+  /** The teams they are on now, lapsed ones left out. */
+  teams: string[];
+
+  permissions: Set<string>;
+};
 
 /** A row on the people list. */
 export type Listed = {
@@ -351,12 +361,19 @@ export const currentPerson = cache(async function currentPerson(): Promise<Perso
       return null;
     }
 
-    const { personId, permissions } = (await response.json()) as {
+    const { personId, email, teams, permissions } = (await response.json()) as {
       personId: string;
+      email?: string | null;
+      teams?: string[];
       permissions: string[];
     };
 
-    return { personId, permissions: new Set(permissions) };
+    return {
+      personId,
+      email: email ?? null,
+      teams: teams ?? [],
+      permissions: new Set(permissions),
+    };
   } catch {
     return null;
   }

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -99,6 +100,76 @@ public class AuthEndpointTests(IdentityDatabase db)
         Assert.Equal(HttpStatusCode.Found, invented.StatusCode);
         Assert.Equal(HttpStatusCode.Found, empty.StatusCode);
         Assert.Equal(invented.Headers.Location, empty.Headers.Location);
+    }
+
+    [Fact]
+    public async Task Me_says_who_you_are_and_which_teams_you_are_on()
+    {
+        // Facts about the person asking, which need no permission to read.
+        // The console's home screen is built from them: without the teams it
+        // can say what somebody may do and not where any of it came from,
+        // which is the half of "why can I not do this" they can act on.
+        var email = Unique();
+        var personId = await db.AddPersonAsync(email, "organizer");
+        await db.AddToTeamAsync(personId, "comms");
+
+        var me = await MeAsync(personId);
+
+        Assert.Equal(email, me.GetProperty("email").GetString());
+        Assert.Contains(
+            me.GetProperty("teams").EnumerateArray(),
+            t => t.GetString() == "comms");
+    }
+
+    [Fact]
+    public async Task A_team_that_has_lapsed_is_not_one_you_are_on()
+    {
+        // A membership past its expiry grants nothing, and this payload has no
+        // room for the date — so listing it would say somebody is on a team
+        // they are not on, which is worse than leaving it out.
+        var personId = await db.AddPersonAsync(Unique(), "organizer");
+        await db.AddToTeamAsync(personId, "comms", DateTimeOffset.UtcNow.AddDays(-1));
+
+        var me = await MeAsync(personId);
+
+        Assert.Empty(me.GetProperty("teams").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Me_does_not_hand_out_individual_grants()
+    {
+        // Deliberately absent. Teams explain the ordinary case; a grant is the
+        // exception, and the screen for exceptions is behind people.view for
+        // everybody including its subject.
+        var personId = await db.AddPersonAsync(Unique(), "organizer");
+        await db.GrantAsync(personId, "audit.view");
+
+        var me = await MeAsync(personId);
+
+        Assert.False(me.TryGetProperty("grants", out _));
+
+        // The permission it confers is still reported -- that is what the
+        // console gates on.
+        Assert.Contains(
+            me.GetProperty("permissions").EnumerateArray(),
+            p => p.GetString() == "audit.view");
+    }
+
+    private async Task<JsonElement> MeAsync(Guid personId)
+    {
+        using var scope = _app.Services.CreateScope();
+        var sessions = scope.ServiceProvider
+            .GetRequiredService<MorganHacks.Identity.Services.SessionService>();
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/auth/me");
+        request.Headers.Add(
+            "Cookie", $"mh_session={await sessions.StartAsync(personId)}");
+
+        var response = await Client().SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync())
+                           .RootElement.Clone();
     }
 
     [Fact]
