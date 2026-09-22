@@ -36,6 +36,23 @@ public readonly record struct ResponseCursor(DateTimeOffset SubmittedAt, Guid Id
 /// columns.
 /// </para>
 /// </remarks>
+/// <param name="RespondentEmail">
+/// Who answered, when a form knew. Null on an anonymous submission, and null
+/// on an application — an application's address is already an answer on it,
+/// because the form asked for one.
+/// <para>
+/// A gated form does not ask. It takes the respondent from their session and
+/// keeps their address out of the answer set on purpose, which left the
+/// responses screen unable to say who had replied — so organizers were adding
+/// an email question to a form that already knew, and getting a second address
+/// typed by somebody who might mistype it.
+/// </para>
+/// <para>
+/// From <c>identity.people</c> rather than from the answers, so it is the
+/// address the session was signed in with and cannot be a different one
+/// somebody typed into a box.
+/// </para>
+/// </param>
 /// <param name="Resume">
 /// The resume, or null. Carries a storage key and no way to resolve it — that
 /// is <see cref="IResumeStore"/>'s job, and keeping the two apart is what stops
@@ -63,7 +80,8 @@ public sealed record FormResponse(
     int FormVersion,
     IReadOnlyDictionary<string, JsonElement> Answers,
     StoredResume? Resume,
-    bool Anonymous = false);
+    bool Anonymous = false,
+    string? RespondentEmail = null);
 
 /// <summary>A page of responses, and where the next one begins.</summary>
 /// <remarks>

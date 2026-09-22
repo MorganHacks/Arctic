@@ -341,3 +341,17 @@
   color: var(--muted);
   text-transform: uppercase;
 }
+
+/* Who answered, where the form knew.
+
+   Sized so a long address does not push the answers off the screen: the
+   answers are what the table is for, and an address is something a reader
+   glances at to know whose they are. Wrapping rather than truncating with an
+   ellipsis, because half an address is worse than a second line — somebody
+   reading this is often about to search for it. */
+.respondent {
+  max-width: 16rem;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+  color: var(--muted);
+}

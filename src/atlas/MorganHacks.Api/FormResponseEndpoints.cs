@@ -296,7 +296,7 @@ public static class FormResponseEndpoints
             // that appears only sometimes is the thing that makes a reader
             // wonder whether the last file was missing something.
             await writer.WriteLineAsync(Row(
-                ["id", "submitted_at", "form_version", "anonymous",
+                ["id", "submitted_at", "form_version", "anonymous", "respondent",
                  .. columns.Select(f => f.Key),
                  "resume_filename", "resume_size", "other_answers"]));
 
@@ -323,6 +323,12 @@ public static class FormResponseEndpoints
                     //
                     // COPY: needs sign-off.
                     response.Anonymous ? "yes" : "no",
+
+                    // Who was signed in. Empty on an application, whose address
+                    // is already one of the columns below because the form
+                    // asked for it -- two columns holding the same address is
+                    // two columns that can disagree after somebody edits one.
+                    response.RespondentEmail ?? string.Empty,
                     .. columns.Select(f => response.Answers.TryGetValue(f.Key, out var a)
                         ? Text(a)
                         : string.Empty),
@@ -399,6 +405,18 @@ public static class FormResponseEndpoints
         // missing a name is one somebody will spend an afternoon trying to
         // match up against the applicant list.
         anonymous = response.Anonymous,
+
+        // Who answered, when the form knew. A gated form takes the respondent
+        // from their session and keeps their address out of the answers, which
+        // left this screen unable to say who had replied -- so organizers were
+        // adding an email question to a form that already knew, and collecting
+        // a second address somebody could mistype.
+        //
+        // Absent rather than empty when there is nobody: an application's
+        // address is already an answer on it because the form asked for one,
+        // and repeating it here would put the same fact in two places that can
+        // disagree.
+        respondent = response.RespondentEmail,
         answers = response.Answers,
         resume = response.Resume is null ? null : new
         {

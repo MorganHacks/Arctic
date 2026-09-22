@@ -43,6 +43,10 @@ export function ResponsesTable({
             <th className={styles.when} scope="col">
               Submitted
             </th>
+            {/* COPY: needs sign-off. */}
+            <th className={styles.respondent} scope="col">
+              Respondent
+            </th>
             <th scope="col">Version</th>
 
             {columns.map((column) => (
@@ -91,6 +95,15 @@ export function ResponsesTable({
               {/* Which version of the form this was answered on. The reason a
                   row has gaps where its neighbours do not, so it belongs
                   beside them rather than buried in the panel. */}
+              {/* Who answered, where a gated form knows. Beside the date
+                  rather than among the answers, because it is not one: it
+                  comes from the session rather than from anything typed, and
+                  a column of addresses interleaved with answers reads as a
+                  question somebody was asked. */}
+              <td className={styles.respondent}>
+                {item.respondent ?? <span className="meta">&mdash;</span>}
+              </td>
+
               <td className={styles.version}>
                   v{item.formVersion}
                   {/* The anonymous mark sits beside the version because it
