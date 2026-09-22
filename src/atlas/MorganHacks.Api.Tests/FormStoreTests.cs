@@ -204,4 +204,47 @@ public class FormStoreTests(ApplicationsDatabase db) : IClassFixture<Application
         Assert.Equal(FieldType.Select, level.Type);
         Assert.Contains(level.Options, o => o.Value == "undergraduate-3y");
     }
+
+    [Fact]
+    public async Task Publishing_a_survey_that_asks_for_a_file_is_refused()
+    {
+        // The rule lives in FormValidation and is only worth anything if the
+        // publish path passes the form's kind to it. It did not, and a unit
+        // test on the rule alone could not tell: the check ran with the
+        // permissive default and published the form anyway.
+        var form = await Store.CreateAsync(
+            await db.AddEventAsync(), "Feedback", "survey", null);
+
+        await Store.DraftAsync(form.Id, null);
+        await Store.SaveDraftAsync(form.Id, [
+            new FormField { Key = "why", Type = FieldType.ShortText, Label = "Why?" },
+            new FormField { Key = "deck", Type = FieldType.File, Label = "Slides" },
+        ]);
+
+        var refused = await Assert.ThrowsAsync<FormNotPublishableException>(
+            () => Store.PublishAsync(form.Id, null));
+
+        Assert.Contains(
+            refused.Problems,
+            p => p.Message.Contains("nowhere to keep it", StringComparison.Ordinal));
+
+        Assert.Null(await Store.PublishedAsync(form.Id));
+    }
+
+    [Fact]
+    public async Task Publishing_an_application_that_asks_for_a_file_is_not()
+    {
+        var form = await Store.CreateAsync(
+            await db.AddEventAsync(), "Application", "application", null);
+
+        var draft = await Store.DraftAsync(form.Id, null);
+        await Store.SaveDraftAsync(form.Id, [
+            .. draft.Fields,
+            new FormField { Key = "resume", Type = FieldType.File, Label = "Resume" },
+        ]);
+
+        var published = await Store.PublishAsync(form.Id, null);
+
+        Assert.NotNull(published);
+    }
 }

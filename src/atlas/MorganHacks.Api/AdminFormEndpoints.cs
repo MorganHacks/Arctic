@@ -326,7 +326,8 @@ public static class AdminFormEndpoints
         return Results.Ok(new
         {
             saved = request.Fields.Count,
-            problems = FormValidation.Check(request.Fields).Select(Describe),
+            problems = FormValidation.Check(request.Fields, form.IsApplication)
+                           .Select(Describe),
         });
     }
 

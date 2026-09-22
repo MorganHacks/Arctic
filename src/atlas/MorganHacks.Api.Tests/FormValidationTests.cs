@@ -356,4 +356,49 @@ public class FormValidationTests
         // link that collects nothing.
         Assert.False(FormValidation.CanPublish([]));
     }
+
+    [Fact]
+    public void A_survey_cannot_ask_for_a_file()
+    {
+        // Not a restriction somebody chose — a gap said out loud. The upload
+        // succeeds, the bytes are stored and paid for, and the answer holds an
+        // id that nothing ever claims, so the file cannot be reached from any
+        // screen. A survey that collected forty project submissions would look
+        // like it worked and hold none of them.
+        FormField[] fields = [
+            new() { Key = "why", Type = FieldType.ShortText, Label = "Why?" },
+            new() { Key = "deck", Type = FieldType.File, Label = "Your slides" },
+        ];
+
+        Assert.Contains(
+            FormValidation.Check(fields, isApplication: false),
+            p => p.Message.Contains("nowhere to keep it", StringComparison.Ordinal));
+
+        Assert.False(FormValidation.CanPublish(fields, isApplication: false));
+    }
+
+    [Fact]
+    public void An_application_still_can()
+    {
+        // The application is the one form with somewhere to put it: a single
+        // resume_key on the row.
+        FormField[] fields = [
+            new() { Key = "why", Type = FieldType.ShortText, Label = "Why?" },
+            new() { Key = "resume", Type = FieldType.File, Label = "Resume" },
+        ];
+
+        Assert.DoesNotContain(
+            FormValidation.Check(fields, isApplication: true),
+            p => p.Message.Contains("nowhere to keep it", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_survey_with_no_file_question_is_unaffected()
+    {
+        FormField[] fields = [
+            new() { Key = "why", Type = FieldType.ShortText, Label = "Why?" },
+        ];
+
+        Assert.True(FormValidation.CanPublish(fields, isApplication: false));
+    }
 }

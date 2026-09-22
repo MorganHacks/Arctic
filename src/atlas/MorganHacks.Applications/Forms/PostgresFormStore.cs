@@ -261,7 +261,12 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     {
         var draft = await DraftAsync(formId, actorId, ct);
 
-        var problems = FormValidation.Check(draft.Fields);
+        // The kind decides one of the rules, so it has to be read rather than
+        // assumed. A form deleted between the draft and here is not publishable
+        // either, and falls through to the same refusal.
+        var form = await ByIdAsync(formId, ct);
+
+        var problems = FormValidation.Check(draft.Fields, form?.IsApplication ?? true);
         if (problems.Count > 0)
         {
             // Refused before anything is written. A half-published form is not
