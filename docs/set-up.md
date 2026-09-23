@@ -370,6 +370,99 @@ If they pass here they pass there.
 
 ---
 
+## Every setting, in one place
+
+Nothing in this section is needed to run the thing locally — `deploy/local/dev.sh`
+starts everything with working defaults, and that is the point of the defaults.
+This is the list for when you are deploying somewhere, or wondering why a thing
+that works on your laptop does not work in staging.
+
+.NET reads nested keys from environment variables with a double underscore, so
+`Google:ClientId` is `Google__ClientId` in a container and `Google:ClientId` in
+a JSON file. Both spellings appear below because both appear in real life.
+
+### atlas — the API
+
+| Setting | Env var | Needed | If unset |
+|---|---|---|---|
+| `ConnectionStrings:Postgres` | `ConnectionStrings__Postgres` | **always** | will not start |
+| `Google:ClientId` | `Google__ClientId` | for organizer sign-in | `/auth/google` answers 503 |
+| `Google:ClientSecret` | `Google__ClientSecret` | for organizer sign-in | as above |
+| `Google:RedirectUri` | `Google__RedirectUri` | deployed | `http://localhost:3000/api/auth/google/callback` |
+| `PublicBaseUrl` | `PublicBaseUrl` | deployed | `http://localhost:3000` — emailed sign-in links point at a machine nobody is running |
+| `FormsBaseUrl` | `FormsBaseUrl` | deployed | `http://localhost:3002` |
+| `ConsoleBaseUrl` | `ConsoleBaseUrl` | deployed | `http://localhost:3001` — only the organizer welcome email uses it |
+| `Network:ProxySecret` | `Network__ProxySecret` | behind a proxy | forwarded client addresses are not believed, so every rate limit buckets on the proxy |
+| `Network:ForwardLimit` | `Network__ForwardLimit` | rarely | framework default |
+| `Resumes:ConnectionString` | `Resumes__ConnectionString` | locally | set in `appsettings.Development.json` to Azurite's published dev values |
+| `Resumes:AccountName` | `Resumes__AccountName` | deployed | uploads fail; deployed environments use this plus a managed identity instead of a key |
+| `Resumes:ClientId` | `Resumes__ClientId` | deployed | which managed identity to authenticate as |
+| `Resumes:Container` | `Resumes__Container` | no | `resumes` |
+| `Sentry:Dsn` | `Sentry__Dsn` | no | errors are logged and not reported |
+
+### lark — the mail sender
+
+| Setting | Env var | Needed | If unset |
+|---|---|---|---|
+| `ConnectionStrings:Postgres` | `ConnectionStrings__Postgres` | **always** | will not start |
+| — | `AWS_REGION` | to send | the send loop logs that no provider is configured and claims nothing |
+| — | `AWS_ACCESS_KEY_ID` | to send | as above |
+| — | `AWS_SECRET_ACCESS_KEY` | to send | as above |
+| `SendLoop:*` | `SendLoop__BatchSize` and friends | no | 25 per batch, 5s idle, 140ms between sends |
+
+Queued mail is not lost while credentials are missing. The loop claims nothing,
+the rows stay pending, and everything goes out untouched once the credentials
+arrive.
+
+### harbor — the proxy
+
+| Setting | Env var | Needed | If unset |
+|---|---|---|---|
+| `ReverseProxy:*` | — | **always** | comes from `appsettings.json`; this is the route allowlist |
+| `Cors:Origins` | `Cors__Origins` | deployed | browsers refuse cross-origin calls |
+| `Network:KnownProxies` | `Network__KnownProxies` | deployed | forwarded headers ignored |
+| `Network:KnownNetworks` | `Network__KnownNetworks` | deployed | as above |
+
+A non-ASCII character anywhere in harbor's `appsettings.json` stops the whole
+configuration binding, silently. There is a test that fails on it.
+
+### The three front ends
+
+| Env var | Which | Needed | If unset |
+|---|---|---|---|
+| `API_ORIGIN` | all three | deployed | `http://localhost:5050` |
+| `PORT` | all three | locally | Next's default 3000, which collides |
+| `PROXY_SHARED_SECRET` | all three | behind a proxy | the client address is not forwarded, so atlas rate-limits everybody into one bucket |
+| `NEXT_PUBLIC_FORMS_ORIGIN` | portaladmin | deployed | form links are built against a hardcoded production URL |
+
+Development-only switches, all of which serve fixtures instead of calling the
+API: `EVENTS_MOCK`, `MAIL_EXAMPLES`, `TEMPLATE_EXAMPLES` (portaladmin), and
+`FORMS_PREVIEW` (portalforms).
+
+### Feature flags
+
+A flag named in `features.json` is overridden by an environment variable of the
+same name shouted: `ENABLE_HACKER_PORTAL_FEATURE=true`. The file is inserted as
+the **lowest** priority source, so the variable always wins.
+
+Unset is not the same as `false`. Unset means the file decides; `false` means
+you decided.
+
+### What the deploy workflow expects
+
+`deploy-azure.yml` reads these from GitHub. Repository **secrets**:
+`DB_PASSWORD`, `SENTRY_DSN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+`GOOGLE_CLIENT_SECRET`, `PROXY_SHARED_SECRET`.
+
+Environment **variables** (set per environment — Staging and Production have
+their own): `SUPER_ADMIN_EMAIL`, `AWS_REGION`, `GOOGLE_CLIENT_ID`,
+`GOOGLE_REDIRECT_URI`, `PUBLIC_BASE_URL`, `FORMS_BASE_URL`, `CONSOLE_BASE_URL`,
+`WARM_REPLICAS`, `ENABLE_HACKER_PORTAL_FEATURE`.
+
+Staging has all of these. **Production has none of the secrets**, which is the
+one reason a production deploy would fail today — there is no production
+environment in Azure either, only `rg-mh-staging`.
+
 ## Things that will confuse you once
 
 **Two .NET installs will pick the wrong one.** If `dotnet build` says
