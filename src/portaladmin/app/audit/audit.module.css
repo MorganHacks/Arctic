@@ -1,0 +1,503 @@
+:global(main):has(> .page) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.controls {
+  flex-shrink: 0;
+}
+
+.activity {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+
+.activity::-webkit-scrollbar {
+  display: none;
+}
+
+.header {
+  margin-bottom: 40px;
+}
+
+.title {
+  margin: 0;
+  color: var(--members-ink);
+  font-family: var(--body);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-rendering: geometricPrecision;
+}
+
+.description {
+  max-width: 660px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+.filters,
+.filterGroup {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filters {
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 28px;
+}
+
+.filterGroup {
+  margin-left: auto;
+}
+
+.selectField {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--members-field);
+  color: var(--members-muted);
+}
+
+.selectField select:not([multiple]):not([size]) {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  max-width: 200px;
+  height: 36px;
+  min-height: 0;
+  padding: 0 32px 0 14px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--members-ink);
+  font: inherit;
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+
+.selectField select::picker-icon {
+  display: none;
+}
+
+.selectField .chevron {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+}
+
+.dateField {
+  width: 210px;
+  padding-left: 12px;
+}
+
+.dateField > svg:first-child {
+  flex-shrink: 0;
+}
+
+.dateField select:not([multiple]):not([size]) {
+  padding-left: 8px;
+}
+
+.personField {
+  width: 145px;
+}
+
+.personInput {
+  width: 145px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--members-field);
+  color: var(--members-ink);
+  font-size: 13px;
+}
+
+.filterButton,
+.filterButton:hover {
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--members-field);
+  color: var(--members-ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.filterButton:hover {
+  background: var(--surface-hover);
+}
+
+.clear {
+  padding: 6px;
+  color: var(--members-muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.clear:hover {
+  color: var(--members-ink);
+}
+
+@supports (appearance: base-select) {
+  .selectField select::picker(select) {
+    min-width: 170px;
+    padding: 4px;
+    margin-top: 8px;
+    border: 1px solid var(--members-line);
+    border-radius: 12px;
+    background: var(--raised);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
+    color: var(--members-ink);
+    font-family: var(--body);
+    font-size: 13px;
+  }
+
+  .selectField option {
+    min-height: 32px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+
+  .selectField option:checked,
+  .selectField option:hover,
+  .selectField option:focus {
+    outline: none;
+    background: var(--members-field);
+  }
+
+  .selectField option::checkmark {
+    display: none;
+  }
+}
+
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  position: relative;
+  min-height: 76px;
+  padding: 0 0 12px 36px;
+}
+
+.entry:not(:last-child)::before {
+  position: absolute;
+  top: 20px;
+  bottom: -12px;
+  left: 10px;
+  border-left: 1px dashed var(--members-line);
+  content: "";
+}
+
+.marker {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 24px;
+  background: var(--paper);
+}
+
+.added {
+  color: var(--ok);
+}
+
+.removed {
+  color: var(--stop);
+}
+
+.changed {
+  color: var(--members-muted);
+}
+
+.event {
+  min-width: 0;
+}
+
+.summary {
+  position: relative;
+  display: block;
+  min-height: 64px;
+  padding: 8px 28px 10px 8px;
+  margin-left: -8px;
+  border-radius: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary:hover,
+.event[open] .summary {
+  background: var(--members-hover);
+}
+
+.timestamp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--members-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.timezone {
+  opacity: 0.8;
+}
+
+.eventLine {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 5px;
+  color: var(--members-ink);
+  font-size: 14px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
+.eventName {
+  font-weight: 500;
+  text-decoration: underline dashed var(--members-line);
+  text-underline-offset: 4px;
+}
+
+.target {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.muted {
+  color: var(--members-muted);
+}
+
+.team {
+  font-weight: 500;
+}
+
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  color: var(--members-ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.person:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.avatar {
+  width: 18px;
+  height: 18px;
+  color: #ffffff;
+  font-size: 7px;
+  font-weight: 600;
+}
+
+.detailChevron {
+  position: absolute;
+  top: 14px;
+  right: 8px;
+  color: var(--members-muted);
+}
+
+.event[open] .detailChevron {
+  transform: rotate(180deg);
+}
+
+.details {
+  max-width: 720px;
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid var(--members-line);
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.details dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.details dl > div {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.details dt {
+  color: var(--members-muted);
+}
+
+.details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.payload {
+  margin: 16px 0 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--members-field);
+  color: var(--members-muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 20px;
+  border: 1px solid var(--members-line);
+  border-radius: 12px;
+  color: var(--members-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.empty p {
+  margin: 0;
+}
+
+.empty a {
+  color: var(--accent);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--members-line);
+}
+
+.pagination {
+  display: flex;
+  gap: 8px;
+}
+
+.pageButton,
+.pageButton:disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--members-field);
+  color: var(--members-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.pageButton:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.pageButton:disabled {
+  color: var(--members-muted);
+  opacity: 0.55;
+}
+
+.count {
+  margin: 0;
+  color: var(--members-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .filterGroup {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 48rem) {
+  :global(main):has(> .page) {
+    height: calc(100dvh - 56px);
+  }
+}
+
+@media (max-width: 600px) {
+  .filters,
+  .filterGroup {
+    width: 100%;
+  }
+
+  .dateField {
+    width: 100%;
+  }
+
+  .dateField select:not([multiple]):not([size]) {
+    max-width: none;
+  }
+
+  .filterGroup > .selectField,
+  .personInput {
+    flex: 1 1 140px;
+  }
+
+  .selectField select:not([multiple]):not([size]) {
+    max-width: none;
+  }
+
+  .entry {
+    padding-left: 30px;
+  }
+
+  .details dl > div {
+    grid-template-columns: 65px minmax(0, 1fr);
+    gap: 10px;
+  }
+}

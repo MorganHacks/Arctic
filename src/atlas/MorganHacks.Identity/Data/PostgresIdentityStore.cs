@@ -88,7 +88,8 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         const string sql = """
             SELECT p.id, p.kind, p.email, p.revoked_at IS NOT NULL,
                    coalesce(array_agg(t.slug ORDER BY t.slug)
-                            FILTER (WHERE t.slug IS NOT NULL), '{}')
+                            FILTER (WHERE t.slug IS NOT NULL), '{}'),
+                   p.full_name, p.avatar_url
               FROM identity.people p
               LEFT JOIN identity.team_members m ON m.person_id = p.id
               LEFT JOIN identity.teams t ON t.id = m.team_id
@@ -107,7 +108,9 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetBoolean(3),
-                await reader.GetFieldValueAsync<string[]>(4, ct)));
+                await reader.GetFieldValueAsync<string[]>(4, ct),
+                await reader.IsDBNullAsync(5, ct) ? null : reader.GetString(5),
+                await reader.IsDBNullAsync(6, ct) ? null : reader.GetString(6)));
         }
 
         return people;
@@ -388,23 +391,49 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
     public async Task<OrganizerResult> ResolveOrganizerAsync(
         GoogleIdentity identity, CancellationToken ct)
     {
+        var fullName = string.IsNullOrWhiteSpace(identity.FullName) ? null : identity.FullName.Trim();
+        var avatarUrl = Uri.TryCreate(identity.AvatarUrl, UriKind.Absolute, out var picture)
+                        && picture.Scheme == Uri.UriSchemeHttps
+                        && string.IsNullOrEmpty(picture.UserInfo)
+            ? picture.AbsoluteUri
+            : null;
+
         // 1. Known subject id wins, whatever the address now is. This is what
         //    keeps an organizer who changed their Google email signed in.
         const string bySubject = """
             SELECT id, revoked_at FROM identity.people
              WHERE google_sub = @sub AND kind = 'organizer'
             """;
+        Guid? existingId = null;
         await using (var cmd = dataSource.CreateCommand(bySubject))
         {
             cmd.Parameters.AddWithValue("sub", identity.Subject);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
             {
-                var id = reader.GetGuid(0);
-                return await reader.IsDBNullAsync(1, ct)
-                    ? OrganizerResult.Accept(id)
-                    : OrganizerResult.Reject(OrganizerRejection.Revoked);
+                if (!await reader.IsDBNullAsync(1, ct))
+                {
+                    return OrganizerResult.Reject(OrganizerRejection.Revoked);
+                }
+                existingId = reader.GetGuid(0);
             }
+        }
+
+        if (existingId is Guid knownId)
+        {
+            await using var update = dataSource.CreateCommand("""
+                UPDATE identity.people
+                   SET full_name = @fullName, avatar_url = @avatarUrl, updated_at = now()
+                 WHERE id = @id AND google_sub = @sub AND revoked_at IS NULL
+                RETURNING id
+                """);
+            update.Parameters.AddWithValue("id", knownId);
+            update.Parameters.AddWithValue("sub", identity.Subject);
+            update.Parameters.AddWithValue("fullName", (object?)fullName ?? DBNull.Value);
+            update.Parameters.AddWithValue("avatarUrl", (object?)avatarUrl ?? DBNull.Value);
+            return await update.ExecuteScalarAsync(ct) is Guid refreshed
+                ? OrganizerResult.Accept(refreshed)
+                : OrganizerResult.Reject(OrganizerRejection.Revoked);
         }
 
         // 2. Otherwise the address must be on the allowlist, which is simply
@@ -443,14 +472,17 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         //    bind.
         const string bind = """
             UPDATE identity.people
-               SET google_sub = @sub, updated_at = now()
-             WHERE id = @id AND google_sub IS NULL
+               SET google_sub = @sub, full_name = @fullName,
+                   avatar_url = @avatarUrl, updated_at = now()
+             WHERE id = @id AND google_sub IS NULL AND revoked_at IS NULL
             RETURNING id
             """;
         await using (var cmd = dataSource.CreateCommand(bind))
         {
             cmd.Parameters.AddWithValue("sub", identity.Subject);
             cmd.Parameters.AddWithValue("id", personId);
+            cmd.Parameters.AddWithValue("fullName", (object?)fullName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("avatarUrl", (object?)avatarUrl ?? DBNull.Value);
             return await cmd.ExecuteScalarAsync(ct) is Guid bound
                 ? OrganizerResult.Accept(bound)
                 : OrganizerResult.Reject(OrganizerRejection.BoundToAnotherAccount);
@@ -462,12 +494,14 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
     public async Task<PersonDetail?> FindPersonAsync(Guid personId, CancellationToken ct)
     {
         const string sql = """
-            SELECT kind, email, revoked_at, google_sub IS NOT NULL
+            SELECT kind, email, revoked_at, google_sub IS NOT NULL, full_name, avatar_url
               FROM identity.people WHERE id = @id
             """;
 
         string kind;
         string email;
+        string? fullName;
+        string? avatarUrl;
         DateTimeOffset? revokedAt;
         bool linked;
 
@@ -490,6 +524,8 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             // id has no use on a screen and every use in a log somebody should
             // not be reading.
             linked = reader.GetBoolean(3);
+            fullName = await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4);
+            avatarUrl = await reader.IsDBNullAsync(5, ct) ? null : reader.GetString(5);
         }
 
         // Reuses the permission-context query rather than repeating its two
@@ -499,7 +535,7 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
         var (memberships, grants, _) = await GetPermissionContextAsync(personId, ct);
 
         return new PersonDetail(
-            personId, kind, email, revokedAt, memberships, grants, linked);
+            personId, kind, email, revokedAt, memberships, grants, linked, fullName, avatarUrl);
     }
 
     public async Task<IReadOnlyList<TeamSummary>> ListTeamsAsync(CancellationToken ct)

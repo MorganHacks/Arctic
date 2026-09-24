@@ -1,3 +1,5 @@
+import { Select } from "@/components/ui/select";
+import Form from "next/form";
 import Link from "next/link";
 import styles from "./applicants.module.css";
 import { STATUSES, figureClass, label } from "./status";
@@ -45,17 +47,17 @@ export function Filters({
 
   return (
     <>
-      <form method="get" action="/applicants" className={styles.controls}>
+      <Form action="/applicants" className={styles.controls}>
         {events.length > 1 ? (
           <div className={styles.field}>
             <label htmlFor="event">Event</label>
-            <select id="event" name="event" defaultValue={chosen.id}>
+            <Select id="event" name="event" defaultValue={chosen.id}>
               {events.map((event) => (
                 <option key={event.id} value={event.id}>
                   {event.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         ) : (
           <input type="hidden" name="event" value={chosen.id} />
@@ -83,7 +85,7 @@ export function Filters({
             Clear
           </Link>
         ) : null}
-      </form>
+      </Form>
 
       {/*
         One strip of counts, doing two jobs at once.

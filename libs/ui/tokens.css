@@ -23,9 +23,9 @@
   --line-soft:  #eef1f4;
 
   /* One accent, for the thing to do next. Never for emphasis. */
-  --accent:      #2d5bd7;
+  --accent:      #003970;
   --accent-ink:  #ffffff;
-  --accent-soft: #eaf0ff;
+  --accent-soft: #eaf0f6;
 
   /* Status. Separate from the accent on purpose: "this is interactive" and
      "this went wrong" must never be the same colour. */
@@ -36,7 +36,7 @@
   --stop:      #b23b4a;
   --stop-soft: #fbe9eb;
 
-  --focus: #2d5bd7;
+  --focus: #003970;
 
   /* The one pair in this file that does not flip with the theme.
    *
@@ -93,9 +93,9 @@
     --line:       #262c34;
     --line-soft:  #1d2229;
 
-    --accent:      #7fa0f5;
+    --accent:      #8db9e6;
     --accent-ink:  #0f1216;
-    --accent-soft: #1a2340;
+    --accent-soft: #13263a;
 
     --ok:        #4cc08a;
     --ok-soft:   #12291f;
@@ -104,7 +104,7 @@
     --stop:      #e0697a;
     --stop-soft: #2d1519;
 
-    --focus: #7fa0f5;
+    --focus: #8db9e6;
   }
 }
 
@@ -118,9 +118,9 @@
   --line:       #262c34;
   --line-soft:  #1d2229;
 
-  --accent:      #7fa0f5;
+  --accent:      #8db9e6;
   --accent-ink:  #0f1216;
-  --accent-soft: #1a2340;
+  --accent-soft: #13263a;
 
   --ok:        #4cc08a;
   --ok-soft:   #12291f;
@@ -129,7 +129,7 @@
   --stop:      #e0697a;
   --stop-soft: #2d1519;
 
-  --focus: #7fa0f5;
+  --focus: #8db9e6;
 }
 
 *:focus-visible {

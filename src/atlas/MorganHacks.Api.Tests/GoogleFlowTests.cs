@@ -50,6 +50,8 @@ public class GoogleFlowTests(IdentityDatabase db)
         Assert.Contains("code_challenge_method=S256", location);
         Assert.Contains("response_type=code", location);
         Assert.Contains("state=", location);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(response.Headers.Location.Query);
+        Assert.Equal("openid email profile", query["scope"].ToString());
 
         // The verifier must never travel to Google; only its hash may.
         var verifier = CookieValue(response, "mh_oidc_verifier");

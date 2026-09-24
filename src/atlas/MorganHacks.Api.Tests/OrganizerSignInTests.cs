@@ -72,6 +72,75 @@ public class OrganizerSignInTests(IdentityDatabase db) : IClassFixture<IdentityD
     }
 
     [Fact]
+    public async Task Google_profile_is_saved_and_refreshed_for_the_bound_account()
+    {
+        var email = Unique("profile");
+        var personId = await db.AddPersonAsync(email, "organizer");
+        var subject = Sub();
+        const string firstPhoto = "https://lh3.googleusercontent.com/a/first";
+        const string updatedPhoto = "https://lh3.googleusercontent.com/a/updated";
+
+        var first = await Store.ResolveOrganizerAsync(
+            new GoogleIdentity(subject, email, "  First Name  ", firstPhoto), default);
+        Assert.True(first.Accepted);
+        var profile = await Store.FindPersonAsync(personId, default);
+        Assert.Equal("First Name", profile!.FullName);
+        Assert.Equal(firstPhoto, profile.AvatarUrl);
+
+        var later = await Store.ResolveOrganizerAsync(
+            new GoogleIdentity(subject, Unique("changed-email"), "Updated Name", updatedPhoto), default);
+        Assert.True(later.Accepted);
+        var listed = Assert.Single(await Store.ListPeopleAsync(default), p => p.Id == personId);
+        Assert.Equal("Updated Name", listed.FullName);
+        Assert.Equal(updatedPhoto, listed.AvatarUrl);
+    }
+
+    [Fact]
+    public async Task Rejected_sign_ins_cannot_overwrite_a_profile()
+    {
+        var email = Unique("profile-owner");
+        var personId = await db.AddPersonAsync(email, "organizer");
+        var subject = Sub();
+        const string photo = "https://lh3.googleusercontent.com/a/original";
+        await Store.ResolveOrganizerAsync(new GoogleIdentity(subject, email, "Original Name", photo), default);
+
+        var impostor = await Store.ResolveOrganizerAsync(
+            new GoogleIdentity(Sub(), email, "Impostor Name", "https://example.test/other.png"), default);
+        Assert.False(impostor.Accepted);
+
+        await db.RevokeAsync(personId);
+        var revoked = await Store.ResolveOrganizerAsync(
+            new GoogleIdentity(subject, email, "Revoked Name", null), default);
+        Assert.False(revoked.Accepted);
+
+        var profile = await Store.FindPersonAsync(personId, default);
+        Assert.Equal("Original Name", profile!.FullName);
+        Assert.Equal(photo, profile.AvatarUrl);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("http://example.test/avatar.png")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("https://user:password@example.test/avatar.png")]
+    public async Task Missing_or_unsafe_profile_fields_fall_back_without_blocking_sign_in(string? photo)
+    {
+        var email = Unique("fallback");
+        var personId = await db.AddPersonAsync(email, "organizer");
+        var subject = Sub();
+        await Store.ResolveOrganizerAsync(
+            new GoogleIdentity(subject, email, "Previous Name", "https://example.test/previous.png"), default);
+
+        var result = await Store.ResolveOrganizerAsync(
+            new GoogleIdentity(subject, email, "  ", photo), default);
+
+        Assert.True(result.Accepted);
+        var profile = await Store.FindPersonAsync(personId, default);
+        Assert.Null(profile!.FullName);
+        Assert.Null(profile.AvatarUrl);
+    }
+
+    [Fact]
     public async Task Nobody_can_claim_an_address_already_bound_to_someone_else()
     {
         // Somebody who controls an allowlisted-looking address cannot take it

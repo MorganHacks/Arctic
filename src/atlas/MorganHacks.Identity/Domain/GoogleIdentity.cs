@@ -1,7 +1,8 @@
 namespace MorganHacks.Identity.Domain;
 
 /// <summary>A verified Google identity. Only ever produced after signature and issuer checks.</summary>
-public sealed record GoogleIdentity(string Subject, string Email);
+public sealed record GoogleIdentity(
+    string Subject, string Email, string? FullName = null, string? AvatarUrl = null);
 
 /// <summary>Why an organizer sign-in did not succeed.</summary>
 public enum OrganizerRejection

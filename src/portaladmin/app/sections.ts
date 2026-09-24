@@ -63,7 +63,7 @@
  */
 
 /** A place in the nav bar. */
-export type Section = { href: string; label: string };
+export type Section = { href: string; label: string; badge?: number; children?: Section[] };
 
 /** A section, with the permissions any one of which makes it worth opening. */
 type GatedSection = Section & { needs: readonly string[] };
@@ -96,8 +96,15 @@ const SECTIONS: readonly GatedSection[] = [
  * console has no screen for either — both sign in to a bar with nothing in it.
  * What to draw in that case is the nav's problem, not this function's.
  */
-export function sectionsFor(mine: ReadonlySet<string>): Section[] {
+export function sectionsFor(mine: ReadonlySet<string>, badges: Readonly<Record<string, number>> = {}): Section[] {
   return SECTIONS.filter((section) =>
     section.needs.some((permission) => mine.has(permission)),
-  ).map(({ href, label }) => ({ href, label }));
+  ).map(({ href, label }) => ({
+    href,
+    label,
+    badge: badges[href],
+    ...(href === "/forms" && mine.has("forms.manage")
+      ? { children: [{ href: "/forms#new-form", label: "New Form" }] }
+      : {}),
+  }));
 }

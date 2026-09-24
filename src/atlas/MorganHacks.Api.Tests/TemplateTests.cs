@@ -675,6 +675,166 @@ public class TemplateTests(ApplicationsDatabase db)
     }
 
     [Fact]
+    public async Task Template_names_round_trip_without_changing_keys_or_old_versions()
+    {
+        var (_, cookie) = await Comms();
+        var key = Key();
+        var created = await Post(cookie, Draft(key, name: "  Placeholder name  "));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal("Placeholder name", (await Body(created)).GetProperty("name").GetString());
+
+        var loaded = await Body(await Client().SendAsync(Request(
+            HttpMethod.Get, $"/admin/templates/{key}", cookie)));
+        Assert.Equal("Placeholder name", loaded.GetProperty("name").GetString());
+        Assert.True(loaded.GetProperty("settingsComplete").GetBoolean());
+        Assert.Equal("Placeholder one", loaded.GetProperty("subject").GetString());
+
+        var list = await Body(await Client().SendAsync(Request(HttpMethod.Get, "/admin/templates", cookie)));
+        var listed = Assert.Single(list.GetProperty("templates").EnumerateArray(), item => item.GetProperty("key").GetString() == key);
+        Assert.Equal("Placeholder name", listed.GetProperty("name").GetString());
+
+        var revised = await Client().SendAsync(Request(
+            HttpMethod.Put, $"/admin/templates/{key}", cookie, Draft(key, name: "Renamed placeholder")));
+        Assert.Equal(HttpStatusCode.OK, revised.StatusCode);
+        var saved = await Body(revised);
+        Assert.Equal(key, saved.GetProperty("key").GetString());
+        Assert.Equal("Renamed placeholder", saved.GetProperty("name").GetString());
+
+        var legacyEdit = await Client().SendAsync(Request(
+            HttpMethod.Put, $"/admin/templates/{key}", cookie, Draft(key)));
+        Assert.Equal(HttpStatusCode.OK, legacyEdit.StatusCode);
+        Assert.Equal("Renamed placeholder", (await Body(legacyEdit)).GetProperty("name").GetString());
+
+        await using var history = db.DataSource.CreateCommand("SELECT name FROM notify.templates WHERE key = @key ORDER BY version");
+        history.Parameters.AddWithValue("key", key);
+        await using var reader = await history.ExecuteReaderAsync();
+        foreach (var expected in new[] { "Placeholder name", "Renamed placeholder", "Renamed placeholder" })
+        {
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal(expected, reader.GetString(0));
+        }
+        Assert.False(await reader.ReadAsync());
+    }
+
+    [Fact]
+    public async Task Template_names_are_validated_on_create_and_edit()
+    {
+        var (_, cookie) = await Comms();
+        var key = Key();
+        var name = new string('a', 200);
+        var created = await Post(cookie, Draft(key, name: name));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(name, (await Body(created)).GetProperty("name").GetString());
+
+        foreach (var invalid in new[] { new string('a', 201), "one\ntwo", "one\u007ftwo" })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, (await Post(cookie, Draft(Key(), name: invalid))).StatusCode);
+            var revised = await Client().SendAsync(Request(
+                HttpMethod.Put, $"/admin/templates/{key}", cookie, Draft(key, name: invalid)));
+            Assert.Equal(HttpStatusCode.BadRequest, revised.StatusCode);
+        }
+
+        var current = await Body(await Client().SendAsync(Request(HttpMethod.Get, $"/admin/templates/{key}", cookie)));
+        Assert.Equal(name, current.GetProperty("name").GetString());
+        Assert.Equal(1, current.GetProperty("version").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Templates_without_names_get_a_name_from_the_subject(string? name)
+    {
+        var (_, cookie) = await Comms();
+        var key = Key();
+        var created = await Post(cookie, Draft(key, name: name));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var saved = await Body(created);
+        Assert.Equal("Placeholder one", saved.GetProperty("name").GetString());
+        Assert.True(saved.GetProperty("settingsComplete").GetBoolean());
+
+        var revised = await Client().SendAsync(Request(
+            HttpMethod.Put, $"/admin/templates/{key}", cookie,
+            Draft(key, subject: "  Updated placeholder  ", name: "  ")));
+        Assert.Equal(HttpStatusCode.OK, revised.StatusCode);
+        Assert.Equal("Updated placeholder", (await Body(revised)).GetProperty("name").GetString());
+
+        var loaded = await Body(await Client().SendAsync(Request(HttpMethod.Get, $"/admin/templates/{key}", cookie)));
+        Assert.Equal("Updated placeholder", loaded.GetProperty("name").GetString());
+        Assert.Equal(key, loaded.GetProperty("key").GetString());
+    }
+
+    [Fact]
+    public async Task Existing_unnamed_templates_keep_their_key_as_the_label()
+    {
+        var (_, cookie) = await Comms();
+
+        var seeded = await Body(await Client().SendAsync(Request(HttpMethod.Get, "/admin/templates/magic_link", cookie)));
+        Assert.Equal("magic_link", seeded.GetProperty("name").GetString());
+        Assert.False(seeded.GetProperty("settingsComplete").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, null)]
+    [InlineData(false, "")]
+    [InlineData(false, "   ")]
+    public async Task Templates_without_a_key_get_distinct_keys_that_survive_edits(
+        bool omitKey, string? suppliedKey)
+    {
+        var (_, cookie) = await Comms();
+        var draft = new Dictionary<string, object?>
+        {
+            ["name"] = "Placeholder name",
+            ["kind"] = "broadcast",
+            ["subject"] = "Placeholder one",
+            ["body"] = "First placeholder body.",
+            ["format"] = "markdown",
+            ["fromLocal"] = "news",
+            ["fromDomain"] = "news.example.invalid",
+        };
+        if (!omitKey)
+        {
+            draft["key"] = suppliedKey;
+        }
+
+        var responses = await Task.WhenAll(Post(cookie, draft), Post(cookie, draft));
+        Assert.All(responses, response => Assert.Equal(HttpStatusCode.Created, response.StatusCode));
+        var first = await Body(responses[0]);
+        var second = await Body(responses[1]);
+        var key = first.GetProperty("key").GetString()!;
+        Assert.Equal("Placeholder name", first.GetProperty("name").GetString());
+        Assert.Equal("Placeholder name", second.GetProperty("name").GetString());
+        Assert.Matches("^template_[a-f0-9]{32}$", key);
+        Assert.NotEqual(key, second.GetProperty("key").GetString());
+        Assert.Equal($"/admin/templates/{key}", responses[0].Headers.Location?.ToString());
+
+        var loaded = await Body(await Client().SendAsync(Request(
+            HttpMethod.Get, $"/admin/templates/{key}", cookie)));
+        Assert.Equal(key, loaded.GetProperty("key").GetString());
+        Assert.Equal(1, loaded.GetProperty("version").GetInt32());
+
+        draft.Remove("key");
+        draft["subject"] = "Placeholder two";
+        var revised = await Client().SendAsync(Request(
+            HttpMethod.Put, $"/admin/templates/{key}", cookie, draft));
+        Assert.Equal(HttpStatusCode.OK, revised.StatusCode);
+        var saved = await Body(revised);
+        Assert.Equal(key, saved.GetProperty("key").GetString());
+        Assert.Equal("Placeholder two", saved.GetProperty("subject").GetString());
+        Assert.Equal(2, saved.GetProperty("version").GetInt32());
+        Assert.Equal(1, await LiveRowsFor(key));
+    }
+
+    [Fact]
+    public async Task An_explicit_invalid_key_is_still_refused()
+    {
+        var (_, cookie) = await Comms();
+        var response = await Post(cookie, Draft("Invalid Key"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task A_key_cannot_be_used_twice()
     {
         var (_, cookie) = await Comms();
@@ -848,9 +1008,11 @@ public class TemplateTests(ApplicationsDatabase db)
         string key,
         string kind = "broadcast",
         string subject = "Placeholder one",
-        string markdown = "First placeholder body.") => new
+        string markdown = "First placeholder body.",
+        string? name = null) => new
         {
             key,
+            name,
             kind,
             subject,
             markdown,

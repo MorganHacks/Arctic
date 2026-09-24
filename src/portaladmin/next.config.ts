@@ -31,6 +31,9 @@ const apiOrigin =
   process.env.API_ORIGIN ?? "http://localhost:5050";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    optimizePackageImports: ["@hugeicons/core-free-icons"],
+  },
   /**
    * The bundler's filesystem root is the repository, not this app.
    *

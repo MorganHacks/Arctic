@@ -1,7 +1,5 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Editor } from "@/components/templates/editor";
-import { currentPerson } from "@/lib/api";
+import { readPageData } from "@/lib/page-data";
 import { Shell } from "../../shell";
 import { readPlaceholders } from "../api";
 
@@ -20,11 +18,6 @@ export default async function NewTemplate({
 }) {
   const query = await searchParams;
 
-  const person = await currentPerson();
-  if (!person) {
-    redirect("/sign-in");
-  }
-
   /*
    * The campaign this is being written for, where somebody arrived from one.
    *
@@ -38,6 +31,8 @@ export default async function NewTemplate({
       ? query.campaign
       : null;
 
+  const { person, data: names } = await readPageData(() => readPlaceholders(campaign));
+
   if (!person.permissions.has("email.manage_templates")) {
     return (
       <Shell personId={person.personId}>
@@ -49,19 +44,13 @@ export default async function NewTemplate({
     );
   }
 
-  const names = await readPlaceholders(campaign);
-
   return (
     <Shell personId={person.personId}>
-      <Link href="/templates" className="back">
-        ← Templates
-      </Link>
-
-      <h1>New template</h1>
-      <p className="lede">Nothing is sent by writing one.</p>
-
       <Editor
+        key={`${person.personId}:new`}
+        personId={person.personId}
         template={null}
+        defaultRecipient={person.email ?? ""}
         canManage
         available={names.ok ? names.items : null}
       />

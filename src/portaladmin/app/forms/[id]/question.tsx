@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import type { FieldOption, FormField } from "@/lib/api";
 import styles from "./builder.module.css";
 import { CHOICE_TYPES, TYPES, nextOptionValue } from "./fields";
@@ -116,7 +117,8 @@ export function Question({
 
         <span className={styles.spacer} />
 
-        <select
+        <Select
+          fullWidth={false}
           aria-label="Question type"
           className={styles.type}
           value={field.type}
@@ -141,7 +143,7 @@ export function Question({
               {type.label}
             </option>
           ))}
-        </select>
+        </Select>
 
         <div className={styles.tools}>
           {/* Up and down rather than dragging. Dragging needs a library, and

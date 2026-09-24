@@ -1,19 +1,9 @@
-import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Editor } from "@/components/templates/editor";
-import styles from "@/components/templates/templates.module.css";
-import { kindLabel } from "@/components/templates/types";
-import { currentPerson } from "@/lib/api";
+import { readPageData } from "@/lib/page-data";
 import { Shell } from "../../shell";
 import { readPlaceholders, readTemplate } from "../api";
 
-/**
- * One template, open.
- *
- * The key is the heading because it is what the template is: campaigns are
- * stored against it, it cannot be renamed, and the subject is a thing it says
- * rather than a thing it is.
- */
 export default async function TemplatePage({
   params,
   searchParams,
@@ -22,11 +12,6 @@ export default async function TemplatePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [{ key }, query] = await Promise.all([params, searchParams]);
-
-  const person = await currentPerson();
-  if (!person) {
-    redirect("/sign-in");
-  }
 
   /*
    * The campaign this template is being edited for, where there is one.
@@ -48,10 +33,10 @@ export default async function TemplatePage({
   // Both reads are started together. The placeholders do not depend on the
   // template, and awaiting them in turn would put a second round trip in front
   // of a page that already waits on one.
-  const [read, names] = await Promise.all([
+  const { person, data: [read, names] } = await readPageData(() => Promise.all([
     readTemplate(key),
     readPlaceholders(campaign),
-  ]);
+  ]));
 
   if (!read.ok) {
     if (read.status === 404) {
@@ -78,20 +63,6 @@ export default async function TemplatePage({
 
   return (
     <Shell personId={person.personId}>
-      <Link href="/templates" className="back">
-        ← Templates
-      </Link>
-
-      <div className="form-head">
-        <div>
-          <h1 className="mono">{template.key}</h1>
-          <p className="lede" style={{ margin: 0 }}>
-            <span className={styles.chip}>{kindLabel(template.kind)}</span>
-            <span className="meta"> Version {template.version}</span>
-          </p>
-        </div>
-      </div>
-
       {/* Scaffolding, and says so. Goes with the fixtures in api.ts the moment
           the endpoints land. */}
       {read.mocked ? (
@@ -101,7 +72,10 @@ export default async function TemplatePage({
       ) : null}
 
       <Editor
+        key={`${person.personId}:${template.key}`}
+        personId={person.personId}
         template={template}
+        defaultRecipient={person.email ?? ""}
         canManage={person.permissions.has("email.manage_templates")}
         available={names.ok ? names.items : null}
       />

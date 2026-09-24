@@ -5,13 +5,6 @@
  * being persuaded by. Density and legibility over character — the moment it
  * competes with portalweb for attention it has gone wrong.
  *
- * Every colour comes from the shared tokens. Not one hex is written here, so a
- * colour cannot come to mean one thing on this screen and something else on
- * the public site. The tokens follow the reader's theme, which is why this
- * console is no longer dark-only: an organizer reviewing at 2pm in a bright
- * room was reading white-on-black because of a decision nobody made on
- * purpose.
- *
  * This file is the layer every screen sits on: the frame, the tables, the
  * pills, the panels, the buttons and the refusal banner. Screens that need
  * more than this reach for a CSS module of their own, but nothing that repeats
@@ -31,8 +24,19 @@
  * time either is touched.
  */
 :root {
-  /* The bar is sticky, so anything else that sticks has to start below it. */
-  --topbar-h: 3rem;
+  /* Match BrandALE's main UI and code typography; the sidebar uses Inter. */
+  --body: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --display: var(--body);
+  --mono: var(--font-geist-mono), "SFMono-Regular", ui-monospace, monospace;
+  --field: #f4f4f5;
+  --surface-hover: #e5e7eb;
+  --surface-selected: #ebebeb;
+  --sidebar-surface: #ffffff;
+  --sidebar-hover: #f3f3f3;
+  --preview-surface: #f7f7f8;
+
+  /* Only the mobile navigation bar occupies the top of the viewport. */
+  --topbar-h: 0rem;
   --content-max: 80rem;
   --gutter: 1.25rem;
 
@@ -104,6 +108,10 @@
   accent-color: var(--accent);
 }
 
+:root[data-theme="light"] {
+  --paper: #ffffff;
+}
+
 :root:not([data-theme="light"]) {
   @media (prefers-color-scheme: dark) {
     color-scheme: dark;
@@ -112,6 +120,21 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --paper: #191919;
+  --raised: #242424;
+  --sunken: #202020;
+  --ink: #f1f1f1;
+  --muted: #a8a8a8;
+  --faint: #898989;
+  --line: #2f2f2f;
+  --line-soft: #282828;
+  --field: #262626;
+  --surface-hover: #2b2b2b;
+  --surface-selected: #343434;
+  --sidebar-surface: #202020;
+  --sidebar-hover: #292929;
+  --preview-surface: #202020;
+  --accent-ink: #1e1e1e;
 }
 
 * {
@@ -137,11 +160,7 @@ body {
  * small.
  */
 body {
-  /* The fallback is inside the var(), not after it. An undefined custom
-     property in a font-family does not fall through to the next name in the
-     list — the whole declaration is dropped and the page inherits, which is
-     how a console that asked for Inter renders in Times. */
-  font-family: var(--font-inter, var(--body)), var(--body);
+  font-family: var(--body);
   font-size: var(--step-1);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -161,187 +180,19 @@ th {
   font-variant-numeric: tabular-nums;
 }
 
-/* The frame ------------------------------------------------------------ */
-
-.shell {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 100vh;
-}
-
-/* Sticky because the nav is how somebody leaves a screen, and a review queue
-   is eight hundred rows long. Scrolling to the top to change section is a tax
-   paid on every switch. */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  height: var(--topbar-h);
-  padding: 0 var(--gutter);
-  border-bottom: 1px solid var(--line);
-  background: var(--raised);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: var(--display);
-  font-size: var(--step1);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-/* The word that says which system this is, set apart from the word that says
-   whose it is. Small, cased and boxed rather than merely grey: on a screen
-   with an applicant's name at the top, the header has to read as furniture. */
-.brand span {
-  font-family: var(--mono);
-  font-size: var(--step-2);
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  background: var(--sunken);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.05rem 0.35rem;
-}
-
-.topbar nav {
-  display: flex;
-  align-items: stretch;
-  gap: 0.15rem;
-  height: 100%;
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.topbar nav::-webkit-scrollbar {
-  display: none;
-}
-
-.topbar nav a {
-  display: flex;
-  align-items: center;
-  padding: 0 0.7rem;
-  color: var(--muted);
-  font-weight: 500;
-  text-decoration: none;
-  white-space: nowrap;
-  /* The underline is always there and usually transparent, so arriving on a
-     section does not shift the row it sits in by two pixels. */
-  border-bottom: 2px solid transparent;
-  transition:
-    color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
-}
-
-.topbar nav a:hover {
-  color: var(--ink);
-}
-
-/* Where you are. Marked with aria-current first and coloured second, so the
-   answer is available to a screen reader and not only to an eye. */
-.topbar nav a[aria-current="page"] {
-  color: var(--ink);
-  border-bottom-color: var(--accent);
-}
-
-/* The bar when the reader can open none of the sections. Muted and plainly not
-   a link, because it is the explanation for an empty bar rather than another
-   place to go. */
-.topbar nav .no-sections {
-  display: flex;
-  align-items: center;
-  padding: 0 0.7rem;
-  color: var(--muted);
-  font-size: var(--step-1);
-}
-
-/* Who is signed in ------------------------------------------------------ */
-
-.identity {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-/* Initials, not a photograph. There is no avatar in this system to fetch, and
-   a coloured circle would be the one decorative colour on the screen. */
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  flex: none;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--sunken);
-  color: var(--ink);
-  font-size: var(--step-2);
-  font-weight: 500;
-}
-
-.who {
-  color: var(--ink);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 14rem;
-}
-
-/* The fallback, when neither a name nor an address is known. Monospace because
-   at that point it is an identifier and will be read a character at a time. */
-.who.id {
-  font-family: var(--mono);
-  font-weight: 400;
-  color: var(--muted);
-}
-
-.topbar form {
-  flex: none;
-}
-
-/* Signing out is not the next action on any screen, so it does not look like
-   one. It turns the colour of the thing it does on the way to being clicked. */
-.topbar form button {
-  border: none;
-  background: none;
-  padding: 0.25rem 0.35rem;
-  color: var(--muted);
-  font-size: var(--step-2);
-  font-weight: 500;
-  transition: color var(--dur-fast) var(--ease);
-}
-
-.topbar form button:hover {
-  background: none;
-  border-color: transparent;
-  color: var(--stop);
-}
+/* The sidebar frame lives in sidebar.module.css. */
 
 main {
   padding: 1.25rem var(--gutter) 3rem;
-  max-width: var(--content-max);
   width: 100%;
-  margin-inline: auto;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
 }
 
 /* Type ----------------------------------------------------------------- */
 
-/* Serif for the things that name a screen or a panel, sans for everything
-   somebody works in. It is the one place the console is allowed a voice, and
-   it earns its keep by making the boundary between sections legible at a
-   glance in a layout that is otherwise all rules and rows. */
+/* Headings share the main UI font, matching the BrandALE reference. */
 h1 {
   font-family: var(--display);
   font-size: var(--step2);
@@ -459,15 +310,6 @@ code,
 .panel-head h2,
 .panel-head h3 {
   margin: 0;
-}
-
-.card {
-  width: 100%;
-  max-width: 22rem;
-  background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 1.75rem;
 }
 
 /* A recessed place to read something out of — a code block, an audit note, an
@@ -1031,13 +873,11 @@ textarea {
   transition: border-color var(--dur-fast) var(--ease);
 }
 
-/* The border answers first, before the focus ring the tokens draw. A heavy
-   glow on a form of twenty questions is twenty glows by the time somebody has
-   tabbed through it. */
+/* Fields keep their resting border when focused, without the shared blue ring. */
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--accent);
+  outline: none;
 }
 
 input::placeholder,
@@ -1081,24 +921,6 @@ textarea:disabled {
 input[readonly],
 textarea[readonly] {
   background-color: var(--sunken);
-}
-
-/*
- * Wrong, and only once somebody has had a go at it.
- *
- * :invalid matches a required field from the moment the page loads, so a form
- * of ten required questions would open with ten red borders, saying nothing
- * except that the console is annoyed in advance. :user-invalid waits until the
- * field has been filled in and left, or the form submitted — which is the
- * point at which "this is wrong" is information rather than nagging.
- *
- * After the focus rule deliberately: a field somebody is in the middle of
- * fixing goes on saying it is wrong until it is not.
- */
-input:user-invalid,
-select:user-invalid,
-textarea:user-invalid {
-  border-color: var(--stop);
 }
 
 /* Down only. A textarea that can be dragged wider than its column drags the
@@ -1393,7 +1215,7 @@ option:disabled {
  * come out as each screen adopts this layer; nothing breaks in the meantime,
  * which is the only reason it is written this way.
  */
-input[type="checkbox"],
+input[type="checkbox"]:not([role="switch"]),
 input[type="radio"] {
   appearance: none;
   position: relative;
@@ -1444,7 +1266,7 @@ input[type="radio"] {
  * milliseconds; the reduced-motion rule in the tokens lands it on the final
  * state immediately, which is the correct mark either way.
  */
-input[type="checkbox"]::before,
+input[type="checkbox"]:not([role="switch"])::before,
 input[type="radio"]::before {
   content: "";
   position: absolute;
@@ -1456,7 +1278,7 @@ input[type="radio"]::before {
   transition: transform var(--dur-fast) var(--ease);
 }
 
-input[type="checkbox"]::before {
+input[type="checkbox"]:not([role="switch"])::before {
   width: 0.625rem;
   height: 0.625rem;
   clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
@@ -1471,43 +1293,43 @@ input[type="radio"]::before {
 /* Both shadows are named in every state, so what changes between them is a
    colour and nothing else — a list that grows or shrinks interpolates by
    sliding the spread, which reads as the box inflating rather than filling. */
-input[type="checkbox"]:checked,
+input[type="checkbox"]:not([role="switch"]):checked,
 input[type="radio"]:checked,
-input[type="checkbox"]:indeterminate {
+input[type="checkbox"]:not([role="switch"]):indeterminate {
   box-shadow:
     inset 0 0 0 1px var(--accent),
     inset 0 0 0 1rem var(--accent);
 }
 
-input[type="checkbox"]:checked::before,
+input[type="checkbox"]:not([role="switch"]):checked::before,
 input[type="radio"]:checked::before,
-input[type="checkbox"]:indeterminate::before {
+input[type="checkbox"]:not([role="switch"]):indeterminate::before {
   transform: scale(1);
 }
 
 /* Some, not all — the state a "select every status" box is in while half the
    statuses are ticked. The browser tracks it; without a mark of its own it
    renders as unticked, which is a lie about what is selected. */
-input[type="checkbox"]:indeterminate::before {
+input[type="checkbox"]:not([role="switch"]):indeterminate::before {
   clip-path: polygon(12% 42%, 88% 42%, 88% 58%, 12% 58%);
 }
 
-input[type="checkbox"]:not(:disabled):hover,
+input[type="checkbox"]:not([role="switch"]):not(:disabled):hover,
 input[type="radio"]:not(:disabled):hover {
   box-shadow:
     inset 0 0 0 1px var(--accent),
     inset 0 0 0 1rem var(--raised);
 }
 
-input[type="checkbox"]:not(:disabled):checked:hover,
+input[type="checkbox"]:not([role="switch"]):not(:disabled):checked:hover,
 input[type="radio"]:not(:disabled):checked:hover,
-input[type="checkbox"]:not(:disabled):indeterminate:hover {
+input[type="checkbox"]:not([role="switch"]):not(:disabled):indeterminate:hover {
   box-shadow:
     inset 0 0 0 1px var(--accent),
     inset 0 0 0 1rem var(--accent);
 }
 
-input[type="checkbox"]:disabled,
+input[type="checkbox"]:not([role="switch"]):disabled,
 input[type="radio"]:disabled {
   cursor: not-allowed;
   box-shadow:
@@ -1518,15 +1340,15 @@ input[type="radio"]:disabled {
 /* A tick that is on and cannot be changed. It still has to read as on from
    across the row, so it keeps a filled box and loses only the colour that
    means "you can do something here". */
-input[type="checkbox"]:disabled:checked,
+input[type="checkbox"]:not([role="switch"]):disabled:checked,
 input[type="radio"]:disabled:checked,
-input[type="checkbox"]:disabled:indeterminate {
+input[type="checkbox"]:not([role="switch"]):disabled:indeterminate {
   box-shadow:
     inset 0 0 0 1px var(--faint),
     inset 0 0 0 1rem var(--faint);
 }
 
-input[type="checkbox"]:disabled::before,
+input[type="checkbox"]:not([role="switch"]):disabled::before,
 input[type="radio"]:disabled::before {
   background-color: var(--sunken);
 }
@@ -1829,29 +1651,6 @@ label {
 
 .toast.stop {
   border-color: var(--stop);
-}
-
-/* Sign-in ------------------------------------------------------------- */
-
-.signin {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
-}
-
-.card h1 {
-  margin-bottom: 0.5rem;
-}
-
-.card p {
-  color: var(--muted);
-  margin: 0 0 1.5rem;
-}
-
-.card .button {
-  width: 100%;
-  text-align: center;
 }
 
 .note {
@@ -2186,23 +1985,13 @@ button.link.add-option:hover {
  * A functional fallback, not a second design.
  *
  * Nobody reviews eight hundred applications on a phone, but somebody does look
- * one up on the way to the venue. The bar keeps the nav and lets it scroll,
- * and tables keep their own horizontal scroll rather than reflowing into
- * something that no longer lines up.
+ * one up on the way to the venue. Navigation moves into a drawer, and tables
+ * keep their own horizontal scroll so their columns still line up.
  */
 @media (max-width: 48rem) {
   :root {
     --gutter: 0.75rem;
-  }
-
-  .topbar {
-    gap: 0.6rem;
-  }
-
-  /* The name goes; the initials stay. On a 390px bar the choice is between the
-     name and the nav, and the nav is what somebody came for. */
-  .topbar .who {
-    display: none;
+    --topbar-h: 3.5rem;
   }
 
   .page-head {

@@ -285,10 +285,6 @@ button.toolbarButton {
   transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms ease;
 }
 
-.card:focus-within {
-  border-color: var(--accent);
-}
-
 /* A question the API has complained about. The left edge rather than a fill, so
    a form with six problems still reads as a form. */
 .flagged {
@@ -563,10 +559,6 @@ div.problemsPanel {
   background: var(--sunken);
   padding: 0.75rem 0.9rem 0.65rem;
   transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), border-color 150ms ease;
-}
-
-.break:focus-within {
-  border-color: var(--accent);
 }
 
 .breakIcon {

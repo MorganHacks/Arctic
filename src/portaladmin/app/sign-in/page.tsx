@@ -1,3 +1,7 @@
+import Image from "next/image";
+import logo from "@/public/brands/morganhacks.png";
+import styles from "./sign-in.module.css";
+
 /**
  * The only unauthenticated screen.
  *
@@ -59,22 +63,43 @@ export default async function SignIn({
   const { error } = await searchParams;
 
   return (
-    <div className="signin">
-      <div className="card">
-        <h1>MorganHacks console</h1>
-        <p>For organizers.</p>
+    <main className={styles.page} aria-labelledby="signin-title">
+      <section className={styles.content}>
+        <Image
+          src={logo}
+          alt="MorganHacks"
+          className={styles.logo}
+          sizes="192px"
+          loading="eager"
+        />
 
-        {error ? <p className="error">{refusal(error)}</p> : null}
-
-        <a className="button primary" href="/api/auth/google">
-          Continue with Google
-        </a>
-
-        <p className="note">
-          Use the Google account an admin added for you. Applicants sign in
-          somewhere else.
+        <h1 id="signin-title" className={styles.title}>
+          Welcome back
+        </h1>
+        <p className={styles.description}>
+          Sign in to the organizer console.
         </p>
-      </div>
-    </div>
+
+        <div className={styles.actions}>
+          {error ? (
+            <p className={styles.error} role="alert">{refusal(error)}</p>
+          ) : null}
+
+          <a
+            className={styles.googleButton}
+            href="/api/auth/google"
+            aria-describedby="signin-note"
+          >
+            <Image src="/brands/google.svg" alt="" width={22} height={22} />
+            <span>Continue with Google</span>
+          </a>
+        </div>
+
+        <p id="signin-note" className={styles.note}>
+          Use the Google account your admin added.
+        </p>
+      </section>
+      <p className={styles.help}>Need access? Ask your team admin.</p>
+    </main>
   );
 }

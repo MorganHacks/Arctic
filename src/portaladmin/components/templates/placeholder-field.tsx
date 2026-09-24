@@ -48,6 +48,11 @@ export function PlaceholderField({
   multiline = false,
   className,
   spellCheck,
+  placeholder,
+  describedBy,
+  maxLength,
+  inputRef,
+  invalid,
 }: {
   id: string;
   value: string;
@@ -57,6 +62,11 @@ export function PlaceholderField({
   multiline?: boolean;
   className?: string;
   spellCheck?: boolean;
+  placeholder?: string;
+  describedBy?: string;
+  maxLength?: number;
+  inputRef?: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
+  invalid?: boolean;
 }) {
   const listId = `${useId()}-placeholders`;
 
@@ -290,6 +300,10 @@ export function PlaceholderField({
     value,
     className,
     spellCheck,
+    maxLength,
+    placeholder,
+    "aria-describedby": describedBy,
+    "aria-invalid": invalid || undefined,
     autoComplete: "off",
     onKeyUp: sync,
     onSelect: sync,
@@ -308,19 +322,26 @@ export function PlaceholderField({
     sync();
   }
 
+  function attachField(element: HTMLTextAreaElement | HTMLInputElement | null) {
+    field.current = element;
+    if (inputRef) {
+      inputRef.current = element;
+    }
+  }
+
   return (
     <div className={styles.completing} ref={wrap}>
       {multiline ? (
         <textarea
           {...shared}
-          ref={field as RefObject<HTMLTextAreaElement | null>}
+          ref={attachField}
           onChange={(event) => typed(event.target.value)}
         />
       ) : (
         <input
           {...shared}
           type="text"
-          ref={field as RefObject<HTMLInputElement | null>}
+          ref={attachField}
           onChange={(event) => typed(event.target.value)}
         />
       )}

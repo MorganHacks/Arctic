@@ -133,7 +133,7 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
                       m.rendered_subject, m.rendered_body_html, m.rendered_body_text,
                       t.from_local || '@' || t.from_domain, t.from_name,
                       t.reply_to,
-                      m.correlation_id
+                      m.correlation_id, t.click_tracking
             """;
 
         await using var cmd = dataSource.CreateCommand(sql);
@@ -156,7 +156,8 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
                     await reader.IsDBNullAsync(9, ct) ? null : reader.GetString(9),
                     reader.GetString(8)),
                 await reader.IsDBNullAsync(10, ct) ? null : reader.GetString(10),
-                await reader.IsDBNullAsync(11, ct) ? null : reader.GetString(11)));
+                await reader.IsDBNullAsync(11, ct) ? null : reader.GetString(11),
+                reader.GetBoolean(12)));
         }
 
         return claimed;
@@ -487,11 +488,15 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
     /// </remarks>
     public async Task SuppressAsync(string email, string reason, CancellationToken ct = default)
     {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
         const string record = """
             INSERT INTO notify.suppressions (email, reason) VALUES (@email, @reason)
-            ON CONFLICT (email) DO NOTHING
+            ON CONFLICT (email) DO UPDATE SET reason = EXCLUDED.reason
+             WHERE notify.suppressions.reason = 'unsubscribed'
+               AND EXCLUDED.reason <> 'unsubscribed'
             """;
-        await using (var cmd = dataSource.CreateCommand(record))
+        await using (var cmd = new NpgsqlCommand(record, connection, transaction))
         {
             cmd.Parameters.AddWithValue("email", email);
             cmd.Parameters.AddWithValue("reason", reason);
@@ -505,15 +510,16 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
             UPDATE notify.messages
                SET status = 'suppressed', locked_by = NULL, locked_until = NULL
              WHERE status = 'pending'
-               AND to_email = @email
+               AND to_email = @email::citext
                AND (@reason <> 'unsubscribed' OR priority > 0)
             """;
-        await using (var cmd = dataSource.CreateCommand(cancel))
+        await using (var cmd = new NpgsqlCommand(cancel, connection, transaction))
         {
             cmd.Parameters.AddWithValue("email", email);
             cmd.Parameters.AddWithValue("reason", reason);
             await cmd.ExecuteNonQueryAsync(ct);
         }
+        await transaction.CommitAsync(ct);
     }
 
     /// <summary>
@@ -529,7 +535,7 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
         string email, bool transactional, CancellationToken ct = default)
     {
         const string sql = """
-            SELECT reason FROM notify.suppressions WHERE email = @email
+            SELECT reason FROM notify.suppressions WHERE email = @email::citext
             """;
         await using var cmd = dataSource.CreateCommand(sql);
         cmd.Parameters.AddWithValue("email", email);
@@ -544,6 +550,19 @@ public sealed class MessageQueue(NpgsqlDataSource dataSource)
             "unsubscribed" => !transactional,
             _ => true,
         };
+    }
+
+    public async Task<bool> StopIfSuppressedAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var command = dataSource.CreateCommand("""
+            UPDATE notify.messages m
+               SET status = 'suppressed', locked_by = NULL, locked_until = NULL
+              FROM notify.suppressions s
+             WHERE m.id = @id AND m.status = 'sending' AND s.email = m.to_email
+               AND (s.reason <> 'unsubscribed' OR m.priority > 0)
+            """);
+        command.Parameters.AddWithValue("id", id);
+        return await command.ExecuteNonQueryAsync(ct) > 0;
     }
 
     private async Task<short> CurrentAttemptsAsync(Guid id, CancellationToken ct)

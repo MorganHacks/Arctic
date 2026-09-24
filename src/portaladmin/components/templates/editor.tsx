@@ -1,12 +1,26 @@
 "use client";
 
-import { EmailPreview } from "./email-preview";
-import { Body, Identity, Placeholders } from "./fields";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
+import { useSidebarState } from "@/app/sidebar-state";
+import { EditorHeader } from "./editor-header";
+import { ApiWorkspace } from "./api-workspace";
+import { DesignToolbar, type PreviewDevice } from "./design-toolbar";
+import { TestEmailDialog } from "./test-email-dialog";
+import { ImportEmailDialog } from "./import-email-dialog";
+import { FormatPicker, InboxPreview, TemplateSettings } from "./settings";
+import settings from "./settings.module.css";
 import styles from "./templates.module.css";
-import { useDraft, FROM_DOMAIN, FROM_LOCAL } from "./use-draft";
+import { useDraft, type DraftHandle } from "./use-draft";
 import { usePreview } from "./use-preview";
 import { useSave } from "./use-save";
-import type { Placeholder, Template } from "./types";
+import type { EditorStep, Placeholder, Template } from "./types";
+
+const loadDesignWorkspace = () => import("./design-workspace");
+const DesignWorkspace = dynamic(() => loadDesignWorkspace().then((module) => module.DesignWorkspace), {
+  loading: () => <p className={styles.editorLoading} role="status">Opening editor…</p>,
+});
 
 /**
  * Writing one email template, with the message drawn beside it.
@@ -31,9 +45,13 @@ export function Editor({
   template,
   canManage,
   available,
+  defaultRecipient = "",
+  personId,
 }: {
   template: Template | null;
   canManage: boolean;
+  defaultRecipient?: string;
+  personId: string;
   /**
    * The placeholders a send can fill in, or null where the API could not say.
    *
@@ -47,38 +65,122 @@ export function Editor({
    */
   available: Placeholder[] | null;
 }) {
-  const handle = useDraft(template, available);
+  const handle = useDraft(template, available, { id: personId, email: defaultRecipient, canManage });
   const { draft } = handle;
+  const query = useSearchParams();
+  const { collapseSidebar } = useSidebarState();
+  const [device, setDevice] = useState<PreviewDevice>("desktop");
+  const [testOpen, setTestOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [toolNotice, setToolNotice] = useState("");
 
-  const preview = usePreview(template, draft.subject, draft.body, draft.format);
-  const saving = useSave(template, handle.toRequest);
+  useEffect(() => {
+    if (template === null) collapseSidebar();
+  }, [template, collapseSidebar]);
+
+  function changeStep(next: EditorStep) {
+    const params = new URLSearchParams(window.location.search);
+    params.set("step", next);
+    window.history.pushState(null, "", `${window.location.pathname}?${params.toString()}`);
+  }
+
+  const preview = usePreview(template, draft.subject, draft.body, draft.format, draft.previewText);
+  const saving = useSave(template, handle, canManage, changeStep);
+
+  const requestedStep = query.get("step");
+  const step: EditorStep = requestedStep === "api" && saving.designComplete ? "api"
+    : (requestedStep === "design" || requestedStep === "api") && saving.settingsComplete ? "design" : "settings";
+  const editable: DraftHandle = { ...handle, set: (field, value) => {
+    handle.set(field, value);
+    saving.clearFieldError(field);
+  } };
+  const form = useRef<HTMLFieldSetElement>(null);
+  const workflow = useRef<HTMLDivElement>(null);
+  const positions = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    const next = new Map<string, { x: number; y: number }>();
+    const animations: Animation[] = [];
+    workflow.current?.querySelectorAll<HTMLElement>("[data-template-motion]").forEach((element) => {
+      const name = element.dataset.templateMotion!;
+      const rect = element.getBoundingClientRect();
+      const position = { x: rect.left + window.scrollX, y: rect.top + window.scrollY };
+      const previous = positions.current.get(name);
+      next.set(name, position);
+      if (previous && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const x = previous.x - position.x;
+        const y = previous.y - position.y;
+        if (x || y) animations.push(element.animate([
+          { transform: `translate(${x}px, ${y}px)` },
+          { transform: "translate(0, 0)" },
+        ], { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }));
+      }
+    });
+    positions.current = next;
+    return () => animations.forEach((animation) => animation.cancel());
+  }, [step]);
+
+  useEffect(() => {
+    if (saving.validationAttempt > 0) {
+      form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    }
+  }, [saving.validationAttempt, step]);
 
   return (
-    <div className={styles.editor}>
-      <div>
-        <fieldset className={styles.form} disabled={!canManage}>
-          <Identity
-            handle={handle}
-            existingKey={template?.key ?? null}
-            available={available}
-          />
-          <Body handle={handle} available={available} />
-          <Placeholders handle={handle} />
-        </fieldset>
-
-        {canManage ? <Actions template={template} saving={saving} /> : null}
-      </div>
-
-      <div className={styles.sticky}>
-        <EmailPreview
-          fromName={draft.fromName.trim() === "" ? null : draft.fromName.trim()}
-          fromLocal={FROM_LOCAL}
-          fromDomain={FROM_DOMAIN}
-          replyTo={draft.replyTo.trim() === "" ? null : draft.replyTo}
-          rendered={preview.rendered}
-          pending={preview.pending}
-          error={preview.error}
-        />
+    <div ref={workflow} className={`${styles.workflow} ${step === "design" ? styles.designWorkflow : ""}`}>
+      <EditorHeader
+        template={template}
+        name={draft.name}
+        completedSteps={[...(saving.settingsComplete ? [0] : []), ...(saving.designComplete ? [1] : [])]}
+        step={step}
+        onStep={saving.navigate}
+        onPrepareDesign={() => { void loadDesignWorkspace(); }}
+        canManage={canManage}
+        saving={saving.saving || !handle.ready}
+        confirming={saving.asked}
+        onSave={() => saving.requestSave(step)}
+        designTools={<DesignToolbar device={device} onDevice={setDevice} onImport={() => setImportOpen(true)}
+          onSave={saving.saveDraft}
+          onTest={() => setTestOpen(true)} busy={saving.saving || saving.asked}
+          hasContent={Boolean(draft.body.trim())} />}
+      />
+      {testOpen ? <TestEmailDialog onClose={() => setTestOpen(false)} toRequest={handle.toRequest} defaultRecipient={defaultRecipient} /> : null}
+      {importOpen ? <ImportEmailDialog hasContent={Boolean(draft.body.trim())} onClose={() => setImportOpen(false)}
+        onImport={(body) => { editable.set("format", "html"); editable.set("body", body); setToolNotice("HTML imported. Your design is ready to edit."); }} /> : null}
+      <span role="status" className={styles.toolNotice}>{toolNotice}</span>
+      {canManage && (saving.asked || saving.outcome?.ok === false) ? (
+        <div className={styles.headerFeedback}>
+          <SaveFeedback saving={saving} />
+        </div>
+      ) : null}
+      <div className={step === "design" ? styles.designContent : undefined}>
+        {step === "settings" ? <div className={settings.grid}>
+          <fieldset ref={form} className={settings.form} disabled={!canManage || !handle.ready || saving.saving}>
+            <TemplateSettings
+              handle={editable}
+              available={available}
+              errors={saving.fieldErrors}
+            />
+          </fieldset>
+          <aside className={settings.aside}>
+            <InboxPreview sender={draft.fromName} subject={draft.subject} snippet={draft.previewText.trim() || preview.rendered?.text || ""} />
+            <fieldset className={settings.form} disabled={!canManage || !handle.ready || saving.saving}>
+              <FormatPicker handle={editable} />
+            </fieldset>
+          </aside>
+        </div> : step === "design" ? <DesignWorkspace handle={editable} available={available} preview={preview} device={device}
+          disabled={!canManage || !handle.ready || saving.saving} error={saving.fieldErrors.body} validationAttempt={saving.validationAttempt}
+          saveNotice={saving.outcome?.ok ? saving.outcome.text : null} />
+          : <ApiWorkspace
+            templateKey={saving.key ?? template?.key ?? handle.toRequest().key ?? ""}
+            version={saving.version || template?.version || 1}
+            kind={draft.kind}
+            placeholders={template?.placeholders ?? []}
+            defaultRecipient={defaultRecipient}
+            draft={handle.toRequest()}
+            canManage={canManage}
+          />}
       </div>
     </div>
   );
@@ -91,11 +193,9 @@ export function Editor({
  * confirmation in front of the first save is a step that teaches people to
  * click through confirmations.
  */
-function Actions({
-  template,
+function SaveFeedback({
   saving,
 }: {
-  template: Template | null;
   saving: ReturnType<typeof useSave>;
 }) {
   return (
@@ -124,25 +224,7 @@ function Actions({
             </button>
           </div>
         </div>
-      ) : (
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className="button primary"
-            onClick={template ? () => saving.ask(true) : saving.save}
-            disabled={saving.saving}
-          >
-            {template
-              ? "Save changes"
-              : saving.saving
-                ? "Creating…"
-                : "Create template"}
-          </button>
-          {template ? (
-            <span className="meta">Version {template.version}</span>
-          ) : null}
-        </div>
-      )}
+      ) : null}
 
       {saving.outcome ? (
         <p
@@ -155,6 +237,11 @@ function Actions({
         >
           {saving.outcome.text}
         </p>
+      ) : null}
+      {saving.outcome?.conflict && saving.key ? (
+        <button type="button" onClick={saving.reloadLatest} disabled={saving.saving}>
+          Discard draft and reload latest version
+        </button>
       ) : null}
     </>
   );

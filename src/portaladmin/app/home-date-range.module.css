@@ -1,0 +1,37 @@
+.trigger svg { flex: none; }
+.trigger .chevron { transition: transform var(--dur-fast) var(--ease); }
+.trigger[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+
+.panel {
+  position: fixed;
+  inset: auto;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: 0;
+  padding: 18px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 0 10px 36px rgb(0 0 0 / 16%);
+}
+
+.panel h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.hint { margin: 5px 0 18px; color: var(--muted); font-size: 12px; }
+.fields { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 12px; }
+.fields label { color: var(--muted); font-size: 13px; }
+.fields input { width: 100%; min-width: 0; min-height: 38px; border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; background: var(--field); color: var(--ink); font: inherit; font-size: 14px; }
+.fields input[aria-invalid="true"] { border-color: var(--stop); }
+.error { margin: 12px 0 0; color: var(--stop); font-size: 12px; line-height: 1.5; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.actions button { min-height: 34px; padding: 7px 13px; border: 0; border-radius: 8px; background: var(--field); color: var(--ink); font-size: 13px; line-height: 20px; }
+.actions button:hover:not(:disabled) { background: var(--surface-hover); }
+.actions .apply { background: var(--accent); color: var(--accent-ink); }
+.actions .apply:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 90%, var(--ink)); }
+.actions button:disabled { opacity: .45; cursor: default; }
+.panel input:focus-visible, .panel button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+@media (pointer: coarse) {
+  .fields input, .actions button { min-height: 44px; }
+}

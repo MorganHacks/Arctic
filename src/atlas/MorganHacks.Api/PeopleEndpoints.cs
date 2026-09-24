@@ -90,6 +90,8 @@ public static class PeopleEndpoints
                 id = p.Id,
                 kind = p.Kind,
                 email = p.Email,
+                fullName = p.FullName,
+                avatarUrl = p.AvatarUrl,
                 revoked = p.Revoked,
                 teams = p.Teams,
             }),
@@ -130,6 +132,8 @@ public static class PeopleEndpoints
             id = person.Id,
             kind = person.Kind,
             email = person.Email,
+            fullName = person.FullName,
+            avatarUrl = person.AvatarUrl,
             revoked = person.Revoked,
             revokedAt = person.RevokedAt,
             // Whether they can sign in at all, as opposed to whether they are

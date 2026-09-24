@@ -21,4 +21,5 @@ public sealed record ClaimedMessage(
     // Carried from the request that queued this, minutes ago in another
     // process. It is what makes "I never got my sign-in link" one query
     // instead of two log searches lined up by hand.
-    string? CorrelationId);
+    string? CorrelationId,
+    bool ClickTracking = false);

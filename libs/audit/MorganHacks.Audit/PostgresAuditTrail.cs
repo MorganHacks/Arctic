@@ -40,6 +40,8 @@ public sealed class PostgresAuditTrail(NpgsqlDataSource dataSource) : IAuditTrai
              WHERE (@subject::uuid IS NULL OR subject_id = @subject)
                AND (@actor::uuid   IS NULL OR actor_id   = @actor)
                AND (@before::bigint IS NULL OR id < @before)
+               AND (@action::text IS NULL OR action = @action)
+               AND (@since::timestamptz IS NULL OR occurred_at >= @since)
              ORDER BY id DESC
              LIMIT @limit
             """;
@@ -48,6 +50,8 @@ public sealed class PostgresAuditTrail(NpgsqlDataSource dataSource) : IAuditTrai
         cmd.Parameters.AddWithValue("subject", (object?)query.Subject ?? DBNull.Value);
         cmd.Parameters.AddWithValue("actor", (object?)query.Actor ?? DBNull.Value);
         cmd.Parameters.AddWithValue("before", (object?)query.Before ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("action", (object?)query.Action ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("since", (object?)query.Since?.ToUniversalTime() ?? DBNull.Value);
         cmd.Parameters.AddWithValue("limit", Math.Clamp(query.Limit, 1, MaxLimit));
 
         var entries = new List<AuditEntry>();

@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { apiFetch, currentPerson, type FormsView } from "@/lib/api";
+import { apiFetch, type FormsView } from "@/lib/api";
 import { FormsTable } from "@/components/formslist/forms-table";
 import { NoForms } from "@/components/formslist/no-forms";
+import { readPageData } from "@/lib/page-data";
 import { Shell } from "../shell";
 import { NewForm } from "./new-form";
 
@@ -18,15 +18,10 @@ export default async function Forms({
 }: {
   searchParams: Promise<{ event?: string }>;
 }) {
-  const person = await currentPerson();
-  if (!person) {
-    redirect("/sign-in");
-  }
-
   const { event } = await searchParams;
-  const response = await apiFetch(
+  const { person, data: response } = await readPageData(() => apiFetch(
     `/admin/forms${event ? `?eventId=${encodeURIComponent(event)}` : ""}`,
-  );
+  ));
 
   if (response.status === 403) {
     return (

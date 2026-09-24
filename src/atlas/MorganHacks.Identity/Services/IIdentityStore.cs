@@ -13,7 +13,9 @@ public sealed record PersonSummary(
     string Kind,
     string Email,
     bool Revoked,
-    IReadOnlyList<string> Teams);
+    IReadOnlyList<string> Teams,
+    string? FullName = null,
+    string? AvatarUrl = null);
 
 /// <summary>
 /// The persistence this module needs. Kept as a port so the state machine

@@ -6,9 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:schools": "node --test lib/schools.test.mjs"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-html": "^6.4.12",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@hugeicons/core-free-icons": "^4.3.5",
+    "@hugeicons/react": "^1.1.10",
+    "@lezer/highlight": "^1.2.3",
+    "emojibase-data": "^17.0.0",
+    "frimousse": "^0.4.0",
     "next": "^16.3.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

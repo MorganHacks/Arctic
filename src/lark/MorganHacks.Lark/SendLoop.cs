@@ -10,6 +10,9 @@ namespace MorganHacks.Lark;
 /// <summary>How the loop is tuned. All of it has a reason.</summary>
 public sealed class SendLoopOptions
 {
+    public string ClickTrackingBaseUrl { get; set; } = string.Empty;
+    public string UnsubscribeBaseUrl { get; set; } = string.Empty;
+
     /// <summary>Messages taken per claim.</summary>
     public int BatchSize { get; set; } = 25;
 
@@ -53,7 +56,9 @@ public sealed class SendLoop(
     IEmailProvider provider,
     IOptions<SendLoopOptions> options,
     TimeProvider clock,
-    ILogger<SendLoop> log) : BackgroundService
+    ILogger<SendLoop> log,
+    LinkTrackingStore tracking,
+    UnsubscribeStore unsubscribe) : BackgroundService
 {
     private readonly SendLoopOptions _options = options.Value;
 
@@ -156,7 +161,25 @@ public sealed class SendLoop(
         using var _ = LogContext.PushProperty(
             Telemetry.CorrelationIdProperty, message.CorrelationId);
 
-        var outcome = await provider.SendAsync(message, ct);
+        ClaimedMessage prepared;
+        try
+        {
+            prepared = await tracking.PrepareAsync(message, _options.ClickTrackingBaseUrl, ct);
+            prepared = await unsubscribe.PrepareAsync(prepared, _options.UnsubscribeBaseUrl, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Email links could not be prepared for a message.");
+            await queue.RecordFailureAsync(message.Id, FailureClass.Temporary,
+                "Email links could not be prepared.", ct);
+            return;
+        }
+        if (await queue.StopIfSuppressedAsync(message.Id, ct)) return;
+        var outcome = await provider.SendAsync(prepared, ct);
 
         if (outcome.Accepted)
         {

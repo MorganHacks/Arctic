@@ -59,10 +59,13 @@ public static class AuditEndpoints
         Guid? subject = null,
         Guid? actor = null,
         long? before = null,
-        int limit = 100)
+        int limit = 100,
+        string? action = null,
+        DateTimeOffset? since = null)
     {
         var entries = await trail.ReadAsync(
-            new AuditQuery(subject, actor, before, limit), ct);
+            new AuditQuery(subject, actor, before, limit,
+                string.IsNullOrWhiteSpace(action) ? null : action, since), ct);
 
         return Results.Ok(new
         {

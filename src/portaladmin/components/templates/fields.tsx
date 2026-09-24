@@ -2,6 +2,7 @@
 
 import { PlaceholderField } from "./placeholder-field";
 import styles from "./templates.module.css";
+import settings from "./settings.module.css";
 import type { DraftHandle } from "./use-draft";
 import { formatLabel, type Placeholder, type TemplateFormat } from "./types";
 
@@ -14,96 +15,15 @@ import { formatLabel, type Placeholder, type TemplateFormat } from "./types";
  * nothing about saving, rendering, or what happens next.
  */
 
-/** Who the message is from, and what it is called. */
-export function Identity({
-  handle,
-  existingKey,
-  available,
-}: {
-  handle: DraftHandle;
-  /** The key of a template that already exists, which cannot be changed. */
-  existingKey: string | null;
-  available: Placeholder[] | null;
-}) {
-  const { draft, set } = handle;
-
-  return (
-    <>
-      <div className={styles.field}>
-        <label htmlFor="key">Key</label>
-        {existingKey ? (
-          <p className="mono" style={{ margin: 0 }}>
-            {existingKey}
-          </p>
-        ) : (
-          <>
-            <input
-              id="key"
-              value={draft.key}
-              onChange={(event) => set("key", event.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-              className={styles.wide}
-            />
-            <p className={styles.medium}>A key cannot be changed later.</p>
-          </>
-        )}
-      </div>
-
-      <div className={styles.field}>
-        <label htmlFor="subject">Subject</label>
-        {/* The subject goes through the same renderer as the body, so it
-            offers the same names. A menu on one and not the other would read
-            as the subject not supporting placeholders at all. */}
-        <PlaceholderField
-          id="subject"
-          value={draft.subject}
-          onChange={(value) => set("subject", value)}
-          available={available}
-          className={styles.wide}
-        />
-      </div>
-
-      <div className={styles.field}>
-        <label htmlFor="fromName">Sender name</label>
-        {/* Signed off 2026-09-13. */}
-        <p className="meta">
-          What the inbox shows instead of the address. Left empty, a mail client
-          has only the address to display, so a message from mail@morganhacks.com
-          arrives from somebody called &ldquo;mail&rdquo;.
-        </p>
-        <input
-          id="fromName"
-          value={draft.fromName}
-          onChange={(event) => set("fromName", event.target.value)}
-          autoComplete="off"
-          maxLength={64}
-          className={styles.wide}
-        />
-      </div>
-
-      <div className={styles.field}>
-        <label htmlFor="replyTo">Reply-to</label>
-        <input
-          id="replyTo"
-          value={draft.replyTo}
-          onChange={(event) => set("replyTo", event.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-          className={styles.wide}
-        />
-      </div>
-    </>
-  );
-}
-
 /** What the message says, in whichever of the two languages. */
 export function Body({
   handle,
   available,
+  error,
 }: {
   handle: DraftHandle;
   available: Placeholder[] | null;
+  error?: string;
 }) {
   const { draft, set } = handle;
 
@@ -140,9 +60,12 @@ export function Body({
         onChange={(value) => set("body", value)}
         available={available}
         multiline
-        spellCheck
+        spellCheck={draft.format !== "html"}
+        invalid={Boolean(error)}
+        describedBy={error ? "template-body-error" : undefined}
         className={styles.body}
       />
+      {error ? <p id="template-body-error" className={settings.fieldError} role="alert">{error}</p> : null}
 
       {/* The answer to "what can this carry", where somebody would otherwise
           spend an afternoon finding out -- or find out from an email that has
@@ -173,7 +96,7 @@ export function Body({
           menu, which is the state this screen was in. */}
       {available !== null && available.length > 0 ? (
         <p className={styles.medium}>
-          Type <span className="mono">{"{{"}</span> to insert a placeholder.
+          Type {"{{"} to insert a placeholder.
         </p>
       ) : null}
     </div>

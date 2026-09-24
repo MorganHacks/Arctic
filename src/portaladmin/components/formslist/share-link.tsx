@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Copy01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
 import styles from "./formslist.module.css";
 
 /**
@@ -175,21 +177,7 @@ export function PublicLink({ code }: { code: string }) {
         aria-label="Copy link"
         aria-describedby={`chip-${code}`}
       >
-        <svg
-          aria-hidden="true"
-          focusable="false"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="9" y="9" width="12" height="12" rx="2" />
-          <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
-        </svg>
+        <Icon icon={Copy01Icon} size={14} />
       </button>
 
       <CopyState state={state} code={code} />

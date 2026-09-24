@@ -1,66 +1,113 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { NavigationLink as Link } from "@/components/ui/navigation-link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useId, useState } from "react";
+import {
+  ArrowRight01Icon,
+  Audit02Icon,
+  Calendar03Icon,
+  FormIcon,
+  InformationCircleIcon,
+  Layout01Icon,
+  Mail01Icon,
+  Menu01Icon,
+  UserAccountIcon,
+  UserGroupIcon,
+} from "@hugeicons/core-free-icons";
+import { Icon, type IconSvgElement } from "@/components/ui/icon";
 import type { Section } from "./sections";
+import styles from "./sidebar.module.css";
 
-/**
- * The section bar.
- *
- * Its own component, and the only part of the shell that runs in the browser,
- * because marking the current section needs the path and the path is only
- * readable there. Which sections are in `sections` was decided on the server —
- * shipping the reader's permission set down here to be filtered would put a
- * second copy of the rules in the bundle, and two copies of a rule are two
- * answers to the same question.
- */
-export function Nav({ sections }: { sections: Section[] }) {
-  const pathname = usePathname();
+function NavSection({ section, badge, pathname, collapsed, onNavigate }: {
+  section: Section;
+  badge?: number;
+  pathname: string;
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const active = pathname === section.href || pathname.startsWith(`${section.href}/`);
+  const [expanded, setExpanded] = useState(true);
+  const submenuId = useId();
+  const query = useSearchParams();
+  const icon = sectionIcons[section.href] ?? Menu01Icon;
 
-  /*
-   * A sentence where the links would be, rather than an empty bar.
-   *
-   * Somebody who can open none of them is not hypothetical: a judge holds
-   * judging.score_assigned, a volunteer holds checkin.scan, and the console has
-   * no screen for either, so both land here with nothing to show. A bar that is
-   * simply empty reads as a page that failed to load, and the reader's next
-   * move is to reload it twice and then ask why the console is down. This says
-   * the account is fine and names the thing that is missing, which is what
-   * every refusal screen behind these links already does.
-   *
-   * The <nav> stays either way. It is the flex child that takes up the slack
-   * between the brand and the identity block, so dropping it would slide the
-   * whole right-hand side of the header across.
-   */
-  if (sections.length === 0) {
-    return (
-      <nav>
-        {/* COPY: needs sign-off. */}
-        <span className="no-sections">
-          Nothing here yet. Ask an admin for access.
-        </span>
-      </nav>
-    );
+  if (collapsed || !section.children?.length) {
+    return <Link href={section.href} className={styles.navItem} aria-label={section.label}
+      title={collapsed ? section.label : undefined} aria-current={active ? "page" : undefined} onClick={onNavigate}>
+      <Icon icon={icon} />
+      <span className={styles.navLabel}>{section.label}</span>
+      {!collapsed && badge !== undefined ? <span className={styles.navBadge} aria-label={`${badge} total`}>{badge}</span> : null}
+    </Link>;
   }
 
+  return <div className={styles.navSection}>
+    <div className={`${styles.navItem} ${styles.navParent}`} data-active={active}>
+      <span className={styles.navIconToggle}>
+        <Icon icon={icon} className={styles.navSectionIcon} />
+        <button type="button" className={styles.navExpand} aria-label={`${expanded ? "Collapse" : "Expand"} ${section.label}`}
+          aria-expanded={expanded} aria-controls={submenuId} onClick={() => setExpanded(!expanded)}>
+          <Icon icon={ArrowRight01Icon} size={18} className={styles.navChevron} />
+        </button>
+      </span>
+      <Link href={section.href} className={styles.navParentLink} aria-current={active ? "page" : undefined} onClick={onNavigate}>
+        {section.label}
+      </Link>
+      {badge !== undefined ? <span className={styles.navBadge} aria-label={`${badge} total`}>{badge}</span> : null}
+    </div>
+    <div id={submenuId} className={styles.navSubmenu} hidden={!expanded}>
+      {section.children.map((child) => {
+        const event = pathname === "/forms" ? query.get("event") : null;
+        const href = event && child.href === "/forms#new-form" ? `/forms?${new URLSearchParams({ event })}#new-form` : child.href;
+        return <Link key={child.href} href={href} className={styles.navSubItem} onClick={onNavigate}>
+          <span>{child.label}</span>
+        </Link>;
+      })}
+    </div>
+  </div>;
+}
+
+const sectionIcons: Record<string, IconSvgElement> = {
+  "/events": Calendar03Icon,
+  "/people": UserGroupIcon,
+  "/forms": FormIcon,
+  "/applicants": UserAccountIcon,
+  "/mail": Mail01Icon,
+  "/templates": Layout01Icon,
+  "/audit": Audit02Icon,
+};
+
+/** Sections are permission-filtered by the server; this only marks the route. */
+export function Nav({
+  sections,
+  collapsed = false,
+  onNavigate,
+}: {
+  sections: Section[];
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
+  const pathname = usePathname();
   return (
-    <nav>
-      {sections.map((section) => (
-        <Link
-          key={section.href}
-          href={section.href}
-          // Marked rather than merely underlined. Which section you are in is
-          // not decoration, and a reader who cannot see the accent should still
-          // be told.
-          aria-current={
-            pathname === section.href || pathname.startsWith(`${section.href}/`)
-              ? "page"
-              : undefined
+    <nav className={styles.nav} aria-label="Primary">
+      {sections.length === 0 ? (
+        <p
+          className={styles.noSections}
+          title={
+            collapsed ? "Nothing here yet. Ask an admin for access." : undefined
           }
         >
-          {section.label}
-        </Link>
-      ))}
+          <Icon icon={InformationCircleIcon} />
+          <span className={collapsed ? styles.srOnly : styles.navLabel}>
+            Nothing here yet. Ask an admin for access.
+          </span>
+        </p>
+      ) : (
+        sections.map((section) => {
+          return <NavSection key={section.href} section={section} badge={section.badge} pathname={pathname}
+            collapsed={collapsed} onNavigate={onNavigate} />;
+        })
+      )}
     </nav>
   );
 }

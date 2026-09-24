@@ -1,8 +1,10 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
+import { NavigationLink as Link } from "@/components/ui/navigation-link";
+import { Add01Icon } from "@hugeicons/core-free-icons";
 import { NoTemplates } from "@/components/templates/no-templates";
 import { TemplatesTable } from "@/components/templates/templates-table";
-import { currentPerson } from "@/lib/api";
+import styles from "@/components/templates/templates.module.css";
+import { Icon } from "@/components/ui/icon";
+import { readPageData } from "@/lib/page-data";
 import { Shell } from "../shell";
 import { readTemplates } from "./api";
 
@@ -14,12 +16,7 @@ import { readTemplates } from "./api";
  * what each one is called, which lane it sends down, and one press to open it.
  */
 export default async function Templates() {
-  const person = await currentPerson();
-  if (!person) {
-    redirect("/sign-in");
-  }
-
-  const templates = await readTemplates();
+  const { person, data: templates } = await readPageData(() => readTemplates(true, true));
 
   if (!templates.ok) {
     return (
@@ -44,7 +41,7 @@ export default async function Templates() {
   const canManage = person.permissions.has("email.manage_templates");
 
   return (
-    <Shell personId={person.personId}>
+    <Shell personId={person.personId} templateCount={templates.items.length}>
       <div className="form-head">
         <div>
           <h1>Templates</h1>
@@ -55,8 +52,9 @@ export default async function Templates() {
         </div>
 
         {canManage ? (
-          <Link href="/templates/new" className="button primary">
-            New template
+          <Link href="/templates/new" className={`button primary ${styles.newTemplateButton}`}>
+            <Icon icon={Add01Icon} size={16} />
+            <span>New template</span>
           </Link>
         ) : null}
       </div>

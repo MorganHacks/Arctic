@@ -1,0 +1,185 @@
+.page {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 48px;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding:
+    max(64px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right))
+    max(28px, env(safe-area-inset-bottom))
+    max(24px, env(safe-area-inset-left));
+}
+
+.content {
+  width: 100%;
+  min-width: 0;
+  max-width: 352px;
+}
+
+.logo {
+  display: block;
+  width: 192px;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto 40px;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.035em;
+  text-align: center;
+}
+
+.description {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.actions {
+  display: grid;
+  gap: 20px;
+  margin-top: 28px;
+}
+
+.googleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 20px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: none;
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.googleButton:hover {
+  border-color: var(--line);
+  background: var(--surface-hover);
+}
+
+.googleButton:active {
+  background: var(--surface-hover);
+}
+
+.googleButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.googleButton img {
+  flex-shrink: 0;
+}
+
+.note {
+  margin: 16px auto 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.error {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--stop-soft);
+  color: var(--stop);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .page {
+    gap: clamp(20px, 5svh, 40px);
+    padding:
+      max(clamp(24px, 6svh, 48px), env(safe-area-inset-top))
+      max(20px, env(safe-area-inset-right))
+      max(20px, env(safe-area-inset-bottom))
+      max(20px, env(safe-area-inset-left));
+  }
+
+  .logo {
+    width: clamp(160px, 48vw, 192px);
+    margin-bottom: clamp(24px, 5svh, 36px);
+  }
+
+  .actions {
+    gap: 16px;
+    margin-top: 24px;
+  }
+
+  .googleButton {
+    min-height: 3.25rem;
+    padding: 12px 16px;
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  .note,
+  .help {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+}
+
+@media (max-height: 500px) {
+  .page {
+    gap: 20px;
+    padding:
+      max(20px, env(safe-area-inset-top))
+      max(20px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom))
+      max(20px, env(safe-area-inset-left));
+  }
+
+  .logo {
+    width: 148px;
+    margin-bottom: 20px;
+  }
+
+  .title {
+    font-size: 1.375rem;
+  }
+
+  .description {
+    margin-top: 6px;
+  }
+
+  .actions {
+    margin-top: 18px;
+  }
+
+  .note {
+    margin-top: 12px;
+  }
+
+  .help {
+    font-size: 0.75rem;
+  }
+}

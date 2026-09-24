@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import { useActionState, useEffect, useRef, useState } from "react";
 import {
   grant,
@@ -146,7 +147,7 @@ export function Teams({
 
           <div>
             <label htmlFor="slug">Add to</label>
-            <select id="slug" name="slug" defaultValue="">
+            <Select id="slug" name="slug" defaultValue="">
               <option value="" disabled>
                 Pick a team
               </option>
@@ -155,7 +156,7 @@ export function Teams({
                   {team.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div>
@@ -239,7 +240,7 @@ export function Grants({
 
             <div>
               <label htmlFor="permission">Grant</label>
-              <select
+              <Select
                 id="permission"
                 name="permission"
                 value={picked}
@@ -254,7 +255,7 @@ export function Grants({
                     {permission.sensitive ? " — sensitive" : ""}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>

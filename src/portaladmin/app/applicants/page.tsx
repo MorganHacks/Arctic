@@ -1,10 +1,9 @@
-import { redirect } from "next/navigation";
 import { ApplicantsTable } from "@/components/applicants/applicants-table";
 import { Filters } from "@/components/applicants/filters";
 import { STATUSES } from "@/components/applicants/status";
 import styles from "@/components/applicants/applicants.module.css";
 import type { Status } from "@/components/applicants/types";
-import { currentPerson } from "@/lib/api";
+import { readPageData } from "@/lib/page-data";
 import { Shell } from "../shell";
 import { loadApplicants } from "./actions";
 import { readView, type Filter } from "./api";
@@ -30,33 +29,23 @@ export default async function Applicants({
 }: {
   searchParams: Promise<{ event?: string; q?: string; status?: string | string[] }>;
 }) {
-  const person = await currentPerson();
-  if (!person) {
-    redirect("/sign-in");
-  }
-
   const { event, q, status } = await searchParams;
 
   const asked = status === undefined ? [] : [status].flat();
   const known = STATUSES as string[];
+  const invalid = asked.some((one) => !known.includes(one));
+  const filter: Filter = { event, q, status: asked as Status[] };
+  const { person, data: read } = await readPageData(() => invalid ? Promise.resolve(null) : readView(filter));
 
   // Refused rather than quietly dropped. A status we do not recognise in the
   // URL means the reader is looking at something other than what they asked
   // for, and a list that silently widened itself is worse than one that says
   // it cannot.
-  if (asked.some((one) => !known.includes(one))) {
+  if (!read) {
     return (
       <Denied personId={person.personId}>That filter is not one of ours.</Denied>
     );
   }
-
-  const filter: Filter = {
-    event,
-    q,
-    status: asked as Status[],
-  };
-
-  const read = await readView(filter);
 
   if (!read.ok) {
     return <Denied personId={person.personId}>{read.error}</Denied>;

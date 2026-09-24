@@ -1,0 +1,198 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 64px;
+  margin-bottom: 16px;
+  padding: 14px 0;
+  background: var(--paper);
+}
+
+.breadcrumb,
+.breadcrumb ol {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+}
+
+.breadcrumb {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.breadcrumb ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumb li[aria-current] {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.separator {
+  color: var(--faint);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 8px;
+}
+
+.workspace {
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--ink);
+  transition: background 150ms ease;
+}
+
+.workspace {
+  min-width: 0;
+  max-width: 256px;
+  gap: 8px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.workspaceIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 8px;
+  background: var(--surface-hover);
+  color: var(--muted);
+}
+
+.workspaceName {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  margin-left: 8px;
+  color: var(--faint);
+}
+
+.workspace:hover,
+.workspace[aria-expanded="true"] {
+  border-color: transparent;
+  background: var(--surface-hover);
+}
+
+.popover {
+  position: fixed;
+  inset: auto;
+  width: min(260px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 9%);
+}
+
+.popoverLabel {
+  margin: 4px 8px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.currentWorkspace {
+  width: 100%;
+  gap: 10px;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--field);
+  text-align: left;
+}
+
+.currentWorkspace > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.currentWorkspace strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.currentWorkspace small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.check {
+  color: var(--accent);
+}
+
+.teamSection {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.teams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0 8px 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.teams li {
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  text-transform: capitalize;
+}
+
+.workspace:focus-visible,
+.currentWorkspace:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 48rem) {
+  .header { top: 56px; }
+  .breadcrumb li:not([aria-current]) { display: none; }
+  .actions { flex: 1; justify-content: flex-end; }
+  .workspace { flex: 1; max-width: 180px; }
+}
+
+@media (pointer: coarse) {
+  .workspace { min-height: 40px; }
+}

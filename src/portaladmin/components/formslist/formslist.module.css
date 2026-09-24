@@ -157,6 +157,7 @@
 /* Making one --------------------------------------------------------- */
 
 .newForm {
+  scroll-margin-top: 72px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--raised);

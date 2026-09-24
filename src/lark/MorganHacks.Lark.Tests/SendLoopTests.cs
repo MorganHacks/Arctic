@@ -40,7 +40,9 @@ public class SendLoopTests(NotifyDatabase db) : IClassFixture<NotifyDatabase>
             BatchSize = 50,
             BetweenSends = TimeSpan.Zero,
             IdleDelay = TimeSpan.FromMilliseconds(10),
-        }), clock, NullLogger<SendLoop>.Instance);
+            ClickTrackingBaseUrl = "https://api.example.invalid/api",
+            UnsubscribeBaseUrl = "https://api.example.invalid/api",
+        }), clock, NullLogger<SendLoop>.Instance, new LinkTrackingStore(db.DataSource), new UnsubscribeStore(db.DataSource));
 
     /// <summary>Runs the loop until it has been round once, then stops it.</summary>
     private static async Task RunOnce(SendLoop loop, FakeTimeProvider clock)
@@ -59,6 +61,67 @@ public class SendLoopTests(NotifyDatabase db) : IClassFixture<NotifyDatabase>
         await stop.CancelAsync();
         await loop.StopAsync(CancellationToken.None);
         await running;
+    }
+
+    [Fact]
+    public async Task Unsubscribe_links_reach_the_provider_without_being_click_tracked()
+    {
+        var campaign = await db.AddCampaignAsync("broadcast");
+        var email = Email("unsubscribe");
+        var id = await db.QueueAsync(campaign, email);
+        await using (var command = db.DataSource.CreateCommand("""
+            UPDATE notify.templates SET click_tracking = true
+             WHERE id = (SELECT template_id FROM notify.campaigns WHERE id = @campaign);
+            UPDATE notify.messages
+               SET rendered_body_html = '<a href="{$unsubscribe_link}">Unsubscribe</a>',
+                   rendered_body_text = 'Unsubscribe <{$unsubscribe_link}>'
+             WHERE id = @message
+            """))
+        {
+            command.Parameters.AddWithValue("campaign", campaign);
+            command.Parameters.AddWithValue("message", id);
+            await command.ExecuteNonQueryAsync();
+        }
+        var clock = new FakeTimeProvider();
+        var provider = new FakeProvider(_ => SendOutcome.Sent("unsubscribe-message"));
+
+        await RunOnce(LoopWith(provider, clock), clock);
+
+        var sent = Assert.Single(provider.Sent, message => message.Id == id);
+        var url = Assert.Single(EmailLinks.Destinations(sent.BodyHtml));
+        Assert.StartsWith("https://api.example.invalid/api/email/unsubscribe/", url);
+        Assert.Contains(url, sent.BodyText);
+        Assert.DoesNotContain("/email/click/", url);
+        Assert.Equal("sent", (await db.StateOf(id)).Status);
+    }
+
+    [Fact]
+    public async Task Enabled_tracking_reaches_the_provider_as_a_redirect_link()
+    {
+        var campaign = await db.AddCampaignAsync();
+        var id = await db.QueueAsync(campaign, Email("tracking"));
+        await using (var command = db.DataSource.CreateCommand("""
+            UPDATE notify.templates SET click_tracking = true
+             WHERE id = (SELECT template_id FROM notify.campaigns WHERE id = @campaign);
+            UPDATE notify.messages
+               SET rendered_body_html = '<a href="https://example.invalid/go">Go</a>',
+                   rendered_body_text = 'Go <https://example.invalid/go>'
+             WHERE id = @message
+            """))
+        {
+            command.Parameters.AddWithValue("campaign", campaign);
+            command.Parameters.AddWithValue("message", id);
+            await command.ExecuteNonQueryAsync();
+        }
+        var clock = new FakeTimeProvider();
+        var provider = new FakeProvider(_ => SendOutcome.Sent("tracked-message"));
+
+        await RunOnce(LoopWith(provider, clock), clock);
+
+        var sent = Assert.Single(provider.Sent, message => message.Id == id);
+        Assert.Contains("https://api.example.invalid/api/email/click/", sent.BodyHtml);
+        Assert.Contains("https://api.example.invalid/api/email/click/", sent.BodyText);
+        Assert.Equal("sent", (await db.StateOf(id)).Status);
     }
 
     [Fact]

@@ -259,6 +259,8 @@ export type Person = {
 
   /** Their own address. Absent only if the row went while the session lived. */
   email: string | null;
+  fullName: string | null;
+  avatarUrl: string | null;
 
   /** The teams they are on now, lapsed ones left out. */
   teams: string[];
@@ -271,6 +273,8 @@ export type Listed = {
   id: string;
   kind: string;
   email: string;
+  fullName: string | null;
+  avatarUrl: string | null;
   revoked: boolean;
   teams: string[];
 };
@@ -280,6 +284,8 @@ export type PersonDetail = {
   id: string;
   kind: string;
   email: string;
+  fullName: string | null;
+  avatarUrl: string | null;
   revoked: boolean;
   revokedAt: string | null;
   /** Whether a Google account is bound. Never which one. */
@@ -361,9 +367,11 @@ export const currentPerson = cache(async function currentPerson(): Promise<Perso
       return null;
     }
 
-    const { personId, email, teams, permissions } = (await response.json()) as {
+    const { personId, email, fullName, avatarUrl, teams, permissions } = (await response.json()) as {
       personId: string;
       email?: string | null;
+      fullName?: string | null;
+      avatarUrl?: string | null;
       teams?: string[];
       permissions: string[];
     };
@@ -371,6 +379,8 @@ export const currentPerson = cache(async function currentPerson(): Promise<Perso
     return {
       personId,
       email: email ?? null,
+      fullName: fullName ?? null,
+      avatarUrl: avatarUrl ?? null,
       teams: teams ?? [],
       permissions: new Set(permissions),
     };

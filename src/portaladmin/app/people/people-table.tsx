@@ -1,135 +1,167 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { NavigationLink as Link } from "@/components/ui/navigation-link";
+import { useMemo, useRef, useState } from "react";
+import { ArrowLeft01Icon, ArrowRight01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
+import { Avatar } from "@/components/ui/avatar";
+import { displayName } from "@/lib/person-profile";
 import type { Listed } from "@/lib/api";
+import styles from "./members.module.css";
 
-/**
- * The list, filtered in the browser rather than on the server.
- *
- * The whole list arrives in one response because it is people who can sign in
- * — organizers and registered hackers — which is tens of rows, not hundreds.
- * Filtering it here means typing is instant. Pushing the filter into the URL
- * and back through the API would put a round trip on every keystroke to search
- * a list that already fits in memory.
- *
- * The moment that stops being true the fix is paging in the API, not a
- * debounce here.
- */
+const kinds = [
+  { value: "all", label: "Everyone" },
+  { value: "organizer", label: "Organizers" },
+  { value: "hacker", label: "Hackers" },
+] as const;
+
+const pageSize = 10;
+const numbers = new Intl.NumberFormat("en-US");
+
+/** The small account directory is filtered locally, including team slugs. */
 export function PeopleTable({ people }: { people: Listed[] }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [page, setPage] = useState(0);
+  const tableScroll = useRef<HTMLDivElement>(null);
 
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
-
     return people.filter((person) => {
-      if (kind !== "all" && person.kind !== kind) {
-        return false;
-      }
-
-      if (status === "active" && person.revoked) {
-        return false;
-      }
-
-      if (status === "revoked" && !person.revoked) {
-        return false;
-      }
-
-      if (needle === "") {
-        return true;
-      }
-
-      // Teams are searchable alongside the address, because "who is on comms"
-      // is asked as often as "where is this person" and neither deserves its
-      // own control.
+      if (kind !== "all" && person.kind !== kind) return false;
       return (
         person.email.toLowerCase().includes(needle) ||
-        person.teams.some((team) => team.includes(needle))
+        (person.fullName?.toLowerCase().includes(needle) ?? false) ||
+        person.teams.some((team) => team.toLowerCase().includes(needle))
       );
     });
-  }, [people, query, kind, status]);
+  }, [people, query, kind]);
+
+  const pageCount = Math.max(1, Math.ceil(shown.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const start = currentPage * pageSize;
+  const end = Math.min(start + pageSize, shown.length);
+  const pageRows = shown.slice(start, end);
+
+  function changePage(nextPage: number) {
+    setPage(nextPage);
+    tableScroll.current?.scrollTo({ top: 0 });
+  }
 
   return (
-    <>
-      <div className="filters">
-        <div className="grow">
-          <label htmlFor="q">Search</label>
+    <section className={styles.section} aria-labelledby="people-title">
+      <div className={styles.tabs} role="group" aria-label="Filter people by type">
+        {kinds.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            className={styles.tab}
+            aria-pressed={kind === item.value}
+            onClick={() => { setKind(item.value); changePage(0); }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.membersHead}>
+        <h1 id="people-title" className={styles.title}>Members</h1>
+        <div className={styles.search}>
+          <Icon icon={Search01Icon} size={18} />
           <input
-            id="q"
+            aria-label="Search people by name, email, or team"
             type="search"
-            className="grow"
-            placeholder="Address or team"
+            autoComplete="off"
+            placeholder="Search members"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            style={{ width: "100%" }}
+            onChange={(event) => { setQuery(event.target.value); changePage(0); }}
           />
-        </div>
-
-        <div>
-          <label htmlFor="kind">Kind</label>
-          <select
-            id="kind"
-            value={kind}
-            onChange={(event) => setKind(event.target.value)}
-          >
-            <option value="all">Everyone</option>
-            <option value="organizer">Organizers</option>
-            <option value="hacker">Hackers</option>
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="status">Status</label>
-          <select
-            id="status"
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-          >
-            <option value="all">Any</option>
-            <option value="active">Active</option>
-            <option value="revoked">Revoked</option>
-          </select>
         </div>
       </div>
 
-      {shown.length === 0 ? (
-        <div className="empty">Nobody matches that.</div>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Kind</th>
-              <th>Teams</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((person) => (
-              <tr key={person.id}>
-                <td>
-                  <Link href={`/people/${person.id}`}>{person.email}</Link>
-                </td>
-                <td>{person.kind}</td>
-                <td>
-                  {person.teams.length > 0 ? person.teams.join(", ") : "—"}
-                </td>
-                <td>
-                  <span className={person.revoked ? "pill revoked" : "pill active"}>
-                    {person.revoked ? "Revoked" : "Active"}
-                  </span>
-                </td>
+      <div className={styles.tableFrame}>
+        <div ref={tableScroll} className={styles.tableScroll} role="region" aria-label="Members table" tabIndex={0}>
+          <table id="people-table" className={styles.table} aria-label="People">
+            <colgroup>
+              <col />
+              <col className={styles.roleColumn} />
+              <col className={styles.statusColumn} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Role</th>
+                <th scope="col">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <p className="count">
-        {shown.length} of {people.length}
-      </p>
-    </>
+            </thead>
+            <tbody>
+              {pageRows.map((person) => {
+                const name = displayName(person.fullName, person.email);
+                return (
+                  <tr key={person.id}>
+                    <td>
+                      <Link
+                        href={`/people/${person.id}`}
+                        className={styles.member}
+                        aria-label={`Manage ${person.email}`}
+                      >
+                        <Avatar
+                          className={styles.avatar}
+                          name={name}
+                          email={person.email}
+                          avatarUrl={person.avatarUrl}
+                        />
+                        <span className={styles.memberMeta}>
+                          <strong>{name}</strong>
+                          <span>{person.email}</span>
+                        </span>
+                      </Link>
+                    </td>
+                    <td>
+                      <div className={styles.role}>
+                        <span>{person.kind === "organizer" ? "Organizer" : person.kind === "hacker" ? "Hacker" : person.kind}</span>
+                        {person.teams.length > 0 ? (
+                          <span className={styles.teams}>{person.teams.join(", ")}</span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={person.revoked ? styles.revoked : styles.active}>
+                        {person.revoked ? "Revoked" : "Active"}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {shown.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className={styles.empty}>
+                    {people.length === 0 ? "No people yet." : "No members found."}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+        {pageCount > 1 ? (
+          <nav className={styles.pagination} aria-label="Members pagination">
+            <span role="status" aria-live="polite" aria-atomic="true">
+              {numbers.format(start + 1)}-{numbers.format(end)} of {numbers.format(shown.length)}
+            </span>
+            <div className={styles.paginationActions}>
+              <button type="button" aria-label="Previous members page" title="Previous" aria-controls="people-table"
+                disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)}>
+                <Icon icon={ArrowLeft01Icon} size={16} />
+              </button>
+              <span aria-label={`Page ${currentPage + 1} of ${pageCount}`}>{numbers.format(currentPage + 1)} / {numbers.format(pageCount)}</span>
+              <button type="button" aria-label="Next members page" title="Next" aria-controls="people-table"
+                disabled={currentPage + 1 >= pageCount} onClick={() => changePage(currentPage + 1)}>
+                <Icon icon={ArrowRight01Icon} size={16} />
+              </button>
+            </div>
+          </nav>
+        ) : null}
+      </div>
+    </section>
   );
 }

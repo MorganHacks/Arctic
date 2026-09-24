@@ -37,7 +37,10 @@ public sealed record TemplateVersion(
     int Version,
     DateTimeOffset UpdatedAt,
     Guid? CreatedBy,
-    string? FromName = null)
+    string? FromName = null,
+    string? PreviewText = null,
+    bool ClickTracking = false,
+    string? Name = null)
 {
     /// <summary>
     /// The same template in the shape the renderer understands.
@@ -49,7 +52,8 @@ public sealed record TemplateVersion(
     /// regex that agrees with it until one of them is changed.
     /// </remarks>
     public EmailTemplate ForRendering() => new(
-        Id, Key, Kind, Subject, Html, Text, FromLocal, FromDomain, ReplyTo);
+        Id, Key, Kind, Subject, Html, Text, FromLocal, FromDomain, ReplyTo,
+        FromName, PreviewText, ClickTracking);
 }
 
 /// <summary>What an author submits when they save a template.</summary>
@@ -71,7 +75,10 @@ public sealed record TemplateDraft(
     string FromLocal,
     string FromDomain,
     string? ReplyTo,
-    string? FromName);
+    string? FromName,
+    string? PreviewText = null,
+    bool ClickTracking = false,
+    string? Name = null);
 
 /// <summary>How a save ended.</summary>
 public enum TemplateWriteResult
