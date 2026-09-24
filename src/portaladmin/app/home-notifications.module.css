@@ -1,0 +1,138 @@
+.trigger,
+.close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--muted);
+}
+
+.trigger:hover,
+.trigger[aria-expanded="true"],
+.close:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.panel {
+  position: fixed;
+  inset: auto;
+  width: min(400px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 12px 48px rgb(0 0 0 / 10%), 0 2px 8px rgb(0 0 0 / 3%);
+}
+
+.panel:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+
+.heading {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 12px 10px 18px;
+}
+
+.heading h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: -0.2px;
+}
+
+.close {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: transparent;
+}
+
+.filterRow {
+  flex: none;
+  min-width: 0;
+  padding-bottom: 12px;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
+}
+
+.filter {
+  flex: none;
+  gap: 6px;
+  min-height: 26px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.filter:hover {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  color: var(--ink);
+}
+
+.filter[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+}
+
+.count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+.content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.trigger:focus-visible,
+.close:focus-visible,
+.filter:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .trigger,
+  .close {
+    width: 40px;
+    height: 40px;
+  }
+
+  .filter {
+    min-height: 40px;
+  }
+}

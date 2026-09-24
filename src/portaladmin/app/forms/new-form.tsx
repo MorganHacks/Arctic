@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import { useActionState } from "react";
 import styles from "@/components/formslist/formslist.module.css";
 import { createForm } from "./actions";
@@ -46,10 +47,10 @@ export function NewForm({ eventId }: { eventId: string }) {
 
         <div>
           <label htmlFor="kind">Kind</label>
-          <select id="kind" name="kind" defaultValue="survey">
+          <Select id="kind" name="kind" defaultValue="survey">
             <option value="survey">Survey</option>
             <option value="application">Application</option>
-          </select>
+          </Select>
         </div>
 
         <button type="submit" className="button primary" disabled={pending}>

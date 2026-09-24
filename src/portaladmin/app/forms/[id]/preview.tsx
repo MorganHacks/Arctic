@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import type { FormField } from "@/lib/api";
 import styles from "./builder.module.css";
 
@@ -148,14 +149,14 @@ function Control({ field }: { field: FormField }) {
 
     case "select":
       return (
-        <select defaultValue="">
+        <Select defaultValue="">
           <option value="">Choose…</option>
           {field.options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
       );
 
     case "radio":

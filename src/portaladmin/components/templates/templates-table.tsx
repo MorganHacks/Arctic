@@ -1,7 +1,7 @@
 "use client";
 
 import { NavigationLink as Link } from "@/components/ui/navigation-link";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDown01Icon,
   Calendar03Icon,
@@ -9,6 +9,7 @@ import {
   Grid3x3Icon,
   LayoutGridIcon,
   LayoutListIcon,
+  Mail01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { when } from "@/components/mail/types";
@@ -16,6 +17,28 @@ import { Icon } from "@/components/ui/icon";
 import { emailDocument } from "./email-preview";
 import styles from "./templates.module.css";
 import { kindLabel, type TemplateRow } from "./types";
+
+const updatedDate = new Intl.DateTimeFormat("en-US", {
+  month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+});
+
+function TemplateThumbnail({ html, name }: { html: string; name: string }) {
+  const paper = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.5);
+
+  useEffect(() => {
+    if (!paper.current) return;
+    const observer = new ResizeObserver(([entry]) => setScale(entry.contentRect.width / 600));
+    observer.observe(paper.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return <div ref={paper} className={styles.templatePreviewPaper}>
+    <iframe className={styles.templatePreviewFrame} title={`${name} email preview`}
+      tabIndex={-1} loading="lazy" sandbox="" referrerPolicy="no-referrer"
+      style={{ transform: `scale(${scale})` }} srcDoc={emailDocument(html, "desktop")} />
+  </div>;
+}
 
 /**
  * Every template there is.
@@ -44,7 +67,7 @@ export function TemplatesTable({ templates }: { templates: TemplateRow[] }) {
     const rightTime = right.updatedAt ? Date.parse(right.updatedAt) : 0;
     return sort === "newest" ? rightTime - leftTime : leftTime - rightTime;
   });
-  const gridStyle = { "--template-columns": density + 2 } as CSSProperties;
+  const gridStyle = { "--template-columns": 4 - density } as CSSProperties;
 
   return (
     <>
@@ -87,6 +110,7 @@ export function TemplatesTable({ templates }: { templates: TemplateRow[] }) {
             <Icon icon={Grid3x3Icon} size={15} />
             <input type="range" min="0" max="2" step="1" value={density}
               aria-label="Grid size" disabled={view === "list"}
+              aria-valuetext={`${4 - density} columns`}
               onChange={(event) => setDensity(Number(event.target.value))} />
             <Icon icon={Grid2x2Icon} size={15} />
           </div>
@@ -117,28 +141,36 @@ export function TemplatesTable({ templates }: { templates: TemplateRow[] }) {
         <ul className={styles.templateGrid} data-view={view} style={gridStyle} aria-label="Email templates">
           {visible.map((template) => {
             const name = template.name || template.key;
+            const updated = template.updatedAt ? new Date(template.updatedAt) : null;
             return (
               <li key={template.key} className={styles.templateGridItem}>
                 <Link href={`/templates/${encodeURIComponent(template.key)}`} className={styles.templateCard}
                   aria-label={`Open ${name} template`}>
                   <div className={styles.templatePreview} aria-hidden="true">
                     {template.previewHtml ? (
-                      <iframe className={styles.templatePreviewFrame} title={`${name} email preview`}
-                        tabIndex={-1} loading="lazy" sandbox=""
-                        srcDoc={emailDocument(template.previewHtml, "desktop")} />
+                      <TemplateThumbnail html={template.previewHtml} name={name} />
                     ) : (
-                      <span className={styles.previewUnavailable}>Preview available after design</span>
+                      <span className={styles.previewUnavailable}>
+                        <Icon icon={Mail01Icon} size={30} strokeWidth={1.4} />
+                        <span>Your next email starts here</span>
+                      </span>
                     )}
-                    {template.hasDraft ? <span className={styles.draftBadge}>Draft</span> : null}
                   </div>
 
                   <div className={styles.templateCardCopy}>
-                    <strong>{name}</strong>
+                    <div className={styles.templateCardEyebrow}>
+                      <span className={styles.templateKind}>{kindLabel(template.kind)}</span>
+                      {template.hasDraft ? <span className={styles.draftBadge}>Draft</span> : null}
+                    </div>
+                    <strong className={styles.templateCardTitle}>{name}</strong>
                     <p>{template.subject}</p>
                     <div className={styles.templateMeta}>
-                      <span>{kindLabel(template.kind)}</span>
+                      {updated && !Number.isNaN(updated.getTime()) ? (
+                        <time dateTime={template.updatedAt!} title={`${when(template.updatedAt)} UTC`}>
+                          Updated {updatedDate.format(updated)}
+                        </time>
+                      ) : <span>No updates yet</span>}
                       <span>Version {template.version || "—"}</span>
-                      <span>{when(template.updatedAt)}</span>
                     </div>
                   </div>
                 </Link>
@@ -147,8 +179,13 @@ export function TemplatesTable({ templates }: { templates: TemplateRow[] }) {
           })}
         </ul>
       ) : (
-        <div className={styles.noTemplateMatches}>
-          No templates match “{query.trim()}”.
+        <div className={styles.noTemplateMatches} role="status">
+          <Icon icon={Search01Icon} size={28} strokeWidth={1.4} />
+          <strong>No templates found</strong>
+          <p>{query.trim() ? `Try another search or adjust your filters for “${query.trim()}”.` : "Try a different template type or status."}</p>
+          <button type="button" onClick={() => { setQuery(""); setKind("all"); setStatus("all"); }}>
+            Clear filters
+          </button>
         </div>
       )}
     </>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import type { FormState } from "@/app/mail/actions";
@@ -75,7 +76,7 @@ export function NewCampaign({
               No broadcast templates. <Link href="/templates/new">Write one</Link>
             </p>
           ) : (
-            <select id="templateKey" name="templateKey" required defaultValue="">
+            <Select id="templateKey" name="templateKey" required defaultValue="">
               <option value="" disabled>
                 Pick a template
               </option>
@@ -84,13 +85,13 @@ export function NewCampaign({
                   {template.name || template.key}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </div>
 
         <div>
           <label htmlFor="segmentKind">Send to</label>
-          <select
+          <Select
             id="segmentKind"
             name="segmentKind"
             value={kind}
@@ -99,7 +100,7 @@ export function NewCampaign({
             <option value="applicants">Applicants by status</option>
             <option value="form">Form respondents</option>
             <option value="addresses">Address list</option>
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -110,13 +111,13 @@ export function NewCampaign({
             {events.length === 0 ? (
               <span className="meta">There is no event yet. Create one under Events.</span>
             ) : (
-              <select id="eventId" name="eventId" defaultValue={events[0]?.id ?? ""}>
+              <Select id="eventId" name="eventId" defaultValue={events[0]?.id ?? ""}>
                 {events.map((event) => (
                   <option key={event.id} value={event.id}>
                     {event.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           </div>
         ) : null}
@@ -124,13 +125,13 @@ export function NewCampaign({
         {kind === "applicants" ? (
           <div>
             <label htmlFor="status">Status</label>
-            <select id="status" name="status" defaultValue="accepted">
+            <Select id="status" name="status" defaultValue="accepted">
               {APPLICANT_STATUSES.map((status) => (
                 <option key={status.value} value={status.value}>
                   {status.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         ) : null}
 
@@ -140,7 +141,7 @@ export function NewCampaign({
             {forms.length === 0 ? (
               <p className="meta">No forms are available to you.</p>
             ) : (
-              <select id="formId" name="formId" defaultValue="">
+              <Select id="formId" name="formId" defaultValue="">
                 <option value="" disabled>
                   Pick a form
                 </option>
@@ -149,7 +150,7 @@ export function NewCampaign({
                     {form.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           </div>
         ) : null}

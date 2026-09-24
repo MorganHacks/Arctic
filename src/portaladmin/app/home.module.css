@@ -1,104 +1,40 @@
-/*
- * The console's home screen.
- *
- * Built from the shared panel and column classes in globals.css rather than a
- * layout of its own, so it reads as the same console as every other screen.
- * What is here is only what those classes have no opinion about.
- */
-
-/* The address, which is the heading. Mono because it is an identifier the
-   reader may be about to compare against one somebody sent them, and a
-   proportional font makes an l and a 1 the same shape at exactly the moment
-   that matters. */
-.who {
-  font-family: var(--mono);
-  font-size: 1.15rem;
-  overflow-wrap: anywhere;
-}
-
-/* The sentence shown where a panel has nothing in it. Not `.empty`, which is
-   the dashed box used for a list that has no rows: these two panels are not
-   lists, and a box around one sentence reads as a thing that failed to
-   load. */
-.none {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.teams {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.teams li code {
-  display: inline-block;
-  padding: 0.2rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--sunken);
-  font-size: 0.82rem;
-}
-
-.areas {
-  margin: 0;
-}
-
-.area {
-  margin-bottom: 0.9rem;
-}
-
-.area:last-child {
-  margin-bottom: 0;
-}
-
-.area dt {
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.area dd {
-  margin: 0.25rem 0 0;
-}
-
-.area ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* The permission strings themselves, not prettified names. They are what the
-   refusal on every other screen names — "you do not have people.view" — and a
-   friendly label here would be a second vocabulary for the same thing, which
-   is how somebody comes to ask an admin for a permission that does not
-   exist. */
-.area li {
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  color: var(--muted);
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
-
-.sections {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.1rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Two panels stacked in one grid column, spaced like the panels around
-   them. */
-.stack {
+.home {
+  --home-card-surface: color-mix(in srgb, var(--ink) 3%, var(--paper));
+  --home-card-hover: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  --metric-sky: #467aa1;
+  --metric-violet: #7563af;
+  --metric-amber: #987137;
+  --metric-teal: #388272;
+  --metric-teal-soft: #edf6f3;
+  --empty-state-title-size: 16px;
+  --empty-state-description-size: 14px;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  width: 100%;
+  min-height: 100dvh;
+  padding-bottom: calc(52px + max(8px, env(safe-area-inset-bottom)));
+  font-family: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  container-type: inline-size;
+}
+
+:global([data-theme="dark"]) .home {
+  --metric-sky: #8bbce0;
+  --metric-violet: #b5a1ee;
+  --metric-amber: #dfb777;
+  --metric-teal: #7fcab7;
+  --metric-teal-soft: #20382f;
+}
+
+:global(main):has(> .home) { padding-top: 0; padding-bottom: 0; }
+:global(html):has(.home) { scrollbar-width: none; scroll-padding-top: 76px; }
+:global(html):has(.home)::-webkit-scrollbar { display: none; }
+
+.empty { padding: 32px; border-radius: 16px; background: var(--home-card-surface); }
+.empty h1 { margin: 18px 0 10px; font-size: 24px; }
+.empty p { color: var(--muted); line-height: 1.6; }
+@media (max-width: 48rem) {
+  .home { min-height: calc(100dvh - 56px); }
+  :global(html):has(.home) { scroll-padding-top: 132px; }
 }

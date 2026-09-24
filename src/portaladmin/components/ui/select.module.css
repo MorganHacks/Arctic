@@ -1,0 +1,33 @@
+.control {
+  position: relative;
+  display: inline-grid;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.control[data-full-width="true"] { width: 100%; }
+
+.control > select:not([multiple]):not([size]) {
+  width: 100%;
+  min-width: 0;
+  padding-right: 34px;
+  background-image: none;
+}
+
+.control > select::picker-icon { display: none; }
+
+.chevron {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: transform var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.control > select:hover:not(:disabled) + .chevron { color: var(--ink); }
+.control > select:focus-visible + .chevron { color: var(--accent); }
+.control > select:open + .chevron { transform: translateY(-50%) rotate(180deg); }
+.control > select:disabled + .chevron { color: var(--faint); }

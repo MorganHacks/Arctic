@@ -312,15 +312,6 @@ code,
   margin: 0;
 }
 
-.card {
-  width: 100%;
-  max-width: 22rem;
-  background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 1.75rem;
-}
-
 /* A recessed place to read something out of — a code block, an audit note, an
    answer somebody typed. Sunken so it does not read as a thing to fill in. */
 .well {
@@ -1660,29 +1651,6 @@ label {
 
 .toast.stop {
   border-color: var(--stop);
-}
-
-/* Sign-in ------------------------------------------------------------- */
-
-.signin {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
-}
-
-.card h1 {
-  margin-bottom: 0.5rem;
-}
-
-.card p {
-  color: var(--muted);
-  margin: 0 0 1.5rem;
-}
-
-.card .button {
-  width: 100%;
-  text-align: center;
 }
 
 .note {

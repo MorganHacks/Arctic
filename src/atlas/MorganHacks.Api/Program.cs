@@ -160,6 +160,8 @@ builder.Services.AddSingleton<IAnnouncementStore, PostgresAnnouncementStore>();
 // Separate from the store above because that one owns the lifecycle: there is
 // one way to change a status and this is deliberately not it.
 builder.Services.AddSingleton<IApplicantStore, PostgresApplicantStore>();
+builder.Services.AddSingleton<PostgresApplicantAnalyticsStore>();
+builder.Services.AddSingleton<EmailAnalyticsStore>();
 
 // Resumes.
 //
@@ -358,6 +360,8 @@ app.MapAuditTrail();
 app.MapFormsAdmin();
 app.MapFormResponses();
 app.MapApplicants();
+app.MapApplicantAnalytics();
+app.MapEmailAnalytics();
 app.MapTemplates();
 app.MapEmailTracking();
 app.MapEmailUnsubscribe();

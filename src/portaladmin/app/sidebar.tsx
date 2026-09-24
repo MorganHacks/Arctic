@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { NavigationLink as Link } from "@/components/ui/navigation-link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +14,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
+import logo from "@/public/brands/morganhacks.png";
 import { Nav } from "./nav";
 import { useSidebarState } from "./sidebar-state";
 import type { Section } from "./sections";
@@ -128,10 +130,13 @@ function SidebarContents({
             aria-label="MorganHacks account overview"
             onClick={onNavigate}
           >
-            <span className={styles.workspaceMark} aria-hidden="true">
-              M
-            </span>
-            <span className={styles.workspaceName}>MorganHacks</span>
+            <Image
+              src={logo}
+              alt="MorganHacks"
+              className={styles.workspaceLogo}
+              sizes="104px"
+              loading="eager"
+            />
           </Link>
           <button
             type="button"

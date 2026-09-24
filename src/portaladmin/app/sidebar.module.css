@@ -42,45 +42,29 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: var(--shell-heading-height);
+  height: 40px;
   margin-bottom: 16px;
 }
 .workspace {
   display: flex;
   align-items: center;
-  gap: 6px;
   flex: 1;
   min-width: 0;
-  height: 32px;
-  padding: 3px;
-  border: 1px solid var(--sidebar-line);
+  height: 40px;
+  padding: 0 4px;
   border-radius: 8px;
-  background: var(--raised);
-  color: var(--sidebar-ink);
   text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background 150ms ease;
+  transition: opacity 150ms ease;
 }
 .workspace:hover {
-  background: var(--sidebar-hover);
+  opacity: 0.8;
 }
-.workspaceMark {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 12px;
-  font-weight: 600;
-}
-.workspaceName {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.workspaceLogo {
+  display: block;
+  width: 104px;
+  max-width: 100%;
+  height: auto;
+  transform: translateY(3px);
 }
 .iconButton {
   display: inline-flex;
@@ -366,8 +350,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #60a5fa;
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-ink);
   font-size: 12px;
   font-weight: 600;
 }
@@ -534,12 +518,6 @@
 }
 .mobileSidebar {
   height: 100%;
-}
-.mobileSidebar .brandRow {
-  height: 40px;
-}
-.mobileSidebar .workspace {
-  height: 36px;
 }
 .mobileSidebar .iconButton {
   width: 40px;

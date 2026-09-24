@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import { useActionState } from "react";
 import { changeStatus } from "@/app/applicants/actions";
 import styles from "./applicants.module.css";
@@ -70,7 +71,7 @@ export function Decision({
 
       <div>
         <label htmlFor="status">Move to</label>
-        <select id="status" name="status" defaultValue="">
+        <Select id="status" name="status" defaultValue="">
           <option value="" disabled>
             Pick a status
           </option>
@@ -79,7 +80,7 @@ export function Decision({
               {label(status)}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <div>
