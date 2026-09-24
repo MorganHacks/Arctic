@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/ui/empty-state";
 import styles from "./templates.module.css";
 
 /**
@@ -11,29 +12,8 @@ import styles from "./templates.module.css";
 export function NoTemplates() {
   return (
     <div className={styles.noTemplates}>
-      <div className={styles.noTemplatesInner}>
-        <div className={styles.emptyTemplatePreview} aria-hidden="true">
-          <div className={styles.emptyTemplateMock}>
-            <div className={`${styles.emptyTemplateBar} ${styles.emptyTemplateSubject}`} />
-            <div className={styles.emptyTemplateRule} />
-            <div className={styles.emptyTemplateSender}>
-              <div className={styles.emptyTemplateAvatar} />
-              <div className={styles.emptyTemplateSenderLines}>
-                <div className={styles.emptyTemplateBar} />
-                <div className={styles.emptyTemplateBar} />
-              </div>
-            </div>
-            <div className={`${styles.emptyTemplateBar} ${styles.emptyTemplateLineWide}`} />
-            <div className={`${styles.emptyTemplateBar} ${styles.emptyTemplateLineMedium}`} />
-            <div className={`${styles.emptyTemplateBar} ${styles.emptyTemplateLineShort}`} />
-            <div className={styles.emptyTemplateAction} />
-          </div>
-        </div>
-        <p className={styles.noTemplatesTitle}>No templates yet</p>
-        <p className={styles.noTemplatesDescription}>
-          Create a reusable email for campaigns and automated messages.
-        </p>
-      </div>
+      <EmptyState title="No templates yet"
+        description="Create a reusable email for campaigns and automated messages." />
     </div>
   );
 }

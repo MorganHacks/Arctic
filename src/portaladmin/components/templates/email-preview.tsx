@@ -17,7 +17,7 @@ export function EmailPreview({ rendered, pending, error, device }: {
       <div className={styles.previewDocument} data-preview-device={device} aria-busy={pending}>
         {!rendered ? <div className={styles.emptyPreview}>
           <Icon icon={Mail01Icon} size={28} strokeWidth={1.25} />
-          <p>Your email will appear here</p>
+          <p>{pending ? "Rendering your email…" : "Your email will appear here"}</p>
         </div> : <iframe className={styles.previewFrame} title="Email preview" sandbox="" srcDoc={emailDocument(rendered.html, device)} />}
       </div>
     </div>

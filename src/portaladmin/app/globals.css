@@ -749,7 +749,7 @@ button,
   background: var(--raised);
   color: var(--ink);
   padding: 0.35rem 0.75rem;
-  border-radius: var(--radius);
+  border-radius: 999px;
   text-decoration: none;
   font-weight: 500;
   transition:

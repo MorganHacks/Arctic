@@ -5,7 +5,7 @@ import styles from "./templates.module.css";
 
 export function TemplateBackLink() {
   return (
-    <Link href="/templates" className={`back ${styles.backLink}`} data-template-motion="back">
+    <Link href="/templates" className={styles.backLink} data-template-motion="back">
       <Icon icon={Undo03Icon} size={17} strokeWidth={2} />
       <span>Back</span>
     </Link>

@@ -9,25 +9,21 @@
   text-align: center;
 }
 
-.preview { display: grid; width: 164px; height: 146px; margin-bottom: 18px; place-items: center; }
 .document {
   display: flex;
-  width: 122px;
+  width: min(100%, 240px);
+  flex: none;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  padding: 18px 15px;
-  border: 1px solid color-mix(in srgb, var(--ink) 7%, var(--paper));
-  border-radius: 10px;
-  background: var(--paper);
-  box-shadow: 0 3px 5px rgb(0 0 0 / 2%), 0 12px 24px rgb(0 0 0 / 3%);
+  gap: 5px;
+  margin-bottom: 28px;
 }
-.bar, .bullet { flex-shrink: 0; background: color-mix(in srgb, var(--ink) 6%, var(--paper)); }
-.bar { height: 4px; border-radius: 3px; }
-.heading { height: 6px; background: color-mix(in srgb, var(--ink) 11%, var(--paper)); }
-.subheading { height: 5px; margin-bottom: 1px; background: color-mix(in srgb, var(--ink) 9%, var(--paper)); }
-.spacer { height: 1px; }
-.row { display: flex; width: 100%; align-items: center; gap: 6px; }
-.bullet { width: 3px; height: 3px; border-radius: 50%; }
-.title { margin: 0; color: var(--ink); font-size: var(--empty-state-title-size, 13px); font-weight: 500; line-height: 1.5; }
-.description { max-width: 280px; margin: 6px 0 0; color: var(--muted); font-size: var(--empty-state-description-size, 12px); line-height: 1.6; text-wrap: pretty; }
+
+.bar { height: 5px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.heading { height: 9px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.subheading { height: 7px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.spacer { height: 6px; }
+.row { display: flex; width: 100%; align-items: center; gap: 5px; }
+.bullet { width: 3px; height: 3px; flex: none; border-radius: 50%; background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.title { margin: 0; color: var(--muted); font-size: var(--empty-state-title-size, 13px); font-weight: 500; line-height: 1.5; }
+.description { max-width: 280px; margin: 6px 0 0; color: var(--faint); font-size: var(--empty-state-description-size, 12px); line-height: 1.6; text-wrap: pretty; }

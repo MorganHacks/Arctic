@@ -1,3 +1,6 @@
 {
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet . ../../libs"
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet . ../../libs",
+  "env": {
+    "LOGO_DEV_PUBLISHABLE_KEY": "pk_atKB3tWwSM2w8eL1PHxaug"
+  }
 }

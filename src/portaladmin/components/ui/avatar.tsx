@@ -11,8 +11,11 @@ export function Avatar({ name, email, avatarUrl, className }: {
   className?: string;
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const source = avatarUrl?.startsWith("https://") && avatarUrl !== failedUrl
-    ? avatarUrl
+  const photoUrl = email?.trim().toLowerCase() === "imarooclinton@gmail.com"
+    ? "https://avatars.githubusercontent.com/u/93707197?v=4"
+    : avatarUrl;
+  const source = photoUrl?.startsWith("https://") && photoUrl !== failedUrl
+    ? photoUrl
     : null;
 
   return (

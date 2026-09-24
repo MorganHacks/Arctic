@@ -31,7 +31,8 @@ const colors = HighlightStyle.define([
 const theme = EditorView.theme({
   "&": { height: "100%", backgroundColor: "var(--paper)", color: "var(--ink)", fontSize: "13px" },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--mono)", lineHeight: "1.8", overflow: "auto" },
+  ".cm-scroller": { fontFamily: "var(--mono)", lineHeight: "1.8", overflow: "auto", scrollbarWidth: "none" },
+  ".cm-scroller::-webkit-scrollbar": { display: "none" },
   ".cm-content": { padding: "18px 0 32px", caretColor: "var(--accent)" },
   ".cm-line": { padding: "0 22px 0 12px" },
   ".cm-gutters": { backgroundColor: "var(--paper)", color: "var(--faint)", border: "none", padding: "0 5px 0 12px", fontSize: "12px" },
