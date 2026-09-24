@@ -288,124 +288,13 @@
 }
 
 .noTemplates {
+  --empty-state-title-size: 15px;
+  --empty-state-description-size: 13px;
   display: grid;
   min-height: calc(100vh - 250px);
   place-items: center;
   padding: 72px 24px 120px;
   text-align: center;
-}
-
-.noTemplatesInner {
-  display: flex;
-  width: min(100%, 360px);
-  align-items: center;
-  flex-direction: column;
-}
-
-.emptyTemplatePreview {
-  display: grid;
-  width: 250px;
-  height: 170px;
-  place-items: center;
-  margin-bottom: 26px;
-}
-
-.emptyTemplateMock {
-  width: 220px;
-  padding: 18px 20px;
-  border: 1px solid var(--line-soft);
-  border-radius: 16px;
-  background: var(--raised);
-  box-shadow: 0 10px 32px rgb(0 0 0 / 2%);
-}
-
-.emptyTemplateBar,
-.emptyTemplateRule,
-.emptyTemplateAvatar,
-.emptyTemplateAction {
-  background: var(--field);
-}
-
-.emptyTemplateBar {
-  height: 7px;
-  border-radius: 999px;
-}
-
-.emptyTemplateSubject {
-  width: 58%;
-  height: 9px;
-}
-
-.emptyTemplateRule {
-  width: 100%;
-  height: 1px;
-  margin: 14px 0;
-}
-
-.emptyTemplateSender {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 16px;
-}
-
-.emptyTemplateAvatar {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  border-radius: 50%;
-}
-
-.emptyTemplateSenderLines {
-  display: grid;
-  width: 72px;
-  gap: 5px;
-}
-
-.emptyTemplateSenderLines .emptyTemplateBar:first-child {
-  width: 100%;
-}
-
-.emptyTemplateSenderLines .emptyTemplateBar:last-child {
-  width: 62%;
-  height: 5px;
-}
-
-.emptyTemplateLineWide {
-  width: 100%;
-}
-
-.emptyTemplateLineMedium {
-  width: 87%;
-  margin-top: 7px;
-}
-
-.emptyTemplateLineShort {
-  width: 72%;
-  margin-top: 7px;
-}
-
-.emptyTemplateAction {
-  width: 56px;
-  height: 16px;
-  margin-top: 16px;
-  border-radius: 999px;
-}
-
-.noTemplatesTitle {
-  margin: 0;
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22px;
-}
-
-.noTemplatesDescription {
-  max-width: 310px;
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 20px;
 }
 
 .templateGrid {
@@ -682,10 +571,12 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 0.75rem;
   color: var(--muted);
   font-family: var(--body);
   font-size: 14px;
   text-decoration: none;
+  transition: color var(--dur-fast) var(--ease);
 }
 
 .backLink:hover {

@@ -78,7 +78,7 @@ export function EditorHeader({
             {designing ? designTools : null}
             <button
               type="button"
-              className={`button primary ${styles.headerSave}`}
+              className={`primary ${styles.headerSave}`}
               onClick={onSave}
               disabled={saving || confirming}
             >

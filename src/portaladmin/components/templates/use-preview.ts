@@ -39,7 +39,7 @@ export function usePreview(
    * render exactly what the server already sent.
    */
   const [rendered, setRendered] = useState<Rendered | null>(
-    template
+    template?.html.trim()
       ? {
           subject: template.subject,
           html: template.html,
@@ -72,7 +72,7 @@ export function usePreview(
       return;
     }
 
-    if (template && subject === template.subject && body === (template.body ?? template.html)
+    if (template?.html.trim() && subject === template.subject && body === (template.body ?? template.html)
       && format === (template.body === null ? "html" : template.format)
       && previewText === (template.previewText ?? "")) {
       setRendered({ subject: template.subject, html: template.html, text: template.text, notes: template.notes });
