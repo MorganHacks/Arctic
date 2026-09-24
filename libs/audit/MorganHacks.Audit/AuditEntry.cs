@@ -80,4 +80,6 @@ public sealed record AuditQuery(
     Guid? Subject = null,
     Guid? Actor = null,
     long? Before = null,
-    int Limit = 100);
+    int Limit = 100,
+    string? Action = null,
+    DateTimeOffset? Since = null);

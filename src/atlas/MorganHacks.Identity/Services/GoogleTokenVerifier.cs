@@ -67,7 +67,9 @@ public sealed class GoogleTokenVerifier : IGoogleTokenVerifier
                 return null;
             }
 
-            return new GoogleIdentity(subject, email);
+            var name = result.Claims.TryGetValue("name", out var n) ? n?.ToString() : null;
+            var picture = result.Claims.TryGetValue("picture", out var p) ? p?.ToString() : null;
+            return new GoogleIdentity(subject, email, name, picture);
         }
         catch
         {

@@ -224,6 +224,51 @@ public class AuditTrailTests(IdentityDatabase db)
     }
 
     [Fact]
+    public async Task Event_and_date_filters_apply_before_cursor_pagination()
+    {
+        var admin = await SuperAdmin("event-date-filter");
+        var target = await Organizer("filtered-target");
+        var other = await Organizer("other-target");
+
+        await Send(HttpMethod.Post, $"/admin/people/{target}/grants", admin.Cookie,
+            new { permission = "applications.export" });
+        await Send(HttpMethod.Post, $"/admin/people/{target}/teams", admin.Cookie,
+            new { slug = "logistics" });
+        await Send(HttpMethod.Post, $"/admin/people/{target}/grants", admin.Cookie,
+            new { permission = "sponsors.view" });
+        await Send(HttpMethod.Post, $"/admin/people/{other}/grants", admin.Cookie,
+            new { permission = "sponsors.view" });
+
+        var path = $"/admin/audit?subject={target}&actor={admin.Id}&action=grant.added";
+        var entries = await Entries(path, admin.Cookie);
+        Assert.Equal(2, entries.Length);
+        Assert.All(entries, entry => Assert.Equal("grant.added", ActionOf(entry)));
+        Assert.All(entries, entry => Assert.Equal(admin.Id, ActorOf(entry)));
+        Assert.All(entries, entry => Assert.Equal(target, entry.GetProperty("subjectId").GetGuid()));
+
+        var firstPage = Assert.Single(await Entries(path + "&limit=1", admin.Cookie));
+        var cursor = firstPage.GetProperty("id").GetInt64();
+        var secondPage = Assert.Single(await Entries(path + $"&before={cursor}&limit=1", admin.Cookie));
+        Assert.True(secondPage.GetProperty("id").GetInt64() < cursor);
+
+        var since = Uri.EscapeDataString(firstPage.GetProperty("occurredAt").GetString()!);
+        var recent = Assert.Single(await Entries(path + $"&since={since}", admin.Cookie));
+        Assert.Equal(cursor, recent.GetProperty("id").GetInt64());
+        Assert.Empty(await Entries(path + $"&since={since}&before={cursor}", admin.Cookie));
+
+        var future = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(1).ToString("O"));
+        Assert.Empty(await Entries(path + $"&since={future}", admin.Cookie));
+    }
+
+    [Fact]
+    public async Task An_invalid_audit_date_is_rejected()
+    {
+        var admin = await SuperAdmin("invalid-date");
+        var response = await Send(HttpMethod.Get, "/admin/audit?since=invalid", admin.Cookie);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task The_trail_never_carries_an_address()
     {
         // Rule one of this whole system: person ids, never PII. The trail is

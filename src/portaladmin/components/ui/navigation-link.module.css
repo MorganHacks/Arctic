@@ -1,0 +1,49 @@
+.progress {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 200;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  animation: appear 120ms ease-out 180ms forwards;
+}
+
+.bar {
+  display: block;
+  width: 35%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: progress 1.4s ease-in-out infinite;
+}
+
+.label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes appear {
+  to { opacity: 1; }
+}
+
+@keyframes progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(386%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress {
+    animation: none;
+    opacity: 1;
+  }
+
+  .bar {
+    width: 100%;
+    animation: none;
+  }
+}

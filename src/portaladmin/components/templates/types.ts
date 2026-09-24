@@ -16,15 +16,19 @@
  * the compose screen.
  */
 export type TemplateKind = "transactional" | "broadcast";
+export type EditorStep = "settings" | "design" | "api";
 
 /** A row on the list. */
 export type TemplateRow = {
   key: string;
+  name: string;
   kind: TemplateKind;
   subject: string;
   version: number;
   /** Null on a template the API has no edit time for. */
   updatedAt: string | null;
+  hasDraft?: boolean;
+  previewHtml?: string | null;
 };
 
 /**
@@ -36,11 +40,17 @@ export type TemplateRow = {
  */
 export type Template = {
   key: string;
+  name: string;
+  settingsComplete: boolean;
+  designComplete?: boolean;
+  hasDraft?: boolean;
   kind: TemplateKind;
   subject: string;
+  previewText: string | null;
+  clickTracking: boolean;
 
   /** The source, in whichever language `format` names. */
-  body: string;
+  body: string | null;
   format: TemplateFormat;
 
   html: string;
@@ -89,9 +99,12 @@ export type Placeholder = { name: string; description: string | null };
 
 /** Everything a create or a save sends. */
 export type TemplateDraft = {
-  key: string;
+  key?: string;
+  name: string;
   kind: TemplateKind;
   subject: string;
+  previewText: string | null;
+  clickTracking: boolean;
   body: string;
   format: TemplateFormat;
   fromName: string | null;

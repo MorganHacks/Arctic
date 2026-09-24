@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using MorganHacks.Identity.Domain;
 using MorganHacks.Lark.Data.Data;
@@ -97,6 +98,15 @@ public static partial class TemplateEndpoints
         // shadow it.
         templates.MapPost("/preview", Preview)
                  .RequirePermission(Permission.EmailManageTemplates);
+        templates.MapPost("/settings", SaveSettings)
+                 .RequirePermission(Permission.EmailManageTemplates);
+        templates.MapPost("/import", ImportHtml)
+                 .RequirePermission(Permission.EmailManageTemplates);
+        templates.MapPost("/test", SendTest)
+                 .RequirePermission(Permission.EmailManageTemplates)
+                 .RequirePermission(Permission.EmailSendTemplated);
+        templates.MapDelete("/{key}/draft", DiscardDraft)
+                 .RequirePermission(Permission.EmailManageTemplates);
 
         // Ahead of GET /{key} for real this time: a literal segment beats a
         // route parameter in ASP.NET's matcher, so this would win wherever it
@@ -155,7 +165,10 @@ public static partial class TemplateEndpoints
         string? FromLocal,
         string? FromDomain,
         string? ReplyTo,
-        string? FromName);
+        string? FromName,
+        string? PreviewText = null,
+        bool ClickTracking = false,
+        string? Name = null);
 
     /// <summary>
     /// The body <see cref="Preview"/> takes.
@@ -173,7 +186,8 @@ public static partial class TemplateEndpoints
         string? Format,
         string? Body,
         string? Markdown,
-        Dictionary<string, string>? Values);
+        Dictionary<string, string>? Values,
+        string? PreviewText = null);
 
     // ------------------------------------------------------------- reading ---
 
@@ -181,14 +195,29 @@ public static partial class TemplateEndpoints
     /// Every template, by key. Requires <c>email.manage_templates</c>.
     /// </summary>
     /// <remarks>
-    /// Live versions only, and no bodies. This is the screen somebody opens to
-    /// pick which template to edit, and shipping every body to draw a list of
-    /// eight rows is several hundred kilobytes to decide which link to click.
+    /// Live versions only, and no bodies unless <c>includePreviews</c> is true.
+    /// This is the screen somebody opens to pick which template to edit, and
+    /// shipping every body to a caller that only needs names is several hundred
+    /// kilobytes to decide which link to click.
     /// </remarks>
-    private static async Task<IResult> List(TemplateCatalog templates, CancellationToken ct)
+    private static async Task<IResult> List(TemplateCatalog templates, TemplateDraftStore drafts,
+        HttpContext http, CancellationToken ct, bool includeDrafts = false, bool includePreviews = false)
     {
         var listed = await templates.ListAsync(ct);
-        return Results.Ok(new { templates = listed.Select(Summary) });
+        var live = listed.ToDictionary(template => template.Key);
+        var rows = live.ToDictionary(pair => pair.Key, pair => Summary(pair.Value, includePreviews));
+        if (includeDrafts)
+        {
+            foreach (var saved in await drafts.ListAsync(http.PersonId(), ct))
+            {
+                live.TryGetValue(saved.Content.Key, out var current);
+                var previewHtml = includePreviews
+                    ? string.IsNullOrWhiteSpace(saved.Content.Html) ? current?.Html : saved.Content.Html
+                    : null;
+                rows[saved.Content.Key] = DraftSummary(saved, previewHtml);
+            }
+        }
+        return Results.Ok(new { templates = rows.Values });
     }
 
     /// <summary>
@@ -211,8 +240,11 @@ public static partial class TemplateEndpoints
     /// </para>
     /// </remarks>
     private static async Task<IResult> One(
-        string key, TemplateCatalog templates, CancellationToken ct)
+        string key, TemplateCatalog templates, TemplateDraftStore drafts,
+        HttpContext http, CancellationToken ct, bool draft = false)
     {
+        if (draft && await drafts.FindAsync(key, http.PersonId(), ct) is { } working)
+            return Results.Ok(DraftDetail(working));
         var template = await templates.FindAsync(key, ct);
         return template is null
             ? Results.NotFound(new { error = NoSuchTemplate })
@@ -260,17 +292,14 @@ public static partial class TemplateEndpoints
         TemplateRequest? request,
         HttpContext http,
         TemplateCatalog templates,
+        TemplateDraftStore drafts,
         ILogger<TemplateRequest> log,
         CancellationToken ct)
     {
         var key = request?.Key?.Trim();
         if (string.IsNullOrEmpty(key))
         {
-            return Results.BadRequest(new
-            {
-                error = "A template needs a key. It is the name the rest of the "
-                        + "system finds it by, like magic_link.",
-            });
+            key = $"template_{Guid.NewGuid():N}";
         }
 
         if (key.Length > MaxKeyLength || !Key.IsMatch(key))
@@ -283,7 +312,8 @@ public static partial class TemplateEndpoints
             return Results.BadRequest(new { error = refusal });
         }
 
-        var written = await templates.CreateAsync(draft!, http.PersonId(), ct);
+        draft = draft! with { Name = draft!.Name ?? CampaignName(draft.Subject) };
+        var written = await templates.CreateAsync(draft, http.PersonId(), ct);
         if (written.Result == TemplateWriteResult.KeyTaken)
         {
             return Results.Conflict(new
@@ -292,6 +322,8 @@ public static partial class TemplateEndpoints
                         + "edit it, or choose another key.",
             });
         }
+
+        await drafts.DeleteAsync(key, http.PersonId(), ct);
 
         log.LogInformation(
             "A template was written. {actor} {template} {kind} {version} {event}",
@@ -323,6 +355,7 @@ public static partial class TemplateEndpoints
         TemplateRequest? request,
         HttpContext http,
         TemplateCatalog templates,
+        TemplateDraftStore drafts,
         ILogger<TemplateRequest> log,
         CancellationToken ct)
     {
@@ -341,7 +374,8 @@ public static partial class TemplateEndpoints
             return Results.BadRequest(new { error = refusal });
         }
 
-        var written = await templates.ReviseAsync(key, draft!, http.PersonId(), ct);
+        var working = await drafts.FindAsync(key, http.PersonId(), ct);
+        var written = await templates.ReviseAsync(key, draft!, http.PersonId(), ct, working?.BaseVersion);
 
         switch (written.Result)
         {
@@ -363,6 +397,7 @@ public static partial class TemplateEndpoints
                 });
 
             default:
+                await drafts.DeleteAsync(key, http.PersonId(), ct);
                 log.LogInformation(
                     "A template was written. {actor} {template} {kind} {version} {event}",
                     http.PersonId(), key, draft!.Kind, written.Template!.Version,
@@ -393,6 +428,11 @@ public static partial class TemplateEndpoints
     {
         var subject = request?.Subject ?? string.Empty;
 
+        if (request?.PreviewText?.Length > 200)
+        {
+            return Results.BadRequest(new { error = PreviewTooLong });
+        }
+
         if (!TryFormat(request?.Format, out var format, out var refusal))
         {
             return Results.BadRequest(new { error = refusal });
@@ -419,7 +459,7 @@ public static partial class TemplateEndpoints
         // and an editor that answers 400 until somebody has finished typing is
         // an editor that flashes an error at them the whole time they work.
         var rendered = TemplateRenderer.Render(
-            Draft(subject, format, source),
+            Draft(subject, format, source) with { PreviewText = request?.PreviewText },
             request?.Values ?? new Dictionary<string, string>(StringComparer.Ordinal));
 
         return Results.Ok(new
@@ -474,10 +514,25 @@ public static partial class TemplateEndpoints
     /// get stuck inside.
     /// </remarks>
     private static bool TryDraft(
-        TemplateRequest? request, string key, out TemplateDraft? draft, out string? refusal)
+        TemplateRequest? request, string key, out TemplateDraft? draft, out string? refusal,
+        bool settingsOnly = false)
     {
         draft = null;
         refusal = null;
+
+        var name = request?.Name?.Trim();
+        if (name is not null && (name.Length > 200 || name.Any(char.IsControl)))
+        {
+            refusal = "Use a campaign name of 200 characters or fewer, without control characters.";
+            return false;
+        }
+
+        var previewText = request?.PreviewText?.Trim();
+        if (previewText?.Length > 200)
+        {
+            refusal = PreviewTooLong;
+            return false;
+        }
 
         var kind = request?.Kind?.Trim();
         if (kind is not ("transactional" or "broadcast"))
@@ -501,6 +556,11 @@ public static partial class TemplateEndpoints
             return false;
         }
 
+        if (name is "")
+        {
+            name = CampaignName(subject);
+        }
+
         if (!TryFormat(request?.Format, out var format, out refusal))
         {
             return false;
@@ -511,7 +571,8 @@ public static partial class TemplateEndpoints
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(source))
+        source ??= "";
+        if (!settingsOnly && string.IsNullOrWhiteSpace(source))
         {
             refusal = NeedsABody(format);
             return false;
@@ -570,9 +631,9 @@ public static partial class TemplateEndpoints
         // rather than in the store so that a body which survives sanitisation
         // as nothing is refused before a NOT NULL column is asked to hold an
         // empty string.
-        var (html, text) = TemplateBody.Render(format, source);
+        var (html, text) = settingsOnly ? ("", "") : TemplateBody.Render(format, source);
 
-        if (html.Length == 0 || text.Length == 0)
+        if (!settingsOnly && (html.Length == 0 || text.Length == 0))
         {
             refusal = "That body renders to nothing an email can carry. Scripts, "
                       + "iframes and event handlers are removed, because no mail "
@@ -583,8 +644,15 @@ public static partial class TemplateEndpoints
 
         draft = new TemplateDraft(
             key, kind, subject, format, source, html, text, fromLocal, fromDomain,
-            replyTo, fromName);
+            replyTo, fromName, string.IsNullOrEmpty(previewText) ? null : previewText,
+            request?.ClickTracking ?? false, name);
         return true;
+    }
+
+    private static string CampaignName(string subject)
+    {
+        var name = new string(subject.Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
+        return name.Length > 0 ? name : "Untitled campaign";
     }
 
     /// <summary>
@@ -678,6 +746,8 @@ public static partial class TemplateEndpoints
 
     private const string NoSuchTemplate = "There is no template with that key.";
 
+    private const string PreviewTooLong = "Keep email preview text to 200 characters or fewer.";
+
     private const string BadKey =
         "A template key can only contain lowercase letters, numbers, underscores "
         + "and hyphens, has to start with a letter or a number, and has to be 64 "
@@ -730,15 +800,26 @@ public static partial class TemplateEndpoints
         + "Create a new template instead.",
         settled);
 
-    private static object Summary(TemplateVersion template) => new
-    {
-        key = template.Key,
-        kind = template.Kind,
-        subject = template.Subject,
-        format = template.Format,
-        version = template.Version,
-        updatedAt = template.UpdatedAt,
-    };
+    private sealed record TemplateSummary(
+        string Key,
+        string Name,
+        string Kind,
+        string Subject,
+        string Format,
+        int Version,
+        DateTimeOffset UpdatedAt,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? HasDraft = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PreviewHtml = null);
+
+    private static TemplateSummary Summary(TemplateVersion template, bool includePreview = false) => new(
+        template.Key,
+        template.Name ?? template.Key,
+        template.Kind,
+        template.Subject,
+        template.Format,
+        template.Version,
+        template.UpdatedAt,
+        PreviewHtml: includePreview ? template.Html : null);
 
     /// <summary>
     /// One template, in the shape an editor opens.
@@ -753,10 +834,16 @@ public static partial class TemplateEndpoints
     private static object Detail(TemplateVersion template) => new
     {
         key = template.Key,
+        name = template.Name ?? template.Key,
+        settingsComplete = !string.IsNullOrWhiteSpace(template.Name),
+        designComplete = true,
+        hasDraft = false,
         kind = template.Kind,
         subject = template.Subject,
         format = template.Format,
         body = template.Source,
+        previewText = template.PreviewText,
+        clickTracking = template.ClickTracking,
         markdown = template.Format == TemplateBody.Html ? null : template.Source,
         html = template.Html,
         text = template.Text,

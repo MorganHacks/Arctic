@@ -6,7 +6,8 @@ import type {
   TemplateDraft,
   TemplateFormat,
 } from "@/components/templates/types";
-import { createTemplate, renderPreview, updateTemplate } from "./api";
+import { createTemplate, discardSettingsDraft, fetchTemplateHtml, queueTemplateTest, renderPreview, saveSettingsDraft, updateTemplate } from "./api";
+import { validateDesign, validateSettings, type TemplateFieldErrors } from "@/components/templates/validation";
 
 /**
  * The two things somebody can do to a template, and the one that only looks.
@@ -27,8 +28,8 @@ import { createTemplate, renderPreview, updateTemplate } from "./api";
  * than showing the answer.
  */
 export type SaveResult =
-  | { ok: true; key: string; version: number | null; note: string | null }
-  | { ok: false; error: string };
+  | { ok: true; key: string; name: string | null; version: number | null; note: string | null }
+  | { ok: false; error: string; fieldErrors?: TemplateFieldErrors; conflict?: boolean };
 
 export type PreviewResult =
   | { ok: true; rendered: Rendered }
@@ -36,18 +37,6 @@ export type PreviewResult =
 
 /** Everything that must be there before the API is asked. */
 function checked(draft: TemplateDraft): string | null {
-  if (draft.key === "") {
-    return "A key is required.";
-  }
-
-  if (draft.subject === "") {
-    return "A subject is required.";
-  }
-
-  if (draft.body === "") {
-    return "A body is required.";
-  }
-
   if (draft.fromLocal === "" || draft.fromDomain === "") {
     return "A from address is required.";
   }
@@ -60,9 +49,12 @@ function trimmed(draft: TemplateDraft): TemplateDraft {
   const fromName = draft.fromName?.trim() ?? "";
 
   return {
-    key: draft.key.trim(),
+    key: draft.key?.trim() || undefined,
+    name: draft.name?.trim() ?? "",
     kind: draft.kind,
     subject: draft.subject.trim(),
+    previewText: draft.previewText?.trim() || null,
+    clickTracking: draft.clickTracking,
     // Not trimmed to the edge on purpose: leading whitespace can be a list's
     // indentation in Markdown or an indented tag in HTML, and the API is the
     // thing that decides what the body means.
@@ -77,9 +69,52 @@ function trimmed(draft: TemplateDraft): TemplateDraft {
   };
 }
 
-/** Writes a template that does not exist yet. */
+export async function saveTemplateSettings(draft: TemplateDraft): Promise<SaveResult> {
+  const body = trimmed(draft);
+  const fieldErrors = validateSettings(body);
+  if (Object.keys(fieldErrors).length) return { ok: false, error: "Check the fields below.", fieldErrors };
+  const saved = await saveSettingsDraft(body);
+  if (saved.ok) {
+    revalidatePath("/templates");
+    revalidatePath(`/templates/${saved.key}`);
+  }
+  return saved;
+}
+
+export async function autosaveTemplateDraft(draft: TemplateDraft): Promise<SaveResult> {
+  const body = trimmed(draft);
+  const fieldErrors = validateSettings(body);
+  if (Object.keys(fieldErrors).length) return { ok: false, error: "Check the fields below.", fieldErrors };
+  return saveSettingsDraft(body);
+}
+
+export async function discardTemplateDraft(key: string) {
+  const result = await discardSettingsDraft(key);
+  if (result.ok) {
+    revalidatePath("/templates");
+    revalidatePath(`/templates/${key}`);
+  }
+  return result;
+}
+
+export async function sendTemplateTest(draft: TemplateDraft, recipient: string, requestId: string) {
+  const body = trimmed(draft);
+  const errors = { ...validateSettings(body), ...validateDesign(body) };
+  const error = Object.values(errors)[0];
+  if (error) return { ok: false as const, error };
+  return queueTemplateTest(body, recipient, requestId);
+}
+
+export async function importTemplateHtml(url: string) {
+  return fetchTemplateHtml(url.trim());
+}
+
 export async function addTemplate(draft: TemplateDraft): Promise<SaveResult> {
   const body = trimmed(draft);
+  const fieldErrors = { ...validateSettings(body), ...validateDesign(body) };
+  if (Object.keys(fieldErrors).length) {
+    return { ok: false, error: "Check the highlighted fields.", fieldErrors };
+  }
 
   const wrong = checked(body);
   if (wrong) {
@@ -108,6 +143,10 @@ export async function editTemplate(
   draft: TemplateDraft,
 ): Promise<SaveResult> {
   const body = { ...trimmed(draft), key };
+  const fieldErrors = { ...validateSettings(body), ...validateDesign(body) };
+  if (Object.keys(fieldErrors).length) {
+    return { ok: false, error: "Check the highlighted fields.", fieldErrors };
+  }
 
   const wrong = checked(body);
   if (wrong) {
@@ -129,6 +168,7 @@ export async function previewBody(input: {
   subject: string;
   body: string;
   format: TemplateFormat;
+  previewText?: string;
 }): Promise<PreviewResult> {
   return renderPreview(input);
 }

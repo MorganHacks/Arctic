@@ -29,6 +29,7 @@ export function usePreview(
   subject: string,
   body: string,
   format: TemplateFormat,
+  previewText: string,
 ): Preview {
   /**
    * Seeded from what the API already rendered.
@@ -60,18 +61,30 @@ export function usePreview(
    */
   const attempt = useRef(0);
 
+
   useEffect(() => {
-    if (body.trim() === "" && subject.trim() === "") {
+    const mine = (attempt.current += 1);
+
+    if (body.trim() === "") {
       setRendered(null);
       setError(null);
+      setPending(false);
+      return;
+    }
+
+    if (template && subject === template.subject && body === (template.body ?? template.html)
+      && format === (template.body === null ? "html" : template.format)
+      && previewText === (template.previewText ?? "")) {
+      setRendered({ subject: template.subject, html: template.html, text: template.text, notes: template.notes });
+      setError(null);
+      setPending(false);
       return;
     }
 
     const timer = setTimeout(() => {
-      const mine = (attempt.current += 1);
       setPending(true);
 
-      void previewBody({ subject, body, format }).then((result) => {
+      void previewBody({ subject, body, format, previewText }).then((result) => {
         if (mine !== attempt.current) {
           return;
         }
@@ -84,11 +97,18 @@ export function usePreview(
         } else {
           setError(result.error);
         }
+      }).catch(() => {
+        if (mine !== attempt.current) return;
+        setPending(false);
+        setError("The preview could not be loaded. Try editing again.");
       });
     }, DEBOUNCE_MS);
 
-    return () => clearTimeout(timer);
-  }, [subject, body, format]);
+    return () => {
+      clearTimeout(timer);
+      attempt.current += 1;
+    };
+  }, [subject, body, format, previewText, template]);
 
   return { rendered, pending, error };
 }

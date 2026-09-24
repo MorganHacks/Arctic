@@ -1,16 +1,12 @@
-import { redirect } from "next/navigation";
-import { apiFetch, currentPerson, type Listed } from "@/lib/api";
+import { apiFetch, type Listed } from "@/lib/api";
+import { readPageData } from "@/lib/page-data";
 import { Shell } from "../shell";
 import { AddOrganizer } from "./add-organizer";
 import { PeopleTable } from "./people-table";
+import styles from "./members.module.css";
 
 export default async function People() {
-  const person = await currentPerson();
-  if (!person) {
-    redirect("/sign-in");
-  }
-
-  const response = await apiFetch("/admin/people");
+  const { person, data: response } = await readPageData(() => apiFetch("/admin/people"));
 
   // 403 is not an error to recover from, it is the answer. The gate is doing
   // its job, and saying which permission is missing is what makes it possible
@@ -39,22 +35,12 @@ export default async function People() {
 
   return (
     <Shell personId={person.personId}>
-      <h1>People</h1>
-      <p className="lede">
-        Everyone with an account. Organizers sign in with Google; hackers get a
-        link by email.
-      </p>
-
-      {/* Cosmetic. The API refuses the write whether or not this form
-          rendered, so hiding it is a courtesy to someone who cannot use it
-          rather than a control. */}
-      {person.permissions.has("people.manage_teams") ? <AddOrganizer /> : null}
-
-      {people.length === 0 ? (
-        <div className="empty">Nobody yet.</div>
-      ) : (
+      <div className={styles.page}>
         <PeopleTable people={people} />
-      )}
+
+        {/* The API independently enforces this permission on every write. */}
+        {person.permissions.has("people.manage_teams") ? <AddOrganizer /> : null}
+      </div>
     </Shell>
   );
 }

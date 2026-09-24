@@ -80,7 +80,7 @@ public static class GoogleEndpoints
             ["client_id"] = clientId,
             ["redirect_uri"] = RedirectUri(config),
             ["response_type"] = "code",
-            ["scope"] = "openid email",
+            ["scope"] = "openid email profile",
             ["state"] = state,
             ["code_challenge"] = challenge,
             ["code_challenge_method"] = "S256",

@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
 import { CampaignsTable } from "@/components/mail/campaigns-table";
 import { NewCampaign } from "@/components/mail/new-campaign";
 import { NoCampaigns } from "@/components/mail/no-campaigns";
-import { currentPerson } from "@/lib/api";
+import { readPageData } from "@/lib/page-data";
 import { Shell } from "../shell";
 import { newCampaign } from "./actions";
 import { readBroadcastTemplates, readCampaigns, readForms } from "./api";
@@ -16,19 +15,14 @@ import { readBroadcastTemplates, readCampaigns, readForms } from "./api";
  * behind a preview.
  */
 export default async function Mail() {
-  const person = await currentPerson();
-  if (!person) {
-    redirect("/sign-in");
-  }
-
   // None of the three needs another's answer. The forms are for the segment
   // picker and the templates for the dropdown beside it, and awaiting them in
   // turn would make the screen three times as slow to arrive for nothing.
-  const [campaigns, choices, templates] = await Promise.all([
+  const { person, data: [campaigns, choices, templates] } = await readPageData(() => Promise.all([
     readCampaigns(),
     readForms(),
     readBroadcastTemplates(),
-  ]);
+  ]));
   const { forms, events } = choices;
 
   if (!campaigns.ok) {

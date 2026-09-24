@@ -81,7 +81,7 @@ export function NewCampaign({
               </option>
               {templates.map((template) => (
                 <option key={template.key} value={template.key}>
-                  {template.key}
+                  {template.name || template.key}
                 </option>
               ))}
             </select>

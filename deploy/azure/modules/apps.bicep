@@ -356,6 +356,8 @@ resource lark 'Microsoft.App/containerApps@2024-03-01' = {
           env: concat([
             { name: 'ARCTIC_DB', secretRef: 'db-connection' }
             { name: 'DOTNET_ENVIRONMENT', value: environmentName == 'prod' ? 'Production' : 'Staging' }
+            { name: 'SendLoop__ClickTrackingBaseUrl', value: 'https://${harbor.properties.configuration.ingress.fqdn}/api' }
+            { name: 'SendLoop__UnsubscribeBaseUrl', value: 'https://${harbor.properties.configuration.ingress.fqdn}/api' }
           ], sentryEnv, awsEnv)
         }
       ]

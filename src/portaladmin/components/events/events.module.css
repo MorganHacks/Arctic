@@ -308,7 +308,7 @@
   display: grid;
   gap: 0.4rem;
   margin: 1.2rem 0 0.4rem;
-  max-width: 46rem;
+  min-width: 0;
 }
 .noticeWrite textarea {
   font: inherit;
@@ -345,7 +345,7 @@
   padding: 0;
   display: grid;
   gap: 1rem;
-  max-width: 46rem;
+  min-width: 0;
 }
 .notices li {
   padding-bottom: 1rem;

@@ -83,12 +83,16 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddAuditTrail();
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton<MessageQueue>();
+builder.Services.AddSingleton<LinkTrackingStore>();
+builder.Services.AddSingleton<UnsubscribeStore>();
 
 // The writing side of the same table. Separate from TemplateStore for the
 // reason CampaignStore is separate from MessageQueue: that one is a single
 // indexed read on the path of somebody signing in, and this one rewrites the
 // rows every queued message points at.
 builder.Services.AddSingleton<TemplateCatalog>();
+builder.Services.AddSingleton<TemplateDraftStore>();
+builder.Services.AddSingleton<TemplateTestQueue>();
 
 // The broadcast side of the same schema. Separate from MessageQueue on
 // purpose: one queues a single message on the path of somebody signing in,
@@ -200,6 +204,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 // default: every query on it is scoped to one person.
 builder.Services.AddScoped<IApplicantPortalStore, PostgresApplicantPortalStore>();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<TemplateHtmlImporter>()
+    .ConfigurePrimaryHttpMessageHandler(TemplateHtmlImporter.CreateHandler);
 builder.Services.AddHttpClient<ISnsSignatureVerifier, SnsSignatureVerifier>();
 builder.Services.AddMemoryCache();
 
@@ -353,6 +359,8 @@ app.MapFormsAdmin();
 app.MapFormResponses();
 app.MapApplicants();
 app.MapTemplates();
+app.MapEmailTracking();
+app.MapEmailUnsubscribe();
 app.MapCampaigns();
 app.MapSesWebhook();
 

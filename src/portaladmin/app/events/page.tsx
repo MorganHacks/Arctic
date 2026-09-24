@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { currentPerson } from "@/lib/api";
+import { readPageData } from "@/lib/page-data";
 import { EventsTable } from "@/components/events/events-table";
 import { NewEvent } from "@/components/events/new-event";
 import { NoEvents } from "@/components/events/no-events";
@@ -18,12 +18,7 @@ import { listEvents } from "./api";
  * exactly why staging has never had an event and somebody's laptop does.
  */
 export default async function Events() {
-  const person = await currentPerson();
-  if (!person) {
-    redirect("/sign-in");
-  }
-
-  const result = await listEvents();
+  const { person, data: result } = await readPageData(() => listEvents());
 
   if (result.state === "signed-out") {
     redirect("/sign-in");

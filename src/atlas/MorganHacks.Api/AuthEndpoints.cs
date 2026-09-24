@@ -401,6 +401,8 @@ public static class AuthEndpoints
         {
             personId = result.PersonId,
             email = me?.Email,
+            fullName = me?.FullName,
+            avatarUrl = me?.AvatarUrl,
 
             // Live ones only. A lapsed membership grants nothing, and listing
             // it here without its expiry — which this payload has no room for

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -134,6 +135,34 @@ public class GoogleCallbackTests(IdentityDatabase db)
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.Equal("/sign-in?error=unknown", response.Headers.Location?.ToString());
+    }
+
+    [Fact]
+    public async Task Signed_in_profile_is_exposed_consistently_to_the_console()
+    {
+        var email = Unique("profile");
+        var personId = await db.AddPersonAsync(email, "organizer");
+        await db.AddToTeamAsync(personId, "super-admin");
+        const string name = "Profile Example";
+        const string photo = "https://lh3.googleusercontent.com/a/profile-example";
+        using var app = AppReturning(new GoogleIdentity($"sub-{Guid.NewGuid():N}", email, name, photo));
+        var signIn = await SignInAsync(app);
+        var session = Cookie(signIn, "mh_session");
+        using var client = app.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        client.DefaultRequestHeaders.Add("Cookie", $"mh_session={session}");
+
+        foreach (var path in new[] { "/auth/me", $"/admin/people/{personId}", "/admin/people" })
+        {
+            var response = await client.GetAsync(path);
+            response.EnsureSuccessStatusCode();
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var profile = path == "/admin/people"
+                ? json.RootElement.GetProperty("people").EnumerateArray()
+                    .Single(p => p.GetProperty("id").GetGuid() == personId)
+                : json.RootElement;
+            Assert.Equal(name, profile.GetProperty("fullName").GetString());
+            Assert.Equal(photo, profile.GetProperty("avatarUrl").GetString());
+        }
     }
 
     [Fact]

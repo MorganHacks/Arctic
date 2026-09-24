@@ -1,6 +1,21 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { cookies } from "next/headers";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { SidebarStateProvider } from "./sidebar-state";
+import { ConsoleShell } from "./shell";
 import "./globals.css";
+
+const geist = Geist({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-sans",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-mono",
+});
 
 const inter = Inter({
   subsets: ["latin"],
@@ -15,12 +30,23 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const preference = (await cookies()).get("arctic_sidebar_collapsed")?.value;
+  const initialCollapsed = preference === "true" ? true : preference === "false" ? false : undefined;
+
   return (
-    <html lang="en" className={inter.variable}>
-      <body>{children}</body>
+    <html
+      lang="en"
+      data-theme="light"
+      className={`${geist.variable} ${geistMono.variable} ${inter.variable}`}
+    >
+      <body>
+        <SidebarStateProvider initialCollapsed={initialCollapsed}>
+          <ConsoleShell>{children}</ConsoleShell>
+        </SidebarStateProvider>
+      </body>
     </html>
   );
 }

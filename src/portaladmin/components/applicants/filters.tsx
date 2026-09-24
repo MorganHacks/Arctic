@@ -1,3 +1,4 @@
+import Form from "next/form";
 import Link from "next/link";
 import styles from "./applicants.module.css";
 import { STATUSES, figureClass, label } from "./status";
@@ -45,7 +46,7 @@ export function Filters({
 
   return (
     <>
-      <form method="get" action="/applicants" className={styles.controls}>
+      <Form action="/applicants" className={styles.controls}>
         {events.length > 1 ? (
           <div className={styles.field}>
             <label htmlFor="event">Event</label>
@@ -83,7 +84,7 @@ export function Filters({
             Clear
           </Link>
         ) : null}
-      </form>
+      </Form>
 
       {/*
         One strip of counts, doing two jobs at once.

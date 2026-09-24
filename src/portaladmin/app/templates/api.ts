@@ -33,8 +33,8 @@ export type OneRead =
  * screen repeats it and does not paraphrase it.
  */
 export type Saved =
-  | { ok: true; key: string; version: number | null; note: string | null }
-  | { ok: false; error: string };
+  | { ok: true; key: string; name: string | null; version: number | null; note: string | null }
+  | { ok: false; error: string; conflict?: boolean };
 
 export type PreviewRead =
   | { ok: true; rendered: Rendered }
@@ -100,10 +100,14 @@ function noted(body: Record<string, unknown>): string | null {
 }
 
 /** Every template, as the API orders them. */
-export async function readTemplates(): Promise<ListRead> {
+export async function readTemplates(includeDrafts = false, includePreviews = false): Promise<ListRead> {
   let response: Response;
+  const params = new URLSearchParams();
+  if (includeDrafts) params.set("includeDrafts", "true");
+  if (includePreviews) params.set("includePreviews", "true");
+  const query = params.size > 0 ? `?${params}` : "";
   try {
-    response = await apiFetch("/admin/templates");
+    response = await apiFetch(`/admin/templates${query}`);
   } catch {
     return { ok: false, status: 0, error: "The API could not be reached." };
   }
@@ -128,7 +132,7 @@ export async function readTemplates(): Promise<ListRead> {
 export async function readTemplate(key: string): Promise<OneRead> {
   let response: Response;
   try {
-    response = await apiFetch(`/admin/templates/${encodeURIComponent(key)}`);
+    response = await apiFetch(`/admin/templates/${encodeURIComponent(key)}?draft=true`);
   } catch {
     return { ok: false, status: 0, error: "The API could not be reached." };
   }
@@ -155,6 +159,45 @@ export async function readTemplate(key: string): Promise<OneRead> {
 /** Writes a template that did not exist. */
 export async function createTemplate(draft: TemplateDraft): Promise<Saved> {
   return write("POST", "/admin/templates", draft);
+}
+
+export async function saveSettingsDraft(draft: TemplateDraft): Promise<Saved> {
+  return write("POST", "/admin/templates/settings", draft);
+}
+
+export async function fetchTemplateHtml(url: string): Promise<{ ok: true; body: string } | { ok: false; error: string }> {
+  try {
+    const response = await apiFetch("/admin/templates/import", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }),
+    });
+    if (!response.ok) return { ok: false, error: await said(response, why(response.status, "The email could not be imported. Try another URL.")) };
+    const { body } = await response.json() as { body: string };
+    return { ok: true, body };
+  } catch {
+    return { ok: false, error: "The API could not be reached. Try again." };
+  }
+}
+
+export async function queueTemplateTest(draft: TemplateDraft, recipient: string, requestId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const response = await apiFetch("/admin/templates/test", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ draft, recipient, requestId }),
+    });
+    if (response.ok) return { ok: true };
+    const fallback = response.status === 403 ? "You need permission to send test emails. Ask an admin." : "The test email could not be queued. Try again.";
+    return { ok: false, error: await said(response, response.status === 401 ? "Your session has ended. Sign in again." : fallback) };
+  } catch {
+    return { ok: false, error: "The API could not be reached. Try again." };
+  }
+}
+
+export async function discardSettingsDraft(key: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const response = await apiFetch(`/admin/templates/${encodeURIComponent(key)}/draft`, { method: "DELETE" });
+    return response.ok ? { ok: true } : { ok: false, error: await said(response, why(response.status, "The draft could not be discarded.")) };
+  } catch {
+    return { ok: false, error: "The API could not be reached." };
+  }
 }
 
 /** Writes over a template that did. The API bumps the version. */
@@ -188,6 +231,7 @@ async function write(
   if (!response.ok) {
     return {
       ok: false,
+      conflict: response.status === 409,
       error: await said(response, why(response.status, "That did not work.")),
     };
   }
@@ -200,9 +244,15 @@ async function write(
     // simply not known here, which is better than inventing one.
   }
 
+  const key = typeof body.key === "string" ? body.key : draft.key;
+  if (!key) {
+    return { ok: false, error: "The template was saved, but its identifier could not be read. Reload the templates list to open it." };
+  }
+
   return {
     ok: true,
-    key: typeof body.key === "string" ? body.key : draft.key,
+    key,
+    name: typeof body.name === "string" ? body.name : null,
     version: typeof body.version === "number" ? body.version : null,
     note: noted(body),
   };
@@ -221,6 +271,7 @@ export async function renderPreview(input: {
   subject: string;
   body: string;
   format: TemplateFormat;
+  previewText?: string;
   values?: Record<string, string>;
 }): Promise<PreviewRead> {
   let response: Response;
@@ -376,8 +427,9 @@ const EXAMPLES =
 const examples = new Map<string, Template>();
 
 function exampleList(): TemplateRow[] {
-  return [...examples.values()].map(({ key, kind, subject, version }) => ({
+  return [...examples.values()].map(({ key, name, kind, subject, version }) => ({
     key,
+    name,
     kind,
     subject,
     version,
@@ -390,25 +442,31 @@ function exampleOne(key: string): Template | null {
 }
 
 function exampleWrite(draft: TemplateDraft): Saved {
-  const existing = examples.get(draft.key);
+  const key = draft.key || `template_${crypto.randomUUID().replaceAll("-", "")}`;
+  const existing = examples.get(key);
   const version = (existing?.version ?? 0) + 1;
   const { html, text } = examplePreview(draft);
+  const name = draft.name.trim() || draft.subject.trim();
 
-  examples.set(draft.key, {
+  examples.set(key, {
     ...draft,
+    key,
+    name,
+    settingsComplete: true,
     html,
     text,
     version,
     placeholders: placeholderNames(`${draft.subject}\n${draft.body}`),
   });
 
-  return { ok: true, key: draft.key, version, note: null };
+  return { ok: true, key, name, version, note: null };
 }
 
 function examplePreview(input: {
   subject: string;
   body: string;
   format: TemplateFormat;
+  previewText?: string | null;
 }): Rendered {
   const escaped = input.body
     .replaceAll("&", "&amp;")

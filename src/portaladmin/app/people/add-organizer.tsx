@@ -1,60 +1,83 @@
 "use client";
 
-import Link from "next/link";
-import { useActionState } from "react";
+import { NavigationLink as Link } from "@/components/ui/navigation-link";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { Add01Icon, Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
 import { addOrganizer } from "./actions";
+import styles from "./members.module.css";
 
-/**
- * Adds an address to the allowlist.
- *
- * There is no team picker here, and that is not an omission. A new organizer
- * lands with nothing until somebody decides what they should have, so the form
- * hands off to their page rather than pretending the decision can be made in
- * the same keystroke as the address.
- */
+/** Add the allowlisted address first; its detail page handles team access. */
 export function AddOrganizer() {
   const [state, action, pending] = useActionState(addOrganizer, {});
+  const [email, setEmail] = useState("");
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const resetCopy = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (resetCopy.current) clearTimeout(resetCopy.current);
+  }, []);
+
+  async function copySignInLink() {
+    if (resetCopy.current) clearTimeout(resetCopy.current);
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/sign-in`);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+    resetCopy.current = setTimeout(() => setCopyState("idle"), 4000);
+  }
 
   return (
-    <form action={action} className="panel">
-      <h2>Add an organizer</h2>
-      <p className="meta" style={{ marginBottom: "0.75rem" }}>
-        They sign in with this Google account. Being on the list grants nothing
-        on its own.
-      </p>
-
-      <div className="row">
-        <div className="grow">
-          <label htmlFor="email">Email</label>
+    <section className={styles.section} aria-labelledby="add-people-title">
+      <h2 id="add-people-title" className={styles.sectionTitle}>People</h2>
+      <div className={styles.divider} />
+      <form action={action}>
+        <h3 className={styles.subtitle}>Add an organizer</h3>
+        <div className={styles.inviteRow}>
+          <label htmlFor="organizer-email" className={styles.visuallyHidden}>Email</label>
           <input
-            id="email"
+            id="organizer-email"
             name="email"
             type="email"
             required
             autoComplete="off"
-            placeholder="name@morgan.edu"
-            style={{ width: "100%" }}
+            placeholder="name@morganhacks.com"
+            className={styles.emailInput}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            aria-describedby="organizer-help"
+            disabled={pending}
           />
+          <span className={styles.accountType}>Organizer</span>
+          <button type="submit" className={styles.inviteButton} disabled={pending || !email.trim()}>
+            <Icon icon={Add01Icon} size={16} />
+            <span>{pending ? "Adding…" : "Add"}</span>
+          </button>
         </div>
-        <button type="submit" className="button primary" disabled={pending}>
-          {pending ? "Adding…" : "Add"}
-        </button>
-      </div>
-
-      {state.error ? (
-        <p className="error" style={{ marginTop: "0.9rem", marginBottom: 0 }}>
-          {state.error}
-          {/* The one refusal with somewhere to go. Typing the address of a
-              revoked colleague back into this box is the obvious thing to try
-              and cannot work, so the refusal carries the page that can. */}
-          {state.personId ? (
-            <>
-              {" "}
-              <Link href={`/people/${state.personId}`}>Open their page</Link>
-            </>
-          ) : null}
+        <p id="organizer-help" className={styles.help}>
+          Use their Google account email. You’ll choose their teams next.
         </p>
+        {state.error ? (
+          <p className={styles.error} role="alert">
+            {state.error}
+            {state.personId ? (
+              <> <Link href={`/people/${state.personId}`}>Open their page</Link></>
+            ) : null}
+          </p>
+        ) : null}
+      </form>
+      <button type="button" className={styles.copyLink} onClick={copySignInLink}>
+        <Icon icon={copyState === "copied" ? Tick02Icon : Copy01Icon} size={15} />
+        <span>{copyState === "copied" ? "Link copied" : "Copy sign-in link"}</span>
+      </button>
+      <p className={styles.visuallyHidden} role="status">
+        {copyState === "copied" ? "Sign-in link copied to clipboard." : ""}
+      </p>
+      {copyState === "failed" ? (
+        <p className={styles.error} role="alert">Could not copy the link. Try again.</p>
       ) : null}
-    </form>
+    </section>
   );
 }

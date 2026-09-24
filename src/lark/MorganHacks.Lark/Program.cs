@@ -17,6 +17,8 @@ var connectionString =
 
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<MessageQueue>();
+builder.Services.AddSingleton<LinkTrackingStore>();
+builder.Services.AddSingleton<UnsubscribeStore>();
 builder.Services.AddSingleton<TemplateStore>();
 builder.Services.AddSingleton(TimeProvider.System);
 

@@ -1,0 +1,235 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.devices {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--field);
+}
+
+.device,
+.iconButton,
+.testButton {
+  position: relative;
+  flex-shrink: 0;
+  height: 40px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.device {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.device[aria-pressed="true"] {
+  background: var(--raised);
+  color: var(--accent);
+  box-shadow: 0 1px 4px #17181b0d;
+}
+
+.iconButton {
+  width: 40px;
+  background: var(--field);
+}
+
+.testButton {
+  gap: 8px;
+  margin-left: 2px;
+  padding: 0 14px;
+  background: var(--raised);
+  border-color: var(--line);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.device:hover,
+.iconButton:hover,
+.testButton:hover {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.testButton:hover {
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.device:focus-visible,
+.iconButton:focus-visible,
+.testButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.iconButton:disabled,
+.testButton:disabled {
+  opacity: 0.45;
+  border-color: transparent;
+  background: var(--field);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--line);
+}
+
+[data-tooltip].device::after,
+[data-tooltip].iconButton::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 9px);
+  left: 50%;
+  padding: 6px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--raised);
+  box-shadow: 0 4px 16px #17181b0d;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -3px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  padding: 28px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 24px;
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 0 24px 80px #17181b26;
+  font-family: var(--body);
+}
+
+.dialog::backdrop {
+  background: #181a2340;
+  backdrop-filter: blur(3px);
+}
+
+.dialogHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.dialogIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dialog h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.description,
+.hint {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hint {
+  margin-top: 9px;
+  font-size: 12px;
+}
+
+.dialog label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dialog input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  padding: 0 14px;
+  background: var(--field);
+  font: inherit;
+  font-size: 14px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.dialogActions button {
+  min-height: 40px;
+  padding-inline: 18px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.error {
+  color: var(--stop);
+  font-size: 13px;
+}
+
+.success {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@media (max-width: 72rem) {
+  .testButton span { display: none; }
+  .testButton { width: 40px; padding: 0; }
+}
+
+@media (max-width: 38rem) {
+  .divider { display: none; }
+  .toolbar { gap: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device,
+  .iconButton,
+  .testButton,
+  [data-tooltip]::after { transition: none; }
+}

@@ -291,7 +291,7 @@
   border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
   padding: 2rem 1.75rem;
-  max-width: 42rem;
+  width: 100%;
 }
 
 .nothing h2 {

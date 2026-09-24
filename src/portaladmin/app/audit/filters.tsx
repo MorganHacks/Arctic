@@ -1,53 +1,95 @@
-import Link from "next/link";
+import Form from "next/form";
+import { NavigationLink as Link } from "@/components/ui/navigation-link";
+import { ArrowDown01Icon, Clock01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
+import type { Listed } from "@/lib/api";
+import { displayName } from "@/lib/person-profile";
+import styles from "./audit.module.css";
 
-/**
- * The two questions the trail answers, as a form.
- *
- * A plain GET form rather than a client component with state. The filters
- * belong in the URL: an organizer reviewing somebody's access sends that link
- * to the admin who has to act on it, and a filter held in React state is one
- * that cannot be sent to anybody.
- *
- * `before` is deliberately not carried across a new search. Changing the
- * filter and keeping the old cursor would land the reader in the middle of a
- * different trail, at a position that means nothing.
- */
-export function Filters({ subject, actor }: { subject: string; actor: string }) {
+export const events: Record<string, string> = {
+  "organizer.added": "Organizer added",
+  "person.revoked": "Access revoked",
+  "person.restored": "Access restored",
+  "team.joined": "Team joined",
+  "team.left": "Team left",
+  "team.retimed": "Membership updated",
+  "grant.added": "Permission granted",
+  "grant.changed": "Permission updated",
+  "grant.removed": "Permission removed",
+  "baseline.added": "Team permission added",
+  "baseline.removed": "Team permission removed",
+};
+
+export const ranges: Record<string, string> = {
+  "": "All time",
+  "1": "Last 24 hours",
+  "7": "Last 7 days",
+  "30": "Last 30 days",
+  "90": "Last 90 days",
+};
+
+export function Filters({ subject, actor, action, range, people }: {
+  subject: string;
+  actor: string;
+  action: string;
+  range: string;
+  people: Listed[];
+}) {
+  const filtered = Boolean(subject || actor || action || range);
+
   return (
-    <form method="get" action="/audit" className="filters">
-      <div className="grow">
-        <label htmlFor="subject">Done to</label>
-        <input
-          id="subject"
-          name="subject"
-          type="search"
-          className="mono"
-          placeholder="Person id"
-          defaultValue={subject}
-          style={{ width: "100%" }}
-        />
+    <Form action="/audit" className={styles.filters}>
+      <div className={`${styles.selectField} ${styles.dateField}`}>
+        <Icon icon={Clock01Icon} size={18} />
+        <select name="range" aria-label="Date range" defaultValue={range}>
+          <option value="">All time</option>
+          {Object.entries(ranges).filter(([value]) => value).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+        <Icon icon={ArrowDown01Icon} size={14} className={styles.chevron} />
       </div>
-
-      <div className="grow">
-        <label htmlFor="actor">Done by</label>
-        <input
-          id="actor"
-          name="actor"
-          type="search"
-          className="mono"
-          placeholder="Person id"
-          defaultValue={actor}
-          style={{ width: "100%" }}
-        />
+      <div className={styles.filterGroup}>
+        <div className={styles.selectField}>
+          <select name="action" aria-label="Event type" defaultValue={action}>
+            <option value="">All events</option>
+            {action && !events[action] ? <option value={action}>{action}</option> : null}
+            {Object.entries(events).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <Icon icon={ArrowDown01Icon} size={14} className={styles.chevron} />
+        </div>
+        <PersonFilter name="subject" label="Affected person" placeholder="All people" value={subject} people={people} />
+        <PersonFilter name="actor" label="Actor" placeholder="All actors" value={actor} people={people} />
+        <button type="submit" className={styles.filterButton}>Apply</button>
+        {filtered ? <Link href="/audit" className={styles.clear}>Clear</Link> : null}
       </div>
+    </Form>
+  );
+}
 
-      <button type="submit">Filter</button>
+function PersonFilter({ name, label, placeholder, value, people }: {
+  name: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  people: Listed[];
+}) {
+  if (people.length === 0) {
+    return <input className={styles.personInput} type="search" name={name} aria-label={label} placeholder={`${label} ID`} defaultValue={value} />;
+  }
 
-      {subject || actor ? (
-        <Link href="/audit" className="button">
-          Clear
-        </Link>
-      ) : null}
-    </form>
+  return (
+    <div className={`${styles.selectField} ${styles.personField}`}>
+      <select name={name} aria-label={label} defaultValue={value}>
+        <option value="">{placeholder}</option>
+        {value && !people.some((person) => person.id === value) ? <option value={value}>{value}</option> : null}
+        {people.map((person) => (
+          <option key={person.id} value={person.id}>{displayName(person.fullName, person.email)}</option>
+        ))}
+      </select>
+      <Icon icon={ArrowDown01Icon} size={14} className={styles.chevron} />
+    </div>
   );
 }

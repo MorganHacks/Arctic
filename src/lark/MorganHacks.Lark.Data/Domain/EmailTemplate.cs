@@ -15,7 +15,9 @@ public sealed record EmailTemplate(
     string FromLocal,
     string FromDomain,
     string? ReplyTo,
-    string? FromName = null)
+    string? FromName = null,
+    string? PreviewText = null,
+    bool ClickTracking = false)
 {
     /// <summary>Transactional sends jump the queue; broadcasts wait behind them.</summary>
     public bool IsTransactional => Kind == "transactional";
@@ -67,7 +69,8 @@ public static partial class TemplateRenderer
     public static RenderedEmail Render(
         EmailTemplate template, IReadOnlyDictionary<string, string> values) =>
         new(Fill(template.Subject, values, escape: false),
-            Fill(template.BodyHtml, values, escape: true),
+            EmailPreheader.Add(Fill(template.BodyHtml, values, escape: true),
+                Fill(template.PreviewText ?? string.Empty, values, escape: false)),
             Fill(template.BodyText, values, escape: false));
 
     /// <summary>
@@ -90,7 +93,7 @@ public static partial class TemplateRenderer
     {
         var found = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var part in new[] { template.Subject, template.BodyHtml, template.BodyText })
+        foreach (var part in new[] { template.Subject, template.BodyHtml, template.BodyText, template.PreviewText ?? string.Empty })
         {
             foreach (Match match in Placeholder.Matches(part))
             {

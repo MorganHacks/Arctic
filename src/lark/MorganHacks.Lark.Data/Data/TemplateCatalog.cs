@@ -29,7 +29,7 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
     private const string Columns = """
         id, key, kind, subject, body_format, body_markdown, body_html, body_text,
         from_local, from_domain, reply_to, version, created_at, created_by,
-        from_name
+        from_name, preview_text, click_tracking, name
         """;
 
     /// <summary>
@@ -86,10 +86,10 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
             INSERT INTO notify.templates
                 (key, kind, subject, body_format, body_markdown, body_html,
                  body_text, from_local, from_domain, reply_to, version, created_by,
-                 from_name)
+                 from_name, preview_text, click_tracking, name)
             VALUES (@key, @kind, @subject, @format, @source, @html,
                     @text, @fromLocal, @fromDomain, @replyTo, 1, @author,
-                    @fromName)
+                    @fromName, @previewText, @clickTracking, @name)
             RETURNING {Columns}
             """;
 
@@ -128,7 +128,8 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
     /// </para>
     /// </remarks>
     public async Task<TemplateWrite> ReviseAsync(
-        string key, TemplateDraft draft, Guid author, CancellationToken ct = default)
+        string key, TemplateDraft draft, Guid author, CancellationToken ct = default,
+        int? expectedVersion = null)
     {
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
@@ -136,6 +137,7 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         var previousId = Guid.Empty;
         var settled = string.Empty;
         var version = 0;
+        string? previousName = null;
         var retired = false;
 
         await using (var retire = new NpgsqlCommand(
@@ -143,12 +145,14 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
             UPDATE notify.templates
                SET superseded_at = now()
              WHERE key = @key AND superseded_at IS NULL
-            RETURNING id, kind, version
+               AND (@expectedVersion IS NULL OR version = @expectedVersion)
+            RETURNING id, kind, version, name
             """,
             connection,
             transaction))
         {
             retire.Parameters.AddWithValue("key", key);
+            retire.Parameters.AddWithValue("expectedVersion", NpgsqlTypes.NpgsqlDbType.Integer, (object?)expectedVersion ?? DBNull.Value);
 
             await using var reader = await retire.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
@@ -157,6 +161,7 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
                 previousId = reader.GetGuid(0);
                 settled = reader.GetString(1);
                 version = reader.GetInt32(2);
+                previousName = reader.IsDBNull(3) ? null : reader.GetString(3);
             }
         }
 
@@ -186,16 +191,16 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
             INSERT INTO notify.templates
                 (key, kind, subject, body_format, body_markdown, body_html,
                  body_text, from_local, from_domain, reply_to, version, created_by,
-                 from_name)
+                 from_name, preview_text, click_tracking, name)
             VALUES (@key, @kind, @subject, @format, @source, @html,
                     @text, @fromLocal, @fromDomain, @replyTo, @version, @author,
-                    @fromName)
+                    @fromName, @previewText, @clickTracking, @name)
             RETURNING {Columns}
             """,
             connection,
             transaction);
 
-        Bind(insert, draft with { Key = key }, author);
+        Bind(insert, draft with { Key = key, Name = draft.Name ?? previousName }, author);
         insert.Parameters.AddWithValue("version", version + 1);
 
         TemplateVersion written;
@@ -240,6 +245,9 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         cmd.Parameters.AddWithValue("fromDomain", draft.FromDomain);
         cmd.Parameters.AddWithValue("replyTo", (object?)draft.ReplyTo ?? DBNull.Value);
         cmd.Parameters.AddWithValue("fromName", (object?)draft.FromName ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("previewText", (object?)draft.PreviewText ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("clickTracking", draft.ClickTracking);
+        cmd.Parameters.AddWithValue("name", (object?)draft.Name ?? DBNull.Value);
         cmd.Parameters.AddWithValue("author", author);
     }
 
@@ -258,5 +266,8 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         reader.GetInt32(11),
         reader.GetFieldValue<DateTimeOffset>(12),
         reader.IsDBNull(13) ? null : reader.GetGuid(13),
-        reader.IsDBNull(14) ? null : reader.GetString(14));
+        reader.IsDBNull(14) ? null : reader.GetString(14),
+        reader.IsDBNull(15) ? null : reader.GetString(15),
+        reader.GetBoolean(16),
+        reader.IsDBNull(17) ? null : reader.GetString(17));
 }

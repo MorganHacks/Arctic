@@ -17,12 +17,12 @@ export function NewForm({ eventId }: { eventId: string }) {
   const [state, action, pending] = useActionState(createForm, {});
 
   return (
-    <form action={action} className={styles.newForm}>
+    <form id="new-form" action={action} className={styles.newForm} aria-labelledby="new-form-title" tabIndex={-1}>
       {/* The caveat beside the heading rather than under it. It is the one
           thing worth knowing before pressing Create, and a line of small print
           on its own row is a line that gets scrolled past. */}
       <div className={styles.newFormHead}>
-        <h2>New form</h2>
+        <h2 id="new-form-title">New form</h2>
         <p className={styles.newFormNote}>
           An application form starts with a standard set of questions, and there
           can only be one per event.
