@@ -49,7 +49,7 @@ export function BestEmailsCard({ campaigns, error = false }: {
             <span className={styles.preview} aria-hidden="true">
               {campaign.previewHtml ? <span className={styles.previewDocument}><iframe title={`${campaign.name} preview`} tabIndex={-1}
                 loading="lazy" sandbox="" referrerPolicy="no-referrer"
-                srcDoc={emailDocument(campaign.previewHtml, "desktop")} /></span> : <Icon icon={Mail01Icon} size={22} />}
+                srcDoc={emailDocument(campaign.previewHtml)} /></span> : <Icon icon={Mail01Icon} size={22} />}
             </span>
             <span className={styles.campaignCopy}><strong>{campaign.name}</strong>
               <span className={styles.sent}><span className={styles.sentState}>Sent</span><time dateTime={campaign.sentAt}>{new Intl.DateTimeFormat("en-US", {

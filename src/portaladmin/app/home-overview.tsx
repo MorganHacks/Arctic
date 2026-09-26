@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { Select } from "@/components/ui/select";
 import { useRef, useState, useTransition, type KeyboardEvent, type ReactNode } from "react";
 import {
@@ -158,7 +160,7 @@ export function HomeOverview({ initial, email, bestEmails, greeting }: { initial
         </button>)}
         <span className={styles.scopeNote}>{refreshing ? "Updating…" : tab === "email" ? "All-time · across the workspace" : "All-time totals · selected event"}</span>
       </div>
-      {error ? <p className={styles.inlineError} role="alert">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
       {!failed && tab !== "email" ? <div className={styles.stats}>
         <Stat label="Total applicants" value={loading ? null : total} tone="sky"
           note={loading ? "Loading totals…" : `${numbers.format(count("incomplete"))} with unfinished applications`} />
@@ -170,7 +172,7 @@ export function HomeOverview({ initial, email, bestEmails, greeting }: { initial
       {tabs.map((item) => <div key={item.id} role="tabpanel" hidden={tab !== item.id}
         id={`dashboard-panel-${item.id}`} aria-labelledby={`dashboard-tab-${item.id}`}
         className={styles.panel} tabIndex={0}>
-        {tab === item.id ? failed && tab !== "email" ? <div className={styles.error} role="alert"><p>{failed}</p>
+        {tab === item.id ? failed && tab !== "email" ? <div className={styles.error}><ErrorToast message={failed} />
           <button type="button" onClick={() => load()} disabled={refreshing}>{refreshing ? "Trying again…" : "Try again"}</button>
         </div> : <>
           {tab === "overview" ? <><div className={styles.overviewGrid}>

@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useState, useTransition } from "react";
 import { Megaphone01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -87,7 +89,7 @@ export function Announcements({
         </p>
       )}
 
-      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
 
       {announcements.length === 0 ? canPost ? (
         <div className={styles.noticeEmpty}>

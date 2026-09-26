@@ -36,7 +36,6 @@
   min-height: 0;
   padding: var(--shell-top-inset);
   overflow-y: auto;
-  scrollbar-width: thin;
 }
 .brandRow {
   display: flex;

@@ -14,6 +14,35 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+test("custom background colors survive unsaved draft recovery", () => {
+  const original = draft();
+  const changed = { ...original, theme: { ...original.theme, background: "#dce9f2" } };
+  const saver = createDraftAutosave({ draft: original, revision: 0 }, async () => ok);
+  saver.update(changed, 1);
+  const recovered = readRecovery(encodeRecovery(saver.getSnapshot()));
+  assert.equal(recovered.draft.theme.background, "#dce9f2");
+  assert.notEqual(draftFingerprint(original), draftFingerprint(changed));
+});
+
+test("link cards are saved, recovered and removable without recovery conflicts", async () => {
+  const original = draft();
+  const linkCard = { label: "Morgan Hacks 2026", title: "Watch the recap", url: "https://example.com/recap", image: null };
+  const changed = { ...original, theme: { ...original.theme, linkCard } };
+  const calls = [];
+  const saver = createDraftAutosave({ draft: original, revision: 0 }, async value => { calls.push(value); return ok; });
+  saver.update(changed, 1);
+  const recovered = readRecovery(encodeRecovery(saver.getSnapshot()));
+  assert.deepEqual(recovered.draft.theme.linkCard, linkCard);
+  assert.equal(recoveryAction(recovered, original), "restore");
+  assert.equal(recoveryAction(recovered, changed), "saved");
+  await saver.flush();
+  assert.deepEqual(calls[0].theme.linkCard, linkCard);
+  assert.equal(draftFingerprint(original), draftFingerprint({ ...original, theme: { ...original.theme, linkCard: null } }));
+  for (const patch of [{ url: "javascript:alert(1)" }, { title: "" }, { image: "https://example.com/image.png" }]) {
+    assert.equal(readRecovery(JSON.stringify({ ...recovered, draft: { ...changed, theme: { ...changed.theme, linkCard: { ...linkCard, ...patch } } } })), null);
+  }
+});
+
 test("MLH badge changes are saved and recovered independently of theme styling", async () => {
   const original = draft();
   const changed = { ...original, theme: { ...original.theme, showMlhBadge: true } };
@@ -27,6 +56,23 @@ test("MLH badge changes are saved and recovered independently of theme styling",
   assert.equal(calls.length, 1);
   assert.equal(calls[0].theme.showMlhBadge, true);
   assert.equal(saver.getSnapshot().status, "saved");
+});
+
+test("MLH badge colors survive autosave and recovery without breaking older drafts", async () => {
+  const original = draft();
+  assert.equal(draftFingerprint(original), draftFingerprint({ ...original, theme: { ...original.theme, mlhBadgeColor: "auto" } }));
+  assert.equal(draftFingerprint(original), draftFingerprint({ ...original, theme: { ...original.theme, mlhBadgeColor: "white" } }));
+  const calls = [];
+  const saver = createDraftAutosave({ draft: original, revision: 0 }, async next => { calls.push(next); return ok; });
+  const changed = { ...original, theme: { ...original.theme, showMlhBadge: true, mlhBadgeColor: "blue" } };
+  saver.update(changed, 1);
+  const recovered = readRecovery(encodeRecovery(saver.getSnapshot()));
+  assert.equal(recovered.draft.theme.mlhBadgeColor, "blue");
+  assert.equal(recoveryAction(recovered, original), "restore");
+  assert.equal(recoveryAction(recovered, changed), "saved");
+  assert.equal(readRecovery(JSON.stringify({ ...recovered, draft: { ...changed, theme: { ...changed.theme, mlhBadgeColor: "purple" } } })), null);
+  await saver.flush();
+  assert.equal(calls[0].theme.mlhBadgeColor, "blue");
 });
 
 test("slow saves serialize later edits and never mark an older revision as saved", async () => {

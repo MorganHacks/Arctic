@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useRef, useState } from "react";
 import type { Field } from "@/lib/api";
 
@@ -225,11 +227,7 @@ export function ResumeField({
         </p>
       ) : null}
 
-      {state.phase === "failed" ? (
-        <strong className="wrong-note" role="alert">
-          {state.message}
-        </strong>
-      ) : null}
+      <ErrorToast title="File could not be uploaded" message={state.phase === "failed" ? state.message : null} />
     </div>
   );
 }

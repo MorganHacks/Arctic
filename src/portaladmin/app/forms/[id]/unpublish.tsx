@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useId, useRef, useState } from "react";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -56,7 +58,7 @@ export function Unpublish({ formId, formName, onClose, onDone }: {
         <strong>{formName}</strong> will stop accepting responses. Existing responses and your draft
         will be kept. You can publish it again anytime.
       </p>
-      {notice ? <p role="alert" className={styles.error}>{notice}</p> : null}
+      <ErrorToast message={notice} />
       <div className={styles.dialogActions}>
         <button ref={cancel} type="button" className={styles.secondaryButton} disabled={working}
           onClick={() => dialog.current?.close()}>Cancel</button>

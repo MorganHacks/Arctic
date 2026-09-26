@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Cancel01Icon, MailSend01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -55,7 +57,7 @@ export function TestEmailDialog({ onClose, toRequest, defaultRecipient }: {
       <input ref={recipientInput} id="test-email-recipient" type="email" autoComplete="email" required maxLength={320}
         placeholder="you@example.com" value={recipient} disabled={sending} onChange={(event) => { setRecipient(event.target.value); setError(null); }} />
       <p className={styles.hint}>Unfilled custom fields stay visible in the test email.</p>
-      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
       <div className={styles.dialogActions}>
         <button type="button" disabled={sending} onClick={() => dialog.current?.close()}>Cancel</button>
         <button type="submit" className="button primary" disabled={sending}>{sending ? "Queueing…" : "Send test email"}</button>

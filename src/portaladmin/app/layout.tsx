@@ -1,3 +1,4 @@
+import { ErrorToasts } from "@/components/ui/error-toast";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
@@ -46,6 +47,7 @@ export default async function RootLayout({
         <SidebarStateProvider initialCollapsed={initialCollapsed}>
           <ConsoleShell>{children}</ConsoleShell>
         </SidebarStateProvider>
+        <ErrorToasts />
       </body>
     </html>
   );

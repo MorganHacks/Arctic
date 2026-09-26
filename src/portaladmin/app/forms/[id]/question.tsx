@@ -13,7 +13,6 @@ import {
   PageBreakIcon,
   Plus,
   Trash,
-  Warning,
 } from "./icons";
 
 /**
@@ -379,7 +378,6 @@ export function Question({
         </div>
       ) : null}
 
-      <Problems problems={problems} />
     </li>
   );
 }
@@ -492,34 +490,8 @@ function PageBreak({
             onChange({ help: event.target.value === "" ? null : event.target.value })
           }
         />
-        <Problems problems={problems} />
-      </div>
+        </div>
     </li>
-  );
-}
-
-/**
- * What the API said is wrong with this one, under it.
- *
- * Beside the question rather than gathered at the top of the screen. Publishing
- * reports every problem at once, and a list of eleven complaints above a form
- * of twenty questions is eleven searches — the complaint has to be where the
- * thing it is about is.
- */
-function Problems({ problems }: { problems: string[] }) {
-  if (problems.length === 0) {
-    return null;
-  }
-
-  return (
-    <ul className={styles.problems}>
-      {problems.map((problem) => (
-        <li key={problem}>
-          <Warning />
-          {problem}
-        </li>
-      ))}
-    </ul>
   );
 }
 

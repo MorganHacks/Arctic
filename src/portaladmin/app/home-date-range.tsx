@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown01Icon, Calendar03Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -102,7 +104,7 @@ export function CustomDateRange({ value, min, max, selected, disabled, onApply }
             aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}
             onInput={(event) => { const to = event.currentTarget.value; setDraft((current) => ({ ...current, to })); }} />
         </div>
-        {error ? <p id={`${id}-error`} className={styles.error} role="status">{error}</p> : null}
+        {error ? <ErrorToast descriptionId={`${id}-error`} message={error} /> : null}
         <div className={styles.actions}>
           <button type="button" onClick={close}>Cancel</button>
           <button type="submit" className={styles.apply} disabled={Boolean(error)}>Apply</button>

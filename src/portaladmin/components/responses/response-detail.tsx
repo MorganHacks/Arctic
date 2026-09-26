@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useRef } from "react";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -78,7 +80,7 @@ export function ResponseDetail({
 
         <div className={styles.panelBody}>
         {loading ? <div className={styles.loadingDetail} role="status" aria-label="Loading response"><span /><span /><span /></div> : null}
-        {error ? <p className={styles.failed}>{error}</p> : null}
+        <ErrorToast message={error} />
 
         {item && parts ? (
           <>

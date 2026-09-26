@@ -323,9 +323,13 @@ public static class AdminFormEndpoints
             return Results.BadRequest(new { error = "The draft's questions are required." });
         }
 
+        if (request.Theme?.LinkCard is not null && !request.Theme.LinkCard.IsValid())
+        {
+            return Results.BadRequest(new { error = "Add a headline, a valid http or https link, and a supported thumbnail for the link card." });
+        }
         if (request.Theme is not null && !request.Theme.IsValid())
         {
-            return Results.BadRequest(new { error = "Choose a valid theme color, background, font, text size, and header image." });
+            return Results.BadRequest(new { error = "Choose a valid theme color, background, font, text size, header image, and MLH badge style." });
         }
 
         var form = await Find(forms, id, ct);

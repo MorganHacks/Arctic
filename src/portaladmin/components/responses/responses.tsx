@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useCallback, useRef, useState } from "react";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -170,7 +172,7 @@ export function Responses({
           <span className={styles.note} role="status">
             Showing <strong>{items.length.toLocaleString("en-US")}</strong> of {Math.max(responseCount, items.length).toLocaleString("en-US")} responses
           </span>
-          {failed ? <span className={styles.failed} role="alert">{failed}</span> : null}
+          <ErrorToast message={failed} />
           {cursor !== null ? (
             <button type="button" className={styles.moreButton} onClick={more} disabled={loading}>
               {loading ? "Loading…" : "Load more"}

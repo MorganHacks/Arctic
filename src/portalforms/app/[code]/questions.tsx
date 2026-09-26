@@ -1,5 +1,7 @@
 "use client";
 
+import { summarizeErrors } from "../../../../libs/ui/error-notifications";
+import { ErrorToast } from "@/components/ui/error-toast";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Field, Prefill } from "@/lib/api";
@@ -12,39 +14,16 @@ import {
   type Answers,
   type Problems,
 } from "./answers";
-import { Question, fieldId } from "./field";
+import { Question } from "./field";
 import { plan } from "./steps";
 
-/**
- * A form long enough that somebody wants to know how far through it they are.
- *
- * Below this the count is furniture: a five-question survey is a screen and a
- * half, and telling somebody they are two questions into it says nothing they
- * cannot see.
- *
- * Only consulted for a form that is one step. A form in steps always says which
- * step it is on, however short it is, because the questions somebody cannot see
- * are the ones they most need counting.
- */
-const LONG_FORM = 8;
-
-/**
- * Where focus goes after something moves.
- *
- * The counter is what makes a repeat land: the summary has to take focus on
- * every refused attempt, including the second one that fails in exactly the
- * same way. Watching the problems themselves would move focus on the first
- * refusal and then sit silent while somebody pressed the button again and
- * nothing appeared to happen.
- */
-type Landing = { at: "summary" | "step"; n: number };
+type Landing = { at: "error" | "step"; n: number };
 
 /**
  * The form, and everything that happens when somebody moves through it.
  *
  * The checks in here are a courtesy, not the rule. They save a round trip and
- * put each message next to the box it belongs to, which on a phone is the
- * difference between fixing one field and scrolling a long page hunting for it.
+ * move focus to the first answer that needs attention.
  * The API validates the same things against the published version, and that is
  * the check that decides anything — this file is deleteable in the sense that
  * removing it would make the form worse, not unsafe.
@@ -100,7 +79,6 @@ export function Questions({
 }) {
   const router = useRouter();
   const form = useRef<HTMLFormElement>(null);
-  const summary = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
   /*
@@ -124,7 +102,7 @@ export function Questions({
    */
   const attempt = useRef<string | null>(null);
 
-  const { steps, ordinals, questions } = useMemo(() => plan(fields), [fields]);
+  const { steps, ordinals } = useMemo(() => plan(fields), [fields]);
 
   const locked = useMemo(() => new Set(fixed ?? []), [fixed]);
 
@@ -224,10 +202,6 @@ export function Questions({
    * neither of them meant. So the handlers say where it goes and this puts it
    * there.
    *
-   * Focus on the problems rather than on the first of them: six complaints and
-   * a cursor in the first box reads as one complaint, and the list is the only
-   * thing that says how much is left to fix.
-   *
    * Focus on the heading when a step changes, which is also how the change is
    * announced. The heading reads "Step 2 of 4" and then the step's name, so a
    * screen reader says where somebody now is without a live region talking over
@@ -239,13 +213,15 @@ export function Questions({
       return;
     }
 
-    if (landing.at === "summary") {
-      summary.current?.focus();
+    if (landing.at === "error") {
+      const first = listed[0];
+      if (first) goTo(first.key);
       return;
     }
 
     // The top of the page, not the top of the step: the form's name is two
     // lines above and is worth seeing again after everything under it changed.
+    form.current?.scrollTo({ top: 0, behavior: still() ? "auto" : "smooth" });
     window.scrollTo({ top: 0, behavior: still() ? "auto" : "smooth" });
     heading.current?.focus({ preventScroll: true });
   }, [landing]);
@@ -354,7 +330,7 @@ export function Questions({
     setBanner(null);
 
     if (Object.keys(found).length > 0) {
-      land("summary");
+      land("error");
       return;
     }
 
@@ -418,7 +394,7 @@ export function Questions({
         setAt(earliest);
       }
 
-      land("summary");
+      land("error");
       return;
     }
 
@@ -493,24 +469,20 @@ export function Questions({
         setAt(earliest);
       }
 
-      // The banner and the list are not alternatives. A refusal can carry both
-      // a sentence about the whole submission and a complaint about one
-      // question, and dropping either leaves somebody without the half that
-      // tells them what to do.
       const keyed = Object.keys(returned).length > 0;
       setBanner(keyed && !loose ? null : (body.error ?? "That did not go through. Try again."));
 
-      land("summary");
+      land("error");
     } catch {
       setBanner("We could not reach the server. Check your connection and try again.");
-      land("summary");
+      land("error");
     } finally {
       setSending(false);
     }
   }
 
   return (
-    <form ref={form} onSubmit={submit} noValidate aria-busy={sending || undefined}>
+    <form className="response-form" ref={form} onSubmit={submit} noValidate aria-busy={sending || undefined}>
       {stepped ? (
         <Step
           heading={heading}
@@ -518,48 +490,13 @@ export function Questions({
           at={at}
           total={steps.length}
         />
-      ) : questions >= LONG_FORM ? (
-        <Progress done={done} total={questions} />
       ) : null}
 
-      {/*
-       * One place that says everything that is wrong, at the top, taking focus
-       * when a step or a submission is refused. It is the pattern a screen
-       * reader user expects and the only one that answers "how much is left" —
-       * a cursor dropped in the first bad box answers "what is wrong here" and
-       * nothing else.
-       */}
-      <div
-        className="summary"
-        ref={summary}
-        tabIndex={-1}
-        role="alert"
-        aria-live="assertive"
-      >
-        {banner ? <p className="summary-lede">{banner}</p> : null}
-
-        {listed.length > 0 ? (
-          <>
-            <p className="summary-lede">Some answers need another look.</p>
-            <ul>
-              {listed.map((field) => (
-                <li key={field.key}>
-                  <a
-                    href={`#${fieldId(field.key)}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      goTo(field.key);
-                    }}
-                  >
-                    {shorten(field.label)}
-                  </a>{" "}
-                  — {problems[field.key]}
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-      </div>
+      <ErrorToast
+        title={listed.length ? "Check your answers" : "Could not submit"}
+        revision={landing?.at === "error" ? landing.n : 0}
+        message={summarizeErrors([banner ?? "", ...listed.map(field => `${shorten(field.label)}: ${problems[field.key]}`)])}
+      />
 
       {/*
        * Only this step's questions are mounted. The answers are not in here —
@@ -579,6 +516,10 @@ export function Questions({
        * one fact rather than as a set of them.
        */}
       <div className="step-body" data-from={from ?? undefined} key={at}>
+        {!stepped && step.section ? <div className="section-intro">
+          <h2>{step.section.label}</h2>
+          {step.section.help ? <p>{step.section.help}</p> : null}
+        </div> : null}
         {step.fields.map((field) => (
           <Question
             key={field.key}
@@ -595,22 +536,24 @@ export function Questions({
       </div>
 
       <div className="submit">
-        {at > 0 ? (
-          <button type="button" className="back" onClick={back}>
-            Back
+        <Progress page={at + 1} total={steps.length} />
+        <div className="submit-actions">
+          {at > 0 ? (
+            <button type="button" className="back" onClick={back}>
+              Back
+            </button>
+          ) : null}
+
+          <button type="submit" disabled={sending || busy}>
+            {busy
+              ? "Waiting for your file…"
+              : sending
+                ? "Sending…"
+                : last
+                  ? "Submit"
+                  : "Next"}
           </button>
-        ) : null}
-
-        <button type="submit" disabled={sending || busy}>
-          {busy
-            ? "Waiting for your file…"
-            : sending
-              ? "Sending…"
-              : last
-                ? "Submit"
-                : "Next"}
-        </button>
-
+        </div>
         <Footnote busy={busy} last={last} />
       </div>
     </form>
@@ -642,12 +585,6 @@ function Footnote({ busy, last }: { busy: boolean; last: boolean }) {
 /**
  * Which step somebody is on, and what it is called.
  *
- * This is the progress indicator for a form in steps — there is not a second
- * one. The `n of m answered` count below is for a form that is one page, where
- * every question is on screen and the useful number is how many of them are
- * done. Once the form is in steps the useful number is which step, and running
- * both would put two different measures of "how far through" side by side.
- *
  * The count lives inside the heading rather than beside it, and the heading is
  * what takes focus when a step changes. That makes one announcement — "Step 2
  * of 4, About you" — out of what would otherwise be a live region competing
@@ -671,21 +608,6 @@ function Step({
 }) {
   return (
     <div className="step">
-      {/*
-       * One segment per step, not a bar filled to a fraction.
-       *
-       * A form in steps has a small whole number of them, and the question
-       * somebody standing on a pavement is asking is "how many more screens is
-       * this" — which is answered by counting segments and not by judging a
-       * proportion. Hidden from a screen reader because the heading below says
-       * the same thing in words, and says it better.
-       */}
-      <div className="step-track" aria-hidden="true">
-        {Array.from({ length: total }, (_, n) => (
-          <span key={n} className={n <= at ? "on" : undefined} />
-        ))}
-      </div>
-
       <h2 className="step-title" ref={heading} tabIndex={-1}>
         <span className="step-of">
           Step {at + 1} of {total}
@@ -706,28 +628,13 @@ function Step({
   );
 }
 
-/**
- * How far through a one-page form somebody is.
- *
- * A count and a bar, not a percentage on its own. On a thirty-question form the
- * useful number is how many questions are left, and only a count answers that.
- *
- * The bar is decoration over the number and is hidden from a screen reader
- * accordingly. The count is not a live region: it changes on every keystroke,
- * and announcing it would talk over the box somebody is typing into.
- */
-function Progress({ done, total }: { done: number; total: number }) {
+function Progress({ page, total }: { page: number; total: number }) {
   return (
-    <div className="tally">
-      <p className="tally-count">
-        {done} of {total} answered
-      </p>
-      <div className="tally-track" aria-hidden="true">
-        <div
-          className="tally-bar"
-          style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
-        />
+    <div className="page-progress">
+      <div className="page-progress-track" aria-hidden="true">
+        <span style={{ width: `${(page / total) * 100}%` }} />
       </div>
+      <p>Page {page} of {total}</p>
     </div>
   );
 }

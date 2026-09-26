@@ -10,7 +10,7 @@
 .toolbar button:disabled { opacity: .45; cursor: default; }
 .toolbar button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .divider { width: 1px; height: 19px; background: rgb(255 255 255 / 24%); }
-.picker { position: fixed; inset: auto; margin: 0; width: 408px; max-width: calc(100vw - 24px); padding: 16px 12px 12px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; border: 1px solid var(--line); border-radius: 20px; background: var(--paper); color: var(--ink); transform: translateX(-50%); box-shadow: 0 18px 56px color-mix(in srgb, var(--ink) 12%, transparent), 0 3px 10px color-mix(in srgb, var(--ink) 4%, transparent); }
+.picker { position: fixed; inset: auto; margin: 0; width: 408px; max-width: calc(100vw - 24px); padding: 16px 12px 12px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 20px; background: var(--paper); color: var(--ink); transform: translateX(-50%); box-shadow: 0 18px 56px color-mix(in srgb, var(--ink) 12%, transparent), 0 3px 10px color-mix(in srgb, var(--ink) 4%, transparent); }
 .heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 2px 6px 16px; margin-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
 .heading h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.02em; line-height: 1.4; }
 .heading p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }

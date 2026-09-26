@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { NavigationLink as Link } from "@/components/ui/navigation-link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Add01Icon, Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
@@ -59,14 +61,8 @@ export function AddOrganizer() {
         <p id="organizer-help" className={styles.help}>
           Use their Google account email. You’ll choose their teams next.
         </p>
-        {state.error ? (
-          <p className={styles.error} role="alert">
-            {state.error}
-            {state.personId ? (
-              <> <Link href={`/people/${state.personId}`}>Open their page</Link></>
-            ) : null}
-          </p>
-        ) : null}
+        <ErrorToast message={state.error} revision={state} />
+        {state.error && state.personId ? <Link href={`/people/${state.personId}`}>Open their page</Link> : null}
       </form>
       <button type="button" className={styles.copyLink} onClick={copySignInLink}>
         <Icon icon={copyState === "copied" ? Tick02Icon : Copy01Icon} size={15} />
@@ -75,9 +71,7 @@ export function AddOrganizer() {
       <p className={styles.visuallyHidden} role="status">
         {copyState === "copied" ? "Sign-in link copied to clipboard." : ""}
       </p>
-      {copyState === "failed" ? (
-        <p className={styles.error} role="alert">Could not copy the link. Try again.</p>
-      ) : null}
+      <ErrorToast message={copyState === "failed" ? "Could not copy the link. Try again." : null} />
     </section>
   );
 }

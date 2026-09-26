@@ -1,8 +1,12 @@
 "use client";
 
+import { summarizeErrors } from "../../../../../libs/ui/error-notifications";
+import { ErrorDescription, ErrorToast } from "@/components/ui/error-toast";
+import { FormLinkCard } from "@/components/ui/form-link-card";
+import type { FormLinkCard as Card } from "../../../../../libs/ui/form-theme";
 import { useId, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { Select } from "@/components/ui/select";
-import { AlertCircleIcon, CheckmarkCircle02Icon, Link04Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { CheckmarkCircle02Icon, Link04Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/empty-state";
 import { publicLink, useCopy } from "@/components/formslist/share-link";
@@ -22,17 +26,17 @@ export function PreviewActions({ code, published }: { code: string; published: b
         <Icon icon={state === "copied" ? Tick02Icon : Link04Icon} size={16} />
         {state === "copied" ? "Link copied" : "Copy responder link"}
       </button>
-      <span className={styles.dragInstructions} role="status">
-        {state === "copied" ? "Link copied." : state === "failed" ? `Could not copy. The link is ${publicLink(code)}` : null}
-      </span>
+      <span className={styles.dragInstructions} role="status">{state === "copied" ? "Link copied." : null}</span>
+      <ErrorToast message={state === "failed" ? `Could not copy. The link is ${publicLink(code)}` : null} />
     </div>
   );
 }
 
-export function Preview({ fields, formName, headerImage }: {
+export function Preview({ fields, formName, headerImage, linkCard }: {
   fields: FormField[];
   formName: string;
   headerImage?: string | null;
+  linkCard?: Card | null;
 }) {
   const formId = useId();
   const panel = useRef<HTMLElement>(null);
@@ -92,7 +96,7 @@ export function Preview({ fields, formName, headerImage }: {
   }
 
   return (
-    <section ref={panel} className={`${styles.previewPanel} ${styles.preview}`} aria-label="Form preview">
+    <section ref={panel} className={`${styles.previewPanel} ${styles.preview}`} aria-label="Form preview" data-link-card={!!linkCard}>
       {headerImage ? <img className={styles.previewHeaderImage} src={headerImage} alt="Form header" /> : null}
       <div className={styles.previewIntro}>
         <div className={styles.previewRule} />
@@ -103,7 +107,8 @@ export function Preview({ fields, formName, headerImage }: {
         </div>
         {hasRequired && !submitted ? <p className={styles.previewRequired}><span>*</span> Indicates a required question</p> : null}
       </div>
-      <span className={styles.dragInstructions} role="status">{announcement}</span>
+      <span className={styles.dragInstructions} role="status">{Object.keys(problems).length ? "" : announcement}</span>
+      <ErrorToast title="Check your answers" revision={focusRequest} message={summarizeErrors(Object.entries(problems).map(([key, problem]) => `${fields.find(field => field.key === key)?.label || "Question"}: ${problem}`))} />
       {submitted ? (
         <div className={styles.previewComplete}>
           <Icon icon={CheckmarkCircle02Icon} size={28} />
@@ -149,6 +154,7 @@ export function Preview({ fields, formName, headerImage }: {
           </>
         )}
       </form>
+      {linkCard ? <FormLinkCard card={linkCard} floating /> : null}
     </section>
   );
 }
@@ -171,7 +177,7 @@ function Asked({ field, problem }: { field: FormField; problem?: string }) {
       )}
       {field.help ? <p id={`${id}-help`} className={styles.help}>{field.help}</p> : null}
       {field.type !== "consent" ? <Control field={field} labelId={`${id}-label`} describedBy={describedBy} invalid={!!problem} /> : null}
-      {problem ? <p id={`${id}-error`} className={styles.previewError}><Icon icon={AlertCircleIcon} size={16} />{problem}</p> : null}
+      {problem ? <ErrorDescription id={`${id}-error`}>{problem}</ErrorDescription> : null}
     </div>
   );
 }

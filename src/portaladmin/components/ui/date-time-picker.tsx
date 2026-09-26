@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowDown01Icon, ArrowLeft01Icon, ArrowRight01Icon, Calendar03Icon, Clock01Icon, PencilEdit02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "./icon";
@@ -212,7 +214,7 @@ export function DateTimePicker({ id, label, value, onChange, disabled, described
             onClick={confirmTime}><Icon icon={Tick02Icon} size={17} /></button>
         </div>
       </div>
-      {open && !valid ? <p className={styles.error} role="status">{!timeValid ? "Enter a valid hour and minute." : min && draft < min ? "Choose a future date and time." : "This time does not exist in Eastern Time. Choose another time."}</p> : null}
+      <ErrorToast message={open && !valid ? !timeValid ? "Enter a valid hour and minute." : min && draft < min ? "Choose a future date and time." : "This time does not exist in Eastern Time. Choose another time." : null} />
       <div className={styles.footer}>
         <button type="button" className={styles.today} onClick={() => chooseDay(new Date(`${today}T00:00:00Z`))}>Today</button>
         <button type="button" className={styles.cancel} onClick={close}>Cancel</button>

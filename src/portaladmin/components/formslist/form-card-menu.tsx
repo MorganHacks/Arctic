@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useId, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Cancel01Icon, Copy01Icon, Delete02Icon, MoreVerticalIcon, PencilEdit02Icon, Tick02Icon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
@@ -83,9 +85,8 @@ export function FormCardMenu({ form, canManage }: { form: FormRow; canManage: bo
         <div className={styles.menuDivider} role="separator" />
         <button type="button" role="menuitem" tabIndex={-1} className={styles.menuDanger} onClick={() => choose("remove")}><Icon icon={Delete02Icon} size={18} />Remove</button>
       </> : null}
-      <span role="status" className={state === "failed" ? styles.menuCopyError : styles.menuStatus}>
-        {state === "copied" ? "Link copied to clipboard." : state === "failed" ? `Could not copy. ${publicLink(form.code)}` : null}
-      </span>
+      <span role="status" className={styles.menuStatus}>{state === "copied" ? "Link copied to clipboard." : null}</span>
+      <ErrorToast message={state === "failed" ? `Could not copy. ${publicLink(form.code)}` : null} />
     </div>
     {action ? <FormActionDialog form={form} action={action} onClose={() => { setAction(null); trigger.current?.focus(); }} /> : null}
   </>;
@@ -130,7 +131,7 @@ function FormActionDialog({ form, action, onClose }: { form: FormRow; action: Ac
             : <><strong>{form.name}</strong> will stop accepting responses. Existing responses will be kept, and you can publish it again from the editor.</>}
       </p>
       {renaming ? <div className={styles.field}><label htmlFor={`${id}-name`}>Form name</label><input ref={input} id={`${id}-name`} required maxLength={200} autoComplete="off" value={name} disabled={pending} onChange={event => setName(event.target.value)} /></div> : null}
-      {error ? <p role="alert" className={styles.error}>{error}</p> : null}
+      <ErrorToast message={error} />
       <div className={styles.dialogActions}>
         <button ref={cancel} type="button" className={styles.secondaryButton} disabled={pending} onClick={() => dialog.current?.close()}>Cancel</button>
         <button type="submit" className={`${styles.primaryButton} ${action === "remove" ? styles.removeButton : ""}`} disabled={pending || renaming && (!name.trim() || name.trim() === form.name)}>

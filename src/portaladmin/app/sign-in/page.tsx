@@ -1,3 +1,4 @@
+import { ErrorToast } from "@/components/ui/error-toast";
 import Image from "next/image";
 import logo from "@/public/brands/morganhacks.png";
 import styles from "./sign-in.module.css";
@@ -82,7 +83,7 @@ export default async function SignIn({
 
         <div className={styles.actions}>
           {error ? (
-            <p className={styles.error} role="alert">{refusal(error)}</p>
+            <ErrorToast message={refusal(error)} />
           ) : null}
 
           <a

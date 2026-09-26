@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Cancel01Icon, Link04Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -49,7 +51,7 @@ export function ImportEmailDialog({ hasContent, onClose, onImport }: {
       <p className={styles.hint}>{hasContent
         ? "Importing replaces your current content with the HTML from this public URL."
         : "Use a public URL that opens your email’s HTML."}</p>
-      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
       <div className={styles.dialogActions}>
         <button type="button" disabled={importing} onClick={() => dialog.current?.close()}>Cancel</button>
         <button type="submit" className="button primary" disabled={importing}>

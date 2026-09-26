@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorDescription } from "@/components/ui/error-toast";
 import type { Field } from "@/lib/api";
 import { shownCap, type Answer } from "./answers";
 import { ResumeField } from "./resume";
@@ -103,18 +104,7 @@ export function Question({
         </p>
       )}
 
-      {problem ? (
-        /*
-         * Not a live region. On a form with six problems, six live regions
-         * mounting at once is six interruptions in a row and none of them
-         * says which question it belongs to. The summary at the top of the
-         * form is the announcement; this is what somebody finds when they
-         * get here.
-         */
-        <strong className="wrong-note" id={problemId}>
-          {problem}
-        </strong>
-      ) : null}
+      {problem ? <ErrorDescription id={problemId}>{problem}</ErrorDescription> : null}
     </>
   );
 
@@ -130,20 +120,20 @@ export function Question({
       aria-invalid={problem ? true : undefined}
     >
       <legend>
-        <span className="ordinal">{index}</span>
-        {field.type === "consent" ? "Agreement" : field.label}
+        <span className="ordinal" aria-hidden="true">{String(index).padStart(2, "0")}</span>
+        <span className="prompt-text">{field.type === "consent" ? "Agreement" : field.label}</span>
         <Requiredness field={field} />
       </legend>
-      {body}
+      <div className="answer">{body}</div>
     </fieldset>
   ) : (
     <div className={`question${problem ? " wrong" : ""}`} data-key={field.key}>
       <label className="prompt" htmlFor={id}>
-        <span className="ordinal">{index}</span>
-        {field.label}
+        <span className="ordinal" aria-hidden="true">{String(index).padStart(2, "0")}</span>
+        <span className="prompt-text">{field.label}</span>
         <Requiredness field={field} />
       </label>
-      {body}
+      <div className="answer">{body}</div>
     </div>
   );
 }
@@ -252,6 +242,7 @@ function Control({
     name: field.key,
     "aria-describedby": describedBy,
     "aria-invalid": wrong || undefined,
+    "data-empty": typeof answer !== "string" || answer.length === 0 ? true : undefined,
     className: wrong ? "wrong" : undefined,
   };
 
@@ -263,6 +254,7 @@ function Control({
         <textarea
           {...shared}
           rows={4}
+          placeholder="Write your answer…"
           value={text}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
@@ -278,6 +270,7 @@ function Control({
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
+          placeholder="name@example.com"
           value={text}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
@@ -290,6 +283,7 @@ function Control({
           type="tel"
           inputMode="tel"
           autoComplete="tel"
+          placeholder="Phone number"
           value={text}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
@@ -303,6 +297,7 @@ function Control({
           inputMode="decimal"
           min={field.min ?? undefined}
           max={field.max ?? undefined}
+          placeholder="Enter a number"
           value={text}
           /*
            * A wheel over a focused number box changes the number. Somebody
@@ -449,6 +444,7 @@ function Control({
         <input
           {...shared}
           type="text"
+          placeholder="Your answer"
           value={text}
           onChange={(e) => onChange(field.key, e.target.value)}
         />

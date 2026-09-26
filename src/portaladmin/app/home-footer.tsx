@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight01Icon, PauseIcon, PlayIcon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
-import styles from "./home-footer.module.css";
+import { MORGAN_HACKS_RECAP } from "../../../libs/ui/form-link-media";
+import cardStyles from "../../../libs/ui/form-link-card.module.css";
 
 export function HomeFooter() {
   const video = useRef<HTMLVideoElement>(null);
@@ -23,9 +24,9 @@ export function HomeFooter() {
   }, []);
 
   return (
-    <footer className={styles.footer} aria-label="Morgan Hacks community recap">
-      <div className={styles.badge}>
-        <button type="button" className={styles.mark} data-paused={paused}
+    <footer className={cardStyles.dock} aria-label="Morgan Hacks community recap">
+      <div className={cardStyles.card}>
+        <button type="button" className={`${cardStyles.image} ${cardStyles.mark}`} data-paused={paused}
           aria-label={paused ? "Play recap preview" : "Pause recap preview"}
           onClick={() => {
             const preview = video.current;
@@ -34,16 +35,16 @@ export function HomeFooter() {
             else preview.pause();
           }}>
           <video ref={video} muted loop playsInline preload="metadata" aria-hidden="true"
-            src="https://res.cloudinary.com/kardusers/video/upload/v1790236201/reference-02b08846cc82817c0074d6612e6b3e70cf4ce12a2afa7016b603c8e68dbfa4ac_xdbiqx.mp4"
+            src={MORGAN_HACKS_RECAP.video}
             onPlay={() => setPaused(false)} onPause={() => setPaused(true)} />
-          <span className={styles.playback}><Icon icon={paused ? PlayIcon : PauseIcon} size={14} /></span>
+          <span className={cardStyles.playback}><Icon icon={paused ? PlayIcon : PauseIcon} size={14} /></span>
         </button>
-        <div className={styles.credit}>
-          <span className={styles.label}>Morgan Hacks 2026</span>
-          <span className={styles.name}>
-            Watch the recap
-            <a href="https://www.instagram.com/p/DXE7YimkZVk/" target="_blank" rel="noopener noreferrer"
-              className={styles.arrow} aria-label="Watch the recap on Instagram (opens in a new tab)">
+        <div className={cardStyles.copy}>
+          <span className={cardStyles.label}>Morgan Hacks 2026</span>
+          <span className={cardStyles.titleRow}>
+            <span className={cardStyles.title}>Watch the recap</span>
+            <a href={MORGAN_HACKS_RECAP.url} target="_blank" rel="noopener noreferrer"
+              className={cardStyles.arrow} aria-label="Watch the recap on Instagram (opens in a new tab)">
               <Icon icon={ArrowUpRight01Icon} size={11} strokeWidth={2} />
             </a>
           </span>

@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useState } from "react";
 import { ArrowDown01Icon, Calendar03Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -133,7 +135,7 @@ export function Schedule({
           </div>
         ) : null}
 
-        {notice ? <p className="error">{notice}</p> : null}
+        <ErrorToast message={notice} />
       </div>
     </details>
   );

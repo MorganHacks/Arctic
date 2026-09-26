@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -183,7 +185,7 @@ export function SubjectCustomFields({ available, label, onOpen, onSelect, error 
           ))}
         </div>
         {matches.length === 0 ? <p className={styles.fieldsEmpty} role="status">No fields found.</p> : null}
-        {error ? <p className={styles.fieldsError} role="alert">{error}</p> : null}
+        {error ? <ErrorToast message={error} /> : null}
       </div>
     </>
   );

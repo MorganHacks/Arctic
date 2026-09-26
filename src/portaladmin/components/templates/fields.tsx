@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { PlaceholderField } from "./placeholder-field";
 import styles from "./templates.module.css";
 import settings from "./settings.module.css";
@@ -65,7 +67,7 @@ export function Body({
         describedBy={error ? "template-body-error" : undefined}
         className={styles.body}
       />
-      {error ? <p id="template-body-error" className={settings.fieldError} role="alert">{error}</p> : null}
+      {error ? <ErrorToast descriptionId="template-body-error" message={error} /> : null}
 
       {/* The answer to "what can this carry", where somebody would otherwise
           spend an afternoon finding out -- or find out from an email that has

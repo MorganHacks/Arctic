@@ -74,6 +74,11 @@ export function draftFingerprint(draft: EditorDraft): string {
       accent: draft.theme.accent.toLowerCase(), background: draft.theme.background,
       font: draft.theme.font, size: draft.theme.size, headerImage: draft.theme.headerImage ?? null,
       showMlhBadge: draft.theme.showMlhBadge === true,
+      ...(draft.theme.mlhBadgeColor && draft.theme.mlhBadgeColor !== "auto" && draft.theme.mlhBadgeColor !== "white" ? { mlhBadgeColor: draft.theme.mlhBadgeColor } : {}),
+      ...(draft.theme.linkCard ? { linkCard: {
+        label: draft.theme.linkCard.label, title: draft.theme.linkCard.title,
+        url: draft.theme.linkCard.url, image: draft.theme.linkCard.image ?? null,
+      } } : {}),
     },
   });
 }
@@ -110,9 +115,20 @@ export function readRecovery(raw: string | null): DraftRecovery | null {
     }
     const theme = draft.theme;
     if (!theme || typeof theme.accent !== "string" || !/^#[0-9a-f]{6}$/i.test(theme.accent)
-      || !["neutral", "tint", "white"].includes(theme.background) || !["sans", "serif", "mono"].includes(theme.font)
+      || !(typeof theme.background === "string" && (["neutral", "tint", "white"].includes(theme.background) || /^#[0-9a-f]{6}$/i.test(theme.background)))
+      || !["sans", "serif", "mono"].includes(theme.font)
       || !["small", "medium", "large"].includes(theme.size)
       || theme.headerImage != null && (typeof theme.headerImage !== "string" || !theme.headerImage.startsWith("data:image/webp;base64,"))) return null;
+    if (theme.mlhBadgeColor != null && !["auto", "white", "black", "gray", "red", "blue", "yellow"].includes(theme.mlhBadgeColor)) return null;
+    if (theme.linkCard != null) {
+      const card = theme.linkCard;
+      if (typeof card.label !== "string" || card.label.length > 60
+        || typeof card.title !== "string" || !card.title.trim() || card.title.length > 80
+        || typeof card.url !== "string" || card.url.length > 2048 || !/^https?:\/\//i.test(card.url) || /[\s\\]/.test(card.url)
+        || card.image != null && (typeof card.image !== "string" || card.image.length > 80_000 || !/^data:image\/webp;base64,UklGR[A-Za-z0-9+/]+={0,2}$/.test(card.image))) return null;
+      const url = new URL(card.url);
+      if (!url.hostname || url.username || url.password) return null;
+    }
     return value as DraftRecovery;
   } catch {
     return null;

@@ -1,5 +1,7 @@
 "use client";
 
+import { summarizeErrors } from "../../../../../libs/ui/error-notifications";
+import { ErrorToast } from "@/components/ui/error-toast";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -18,7 +20,7 @@ import { Audience } from "./audience";
 import styles from "./builder.module.css";
 import { blankField, blankSection, copyOf } from "./fields";
 import { FormHeader } from "./form-header";
-import { Save, Warning } from "./icons";
+import { Save } from "./icons";
 import { Preview, PreviewActions } from "./preview";
 import { Question } from "./question";
 import { Schedule } from "./schedule";
@@ -354,15 +356,10 @@ export function Builder({
     return map;
   }, [problems]);
 
-  // Problems that name a key no longer on the form, plus the ones that never
-  // named one. Without this a complaint about a question somebody has since
-  // deleted would simply vanish, and "publish did nothing" is the worst
-  // possible answer.
-  const loose = problems.filter(
-    (problem) =>
-      problem.fieldKey === null ||
-      !fields.some((field) => field.key === problem.fieldKey),
-  );
+  const errorMessage = summarizeErrors([notice ?? autosave.result.error ?? "", ...problems.map(problem => {
+    const field = fields.find(item => item.key === problem.fieldKey);
+    return field ? `${field.label || "Untitled question"}: ${problem.message}` : problem.message;
+  })], "questions");
 
   // The number shown against each question, counting only the questions. Page
   // breaks live in the same array, so numbering by position would leave gaps
@@ -444,6 +441,7 @@ export function Builder({
           onSaved={() => router.refresh()}
         />
         <MlhSettings enabled={theme.showMlhBadge} season={mlhSeason} eventId={form.eventId}
+          color={theme.mlhBadgeColor} onColorChange={mlhBadgeColor => changeTheme({ ...theme, mlhBadgeColor })}
           disabled={!canEdit || publishing} onChange={showMlhBadge => changeTheme({ ...theme, showMlhBadge })} />
       </PublishControl>
     </div>
@@ -471,8 +469,8 @@ export function Builder({
           </button>
         </div> : null}
         <div className={styles.canvasInner}>
-          {autosave.result.error || notice ? <p className="error" role="status">{autosave.result.error ?? notice}</p> : null}
-          {autosave.storageFailed && status !== "saved" ? <p className="error">Keep this page open until your changes are saved. Browser recovery is unavailable.</p> : null}
+          <ErrorToast title="Changes need attention" message={errorMessage} revision={autosave.result} />
+          <ErrorToast message={autosave.storageFailed && status !== "saved" ? "Keep this page open until your changes are saved. Browser recovery is unavailable." : null} />
           {autosave.conflict ? <div className={styles.recovery} role="status">
             <p>A draft was recovered, but the saved form has changed. Choose which version to continue editing.</p>
             <div>
@@ -480,21 +478,6 @@ export function Builder({
               <button type="button" className={styles.toolbarButton} onClick={() => autosave.resolveRecovery(false)}>Keep saved version</button>
             </div>
           </div> : null}
-
-          {loose.length > 0 ? (
-            <div className={`panel ${styles.problemsPanel}`}>
-              <h2>Not ready to publish</h2>
-              <ul className={styles.problems}>
-                {loose.map((problem) => (
-                  <li key={problem.message}>
-                    <Warning />
-                    {problem.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
 
           <div className={styles.editorColumn} hidden={previewOnly}>
             <div className={styles.editorHeading}>
@@ -543,7 +526,7 @@ export function Builder({
 
           </div>
 
-          {previewOnly ? <Preview fields={fields} formName={formName} headerImage={theme.headerImage} /> : null}
+          {previewOnly ? <Preview fields={fields} formName={formName} headerImage={theme.headerImage} linkCard={theme.linkCard} /> : null}
 
 
           {!previewOnly && canManage && published ? (

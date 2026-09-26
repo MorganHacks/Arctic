@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useState } from "react";
 import { ArrowDown01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -174,7 +176,7 @@ export function Audience({
           </div>
         ) : null}
 
-        {notice ? <p className="error">{notice}</p> : null}
+        <ErrorToast message={notice} />
       </div>
     </details>
   );

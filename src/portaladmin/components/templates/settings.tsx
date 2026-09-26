@@ -1,3 +1,4 @@
+import { ErrorToast } from "@/components/ui/error-toast";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight02Icon, BulbIcon, CheckmarkCircle02Icon, InboxIcon, Link01Icon, SourceCodeIcon, TextBoldIcon, TextFontIcon, TextItalicIcon } from "@hugeicons/core-free-icons";
@@ -52,7 +53,7 @@ export function TemplateSettings({
               aria-describedby={errors.name ? "template-name-error" : "template-name-help"}
               className={styles.input}
             />
-            {errors.name ? <p id="template-name-error" role="alert" className={styles.fieldError}>{errors.name}</p> : (
+            {errors.name ? <ErrorToast descriptionId="template-name-error" message={errors.name} /> : (
               <p id="template-name-help" className={styles.help}>Leave blank to use the email subject.</p>
             )}
           </div>
@@ -69,7 +70,7 @@ export function TemplateSettings({
               className={styles.input}
               validationError={errors.subject}
             />
-            {errors.subject ? <p id="template-subject-error" role="alert" className={styles.fieldError}>{errors.subject}</p> : null}
+            {errors.subject ? <ErrorToast descriptionId="template-subject-error" message={errors.subject} /> : null}
             {!errors.subject && available && available.length > 0 ? (
               <p id="template-subject-help" className={styles.help}>Type {"{{"} to add a personalized field.</p>
             ) : null}
@@ -87,7 +88,7 @@ export function TemplateSettings({
               describedBy={errors.previewText ? "template-preview-error" : "template-preview-tip"}
               className={styles.input}
             />
-            {errors.previewText ? <p id="template-preview-error" role="alert" className={styles.fieldError}>{errors.previewText}</p> : null}
+            {errors.previewText ? <ErrorToast descriptionId="template-preview-error" message={errors.previewText} /> : null}
             <p id="template-preview-tip" className={styles.tip}>
               <Icon icon={BulbIcon} size={17} />
               <span><strong>Tip:</strong> We recommend adding email preview text.</span>
@@ -131,7 +132,7 @@ export function TemplateSettings({
               className={styles.input}
             />
           </div>
-          {errors.fromName ? <p id="template-sender-error" role="alert" className={styles.fieldError}>{errors.fromName}</p> : null}
+          {errors.fromName ? <ErrorToast descriptionId="template-sender-error" message={errors.fromName} /> : null}
           <div id="reply-to-editor" className={styles.field} hidden={!editingReplyTo}>
             <label htmlFor="replyTo">Reply-to email <span className={styles.optional}>Optional</span></label>
             <input
@@ -147,7 +148,7 @@ export function TemplateSettings({
               aria-describedby={errors.replyTo ? "template-reply-error" : "template-reply-help"}
               className={styles.input}
             />
-            {errors.replyTo ? <p id="template-reply-error" role="alert" className={styles.fieldError}>{errors.replyTo}</p> : (
+            {errors.replyTo ? <ErrorToast descriptionId="template-reply-error" message={errors.replyTo} /> : (
               <p id="template-reply-help" className={styles.help}>Replies will go here. Leave empty to use the sender email.</p>
             )}
           </div>

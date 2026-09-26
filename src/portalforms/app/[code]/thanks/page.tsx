@@ -1,9 +1,12 @@
+import { PageBackground } from "../page-background";
 import type { Metadata } from "next";
 import { loadForm } from "@/lib/api";
+import { formThemeStyle } from "../../../../../libs/ui/form-theme";
+import styles from "./thanks.module.css";
 
 type Props = { params: Promise<{ code: string }> };
 
-export const metadata: Metadata = { title: "Sent — MorganHacks" };
+export const metadata: Metadata = { title: "Thank you — MorganHacks" };
 
 /**
  * Where somebody lands after submitting.
@@ -27,16 +30,20 @@ export default async function Thanks({ params }: Props) {
   const form = await loadForm(code).catch(() => null);
 
   return (
-    <main className="notice">
-      <h1>That is in</h1>
-      <p>
-        {form
-          ? `Your answers to ${form.name} have been recorded.`
-          : "Your answers have been recorded."}
-      </p>
-      <p>
-        Nothing else to do. You can close this page.
-      </p>
+    <main className={`formTheme ${styles.page}`} style={formThemeStyle(form?.theme)}>
+      <PageBackground theme={form?.theme} />
+      <div className={styles.content}>
+        <h1>{form?.kind === "application" ? "Thank you for applying." : "Thanks for your response."}</h1>
+        <p>
+          {form
+            ? `Your answers to ${form.name} have been recorded.`
+            : "Your answers have been recorded."}
+          {" "}You’re all set. You can close this page.
+        </p>
+        <div className={styles.actions}>
+          <a href="https://morganhacks.com">Back to MorganHacks</a>
+        </div>
+      </div>
     </main>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useActionState } from "react";
 import { addNote } from "@/app/applicants/actions";
 import styles from "./applicants.module.css";
@@ -58,7 +60,7 @@ export function Notes({ id, notes }: { id: string; notes: Note[] }) {
         <button type="submit" disabled={pending} style={{ marginTop: "0.5rem" }}>
           {pending ? "Saving…" : "Add note"}
         </button>
-        {state.error ? <p className="error">{state.error}</p> : null}
+        {state.error ? <ErrorToast message={state.error} revision={state} /> : null}
       </form>
     </div>
   );

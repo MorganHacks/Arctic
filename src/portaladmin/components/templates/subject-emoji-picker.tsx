@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { EmojiPicker, type EmojiData, type SkinTone } from "frimousse";
 import emojis from "emojibase-data/en/data.json";
 import messages from "emojibase-data/en/messages.json";
@@ -58,7 +60,7 @@ export default function SubjectEmojiPicker({ onSelect, error }: {
         </EmojiPicker.ActiveEmoji>
         <EmojiPicker.SkinToneSelector className={styles.skinTone} />
       </div>
-      {error ? <p className={styles.error} role="status">{error}</p> : null}
+      {error ? <ErrorToast message={error} /> : null}
     </EmojiPicker.Root>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Add01Icon, Cancel01Icon, ClipboardListIcon, FormIcon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -86,7 +88,7 @@ function NewFormDialog({ eventId, eventName, hasApplication, onClose }: {
         </label>
       </fieldset>
       <p className={styles.formHint}>The form type cannot be changed later.</p>
-      {state.error ? <p className={styles.error} role="alert">{state.error}</p> : null}
+      <ErrorToast message={state.error} revision={state} />
       <div className={styles.dialogActions}>
         <button type="button" className={styles.secondaryButton} disabled={pending} onClick={() => dialog.current?.close()}>Cancel</button>
         <button type="submit" className={styles.primaryButton} disabled={pending || !name.trim()}>{pending ? "Creating…" : "Create form"}</button>
