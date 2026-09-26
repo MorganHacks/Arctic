@@ -678,6 +678,7 @@ button.previewPrevious { background: var(--raised); color: var(--ink); }
 .field input:focus, .label:focus, .optionLabel:focus { outline: none; box-shadow: none; background: var(--field-active); }
 .previewPanel { min-width: 0; }
 .previewPanel[data-link-card="true"] { padding-bottom: 96px; }
+.previewLinkCard { position: absolute; right: 16px; bottom: 16px; z-index: 20; width: 240px; max-width: calc(100% - 32px); }
 .preview .answerInput { width: 100%; max-width: 420px; min-height: 42px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); }
 .preview .answerInput::placeholder { color: var(--faint); opacity: 1; }
 .preview textarea.answerInput { display: block; max-width: none; min-height: 80px; resize: vertical; }
