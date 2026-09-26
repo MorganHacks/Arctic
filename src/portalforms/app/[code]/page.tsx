@@ -1,11 +1,15 @@
+import { PageBackground } from "./page-background";
+import { FormLinkCard } from "@/components/ui/form-link-card";
 import type { Metadata } from "next";
 import { loadForm, type PublicForm } from "@/lib/api";
-import { formThemeStyle, resolveFormTheme } from "../../../../libs/ui/form-theme";
+import { formMlhBadgeColor, formThemeStyle, resolveFormTheme } from "../../../../libs/ui/form-theme";
 import { NoForm } from "../no-form";
 import { Questions } from "./questions";
 import { SignIn } from "./sign-in";
 import { MlhBadge } from "./mlh-badge";
+import { DeadlineCountdown } from "./deadline";
 import { ZONE } from "../../../../libs/ui/zone";
+import styles from "./form-page.module.css";
 
 type Props = {
   params: Promise<{ code: string }>;
@@ -65,9 +69,13 @@ export default async function FormPage({ params, searchParams }: Props) {
     return <NoForm />;
   }
 
-  return <div className="formTheme" style={formThemeStyle(form.theme)}>
-    {resolveFormTheme(form.theme).showMlhBadge && form.mlhSeason ? <MlhBadge season={form.mlhSeason} /> : null}
+  const theme = resolveFormTheme(form.theme);
+  const linkCard = form.open && (form.fields?.length || form.access === "signIn") ? theme.linkCard : null;
+  return <div className={`formTheme ${styles.surface}`} style={formThemeStyle(theme)} data-link-card={!!linkCard}>
+    <PageBackground theme={form.theme} />
+    {theme.showMlhBadge && form.mlhSeason ? <MlhBadge season={form.mlhSeason} color={formMlhBadgeColor(theme)} /> : null}
     <FormContent form={form} expired={query.link === "expired"} />
+    {linkCard ? <FormLinkCard card={linkCard} /> : null}
   </div>;
 }
 
@@ -104,8 +112,7 @@ function FormContent({ form, expired }: { form: PublicForm; expired: boolean }) 
   if (form.access === "signIn") {
     return (
       <main className="page">
-        <HeaderImage form={form} />
-        <Masthead name={form.name} closesAt={form.closesAt} />
+        <FormIntro form={form} />
         <SignIn code={form.code} expired={expired} />
       </main>
     );
@@ -127,8 +134,7 @@ function FormContent({ form, expired }: { form: PublicForm; expired: boolean }) 
 
   return (
     <main className="page">
-      <HeaderImage form={form} />
-      <Masthead name={form.name} closesAt={form.closesAt} you={form.you} />
+      <FormIntro form={form} />
 
       <Questions
         code={form.code}
@@ -138,6 +144,13 @@ function FormContent({ form, expired }: { form: PublicForm; expired: boolean }) 
       />
     </main>
   );
+}
+
+function FormIntro({ form }: { form: PublicForm }) {
+  return <aside className={styles.intro}>
+    <HeaderImage form={form} />
+    <Masthead name={form.name} closesAt={form.closesAt} you={form.you} />
+  </aside>;
 }
 
 function HeaderImage({ form }: { form: PublicForm }) {
@@ -171,7 +184,11 @@ function Masthead({
           {you.email}.
         </p>
       ) : null}
-      {closesAt ? <p className="lede">Open until {longDate(closesAt)}.</p> : null}
+      {closesAt ? <div className={styles.deadline}>
+        <span>Submission deadline</span>
+        <time dateTime={closesAt}>{longDate(closesAt)}</time>
+        <DeadlineCountdown closesAt={closesAt} />
+      </div> : null}
     </div>
   );
 }

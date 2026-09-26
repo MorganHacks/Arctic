@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorDescription, ErrorToast } from "@/components/ui/error-toast";
 import { useState } from "react";
 
 /**
@@ -82,12 +83,8 @@ export function SignIn({ code, expired }: { code: string; expired: boolean }) {
       {/* The link that did not work, said once and without saying which way it
           failed. Expired, already used and never issued are one message on
           purpose — telling them apart only helps somebody probing links. */}
-      {expired ? (
-        <div className="summary" role="alert">
-          <p className="summary-lede">That link did not work.</p>
-          <p>It may have expired or already been used. Ask for a new one below.</p>
-        </div>
-      ) : null}
+      <ErrorToast title="That link did not work" message={expired ? "It may have expired or already been used. Ask for a new one below." : null} />
+      <ErrorToast message={problem} />
 
       <div className={`question${problem ? " wrong" : ""}`}>
         <label className="prompt" htmlFor="sign-in-email">
@@ -114,9 +111,9 @@ export function SignIn({ code, expired }: { code: string; expired: boolean }) {
           }}
         />
         {problem ? (
-          <strong className="wrong-note" id="sign-in-email-problem">
+          <ErrorDescription id="sign-in-email-problem">
             {problem}
-          </strong>
+          </ErrorDescription>
         ) : null}
       </div>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import Link from "next/link";
 import { ArrowRight01Icon, Link04Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { useCopy } from "@/components/formslist/share-link";
@@ -29,9 +31,8 @@ export function NoResponses({ formId, code, published, closed }: {
             <button type="button" className={styles.secondaryButton} onClick={copy}>
               <Icon icon={state === "copied" ? Tick02Icon : Link04Icon} size={17} />Copy form link
             </button>
-            <span role="status" className={state === "failed" ? styles.failed : styles.note}>
-              {state === "copied" ? "Link copied" : state === "failed" ? "Could not copy the link. Try the link above." : null}
-            </span>
+            <span role="status" className={styles.note}>{state === "copied" ? "Link copied" : null}</span>
+            <ErrorToast message={state === "failed" ? "Could not copy the link. Try the link above." : null} />
           </div>
         ) : (
           <Link href={`/forms/${formId}`} className={styles.secondaryButton}>

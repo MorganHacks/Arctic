@@ -681,30 +681,42 @@ public class FormBuilderTests(ApplicationsDatabase db)
         Assert.Equal(other["id"]!.GetValue<Guid>(), remaining.Id);
     }
 
-    [Fact]
-    public async Task Themes_save_with_the_draft_and_only_reach_the_public_form_after_publishing()
+    [Theory]
+    [InlineData("tint", "auto")]
+    [InlineData("#182436", "white")]
+    [InlineData("white", "black")]
+    [InlineData("white", "gray")]
+    [InlineData("white", "red")]
+    [InlineData("white", "blue")]
+    [InlineData("white", "yellow")]
+    public async Task Themes_save_with_the_draft_and_only_reach_the_public_form_after_publishing(string background, string badgeColor)
     {
         var (cookie, form, fields) = await OpenBuilderAsync();
         var theme = new
         {
             accent = "#6750a4",
-            background = "tint",
+            background,
             font = "serif",
             size = "large",
             showMlhBadge = true,
+            mlhBadgeColor = badgeColor,
             headerImage = "data:image/webp;base64,UklGRjgAAABXRUJQVlA4ICwAAADQAQCdASoEAAEAAUAmJaACdLoB+AADsAD++X2//yU1/jblq/+LORiOy8AAAA=="
         };
         await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields, theme })).EnsureSuccess();
         await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields })).EnsureSuccess();
         var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
         Assert.Equal(theme.accent, draft["draft"]!["theme"]!["accent"]!.GetValue<string>());
+        Assert.Equal(background, draft["draft"]!["theme"]!["background"]!.GetValue<string>());
         Assert.True(draft["draft"]!["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Equal(badgeColor, draft["draft"]!["theme"]!["mlhBadgeColor"]!.GetValue<string>());
         Assert.Equal(theme.headerImage, draft["draft"]!["theme"]!["headerImage"]!.GetValue<string>());
         await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
         var code = draft["form"]!["code"]!.GetValue<string>();
         var live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
         Assert.Equal(theme.font, live["theme"]!["font"]!.GetValue<string>());
+        Assert.Equal(background, live["theme"]!["background"]!.GetValue<string>());
         Assert.True(live["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Equal(badgeColor, live["theme"]!["mlhBadgeColor"]!.GetValue<string>());
         Assert.Equal(theme.headerImage, live["theme"]!["headerImage"]!.GetValue<string>());
         draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
         Assert.Equal(theme.accent, draft["draft"]!["theme"]!["accent"]!.GetValue<string>());
@@ -714,18 +726,98 @@ public class FormBuilderTests(ApplicationsDatabase db)
         live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
         Assert.Equal(theme.accent, live["theme"]!["accent"]!.GetValue<string>());
         Assert.True(live["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Equal(badgeColor, live["theme"]!["mlhBadgeColor"]!.GetValue<string>());
         Assert.Equal(theme.headerImage, live["theme"]!["headerImage"]!.GetValue<string>());
         await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
         live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
         Assert.Equal(updated.accent, live["theme"]!["accent"]!.GetValue<string>());
         Assert.Equal(updated.size, live["theme"]!["size"]!.GetValue<string>());
+        Assert.Equal("white", live["theme"]!["background"]!.GetValue<string>());
         Assert.False(live["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Equal("white", live["theme"]!["mlhBadgeColor"]!.GetValue<string>());
         Assert.Null(live["theme"]!["headerImage"]);
         await using var mutate = db.DataSource.CreateCommand(
             "UPDATE applications.form_versions SET theme = '{}' WHERE form_id = @form AND status = 'published'");
         mutate.Parameters.AddWithValue("form", form);
         var error = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => mutate.ExecuteNonQueryAsync());
         Assert.Equal("23001", error.SqlState);
+    }
+
+    [Fact]
+    public async Task Link_cards_follow_the_draft_publish_cycle_and_can_be_removed()
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        var code = draft["form"]!["code"]!.GetValue<string>();
+        Assert.Null(draft["draft"]!["theme"]!["linkCard"]);
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        var card = new MorganHacks.Applications.Forms.FormLinkCard("Morgan Hacks 2026", "Watch the recap", "https://example.com/recap",
+            "data:image/webp;base64,UklGRjgAAABXRUJQVlA4ICwAAADQAQCdASoEAAEAAUAmJaACdLoB+AADsAD++X2//yU1/jblq/+LORiOy8AAAA==");
+        await (await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie)).EnsureSuccess();
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields, theme = new { linkCard = card } })).EnsureSuccess();
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields })).EnsureSuccess();
+        draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        var savedCard = draft["draft"]!["theme"]!["linkCard"];
+        Assert.Equal(card.Title, savedCard!["title"]!.GetValue<string>());
+        Assert.Equal(card.Image, savedCard["image"]!.GetValue<string>());
+        var live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.Null(live["theme"]!["linkCard"]);
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.True(JsonNode.DeepEquals(savedCard, live["theme"]!["linkCard"]));
+        draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.True(JsonNode.DeepEquals(savedCard, draft["draft"]!["theme"]!["linkCard"]));
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields, theme = new { linkCard = (object?)null } })).EnsureSuccess();
+        live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.True(JsonNode.DeepEquals(savedCard, live["theme"]!["linkCard"]));
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.Null(live["theme"]!["linkCard"]);
+    }
+
+    [Theory]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("//example.com")]
+    [InlineData("https://")]
+    [InlineData("https://user:password@example.com")]
+    [InlineData("https://example.com\n")]
+    public async Task Invalid_card_links_leave_the_saved_draft_unchanged(string url)
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var response = await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
+            new { fields, theme = new { linkCard = new { label = "Recap", title = "Watch", url } } });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Null(draft["draft"]!["theme"]!["linkCard"]);
+    }
+
+    [Fact]
+    public void Link_cards_require_a_headline_and_limit_text_and_image_size()
+    {
+        var card = new MorganHacks.Applications.Forms.FormLinkCard(Title: "Watch the recap", Url: "https://example.com/recap");
+        Assert.True(card.IsValid());
+        Assert.False((card with { Title = " " }).IsValid());
+        Assert.False((card with { Title = new string('a', 81) }).IsValid());
+        Assert.False((card with { Label = new string('a', 61) }).IsValid());
+        Assert.False((card with { Url = "https://example.com/" + new string('a', 2048) }).IsValid());
+        Assert.False((card with { Image = "data:image/svg+xml;base64,PHN2Zz4=" }).IsValid());
+        Assert.False((card with { Image = "data:image/webp;base64,UklGR" + new string('A', 80_000) }).IsValid());
+    }
+
+    [Theory]
+    [InlineData("purple")]
+    [InlineData("../../other")]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task Invalid_mlh_badge_colors_leave_the_saved_draft_unchanged(string? color)
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var response = await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
+            new { fields, theme = new { showMlhBadge = true, mlhBadgeColor = color } });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Equal("white", draft["draft"]!["theme"]!["mlhBadgeColor"]!.GetValue<string>());
+        Assert.False(draft["draft"]!["theme"]!["showMlhBadge"]!.GetValue<bool>());
     }
 
     [Fact]
@@ -783,6 +875,8 @@ public class FormBuilderTests(ApplicationsDatabase db)
     [Theory]
     [InlineData("red", "neutral", "sans", "medium")]
     [InlineData("#003970", "url(evil)", "sans", "medium")]
+    [InlineData("#003970", "#ffffff; color: red", "sans", "medium")]
+    [InlineData("#003970", "#12345", "sans", "medium")]
     [InlineData("#003970", "neutral", "unknown", "medium")]
     [InlineData("#003970", "neutral", "sans", "huge")]
     public async Task Invalid_themes_are_rejected_without_changing_the_draft(string accent, string background, string font, string size)

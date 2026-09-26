@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useRef, useState } from "react";
 import { Copy01Icon, Link04Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -107,10 +109,10 @@ function CopyState({
   code: string;
 }) {
   return (
-    <span role="status" className={styles.copyState}>
-      {state === "copied" ? "Copied." : null}
-      {state === "failed" ? `Could not copy. The link is ${publicLink(code)}` : null}
-    </span>
+    <>
+      <span role="status" className={styles.copyState}>{state === "copied" ? "Copied." : null}</span>
+      <ErrorToast message={state === "failed" ? `Could not copy. The link is ${publicLink(code)}` : null} />
+    </>
   );
 }
 
@@ -161,9 +163,8 @@ export function CopyLink({ code, name, appearance = "compact" }: { code: string;
           </button>
         </span>
       )}
-      <span role="status" className={pageStyles.copyFeedback} data-failed={state === "failed"}>
-        {state === "copied" ? "Link copied." : state === "failed" ? `Could not copy. The link is ${publicLink(code)}` : null}
-      </span>
+      <span role="status" className={pageStyles.copyFeedback}>{state === "copied" ? "Link copied." : null}</span>
+      <ErrorToast message={state === "failed" ? `Could not copy. The link is ${publicLink(code)}` : null} />
     </span>
   );
 }

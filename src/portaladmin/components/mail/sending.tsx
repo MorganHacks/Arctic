@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useState, useTransition, type ReactNode } from "react";
 import type {
   CancelResult,
@@ -231,7 +233,7 @@ export function Sending({
                   </p>
                 ) : null}
 
-                {error ? <p className="error">{error}</p> : null}
+                {error ? <ErrorToast message={error} /> : null}
               </div>
             </section>
 
@@ -508,7 +510,7 @@ function Outcome({
           )
         ) : null}
 
-        {error ? <p className="error">{error}</p> : null}
+        {error ? <ErrorToast message={error} /> : null}
       </div>
     </section>
   );

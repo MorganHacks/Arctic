@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import { deleteTemplates } from "@/app/templates/actions";
 import type { TemplateRow } from "./types";
@@ -38,7 +40,7 @@ export function DeleteTemplateDialog({ templates, protectedCount = 0, onClose, o
     {protectedCount > 0 ? <p className={styles.description}>
       {protectedCount} account-access {protectedCount === 1 ? "template is" : "templates are"} protected and won’t be deleted.
     </p> : null}
-    {error ? <p className={styles.error} role="alert">{error}</p> : null}
+    {error ? <ErrorToast message={error} /> : null}
     <div className={styles.dialogActions}>
       <button ref={cancel} type="button" disabled={pending} onClick={() => dialog.current?.close()}>Cancel</button>
       <button type="button" className="button danger" disabled={pending} onClick={() => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useState, type ReactNode } from "react";
 import { Clock01Icon, Link04Icon } from "@hugeicons/core-free-icons";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
@@ -205,7 +207,7 @@ export function ScheduleForm({ event, canManage, active, renderHeader }: {
             </div>
           </section>
 
-          {notice ? <p className={styles.error} role="alert">{notice}</p> : null}
+          {notice ? <ErrorToast message={notice} /> : null}
 
           {!canManage ? <p className={styles.saveHint}>You can view these settings. An event admin can make changes.</p> : null}
         </form>

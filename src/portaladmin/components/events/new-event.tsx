@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -64,7 +66,7 @@ function NewEventDialog({ onClose }: { onClose: () => void }) {
             value={slug} onChange={(event) => setSlug(event.target.value)} aria-describedby="event-slug-hint" disabled={pending} />
           <p id="event-slug-hint">A unique identifier for this event. Use letters, numbers and single hyphens. This cannot be changed later.</p>
         </div>
-        {state.error ? <p className={styles.formError} role="alert">{state.error}</p> : null}
+        {state.error ? <ErrorToast message={state.error} revision={state} /> : null}
         <div className={styles.dialogActions}>
           <button type="button" className={styles.secondaryButton} disabled={pending} onClick={() => dialog.current?.close()}>Cancel</button>
           <button type="submit" className={`button primary ${styles.newButton}`} disabled={pending || !name.trim() || !slug.trim()}>

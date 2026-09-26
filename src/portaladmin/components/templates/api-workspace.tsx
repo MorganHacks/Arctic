@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import {
   CheckmarkCircle02Icon,
@@ -104,7 +106,7 @@ export function ApiWorkspace({
               </button>
             </div>
             <span className={styles.copyStatus} role="status">{copyStatus === "copied" ? "Template key copied." : ""}</span>
-            {copyStatus === "error" ? <p className={styles.error} role="alert">Could not copy. Select the key and copy it manually.</p> : null}
+            <ErrorToast message={copyStatus === "error" ? "Could not copy. Select the key and copy it manually." : null} />
           </div>
 
           <dl className={styles.details}>
@@ -152,7 +154,7 @@ export function ApiWorkspace({
                 Test email queued for <strong>{recipient.trim()}</strong>.
               </p>
             ) : null}
-            {error ? <p className={styles.error} role="alert">{error}</p> : null}
+            {error ? <ErrorToast message={error} /> : null}
           </form>
         </section>
       </div>

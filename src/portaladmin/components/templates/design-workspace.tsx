@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { SourceCodeIcon } from "@hugeicons/core-free-icons";
@@ -72,7 +74,7 @@ export function DesignWorkspace({ handle, available, preview, device, disabled, 
         </div>
         <CodeEditor ref={editor} value={handle.draft.body} format={handle.draft.format} available={available}
           onChange={(body) => handle.set("body", body)} disabled={disabled} invalid={Boolean(error)} />
-        {error ? <p id="template-body-error" className={styles.error} role="alert">{error}</p> : null}
+        {error ? <ErrorToast descriptionId="template-body-error" message={error} /> : null}
       </section>
       <div role="separator" aria-label="Resize editor and preview" aria-orientation="vertical" aria-controls={`${paneId}-code`}
         aria-valuenow={Math.round(percent)} aria-valuemin={Math.ceil(minPercent)} aria-valuemax={Math.floor(100 - minPercent)}

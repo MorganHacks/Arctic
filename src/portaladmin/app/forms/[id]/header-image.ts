@@ -1,6 +1,14 @@
-import { isFormHeaderImage } from "../../../../../libs/ui/form-theme";
+import { isFormHeaderImage, MAX_LINK_CARD_IMAGE_LENGTH, MAX_HEADER_IMAGE_LENGTH } from "../../../../../libs/ui/form-theme";
 
 export async function prepareHeaderImage(file: File): Promise<string> {
+  return prepareImage(file, 1600, 400, MAX_HEADER_IMAGE_LENGTH);
+}
+
+export async function prepareLinkCardImage(file: File): Promise<string> {
+  return prepareImage(file, 480, 240, MAX_LINK_CARD_IMAGE_LENGTH);
+}
+
+async function prepareImage(file: File, width: number, height: number, maxLength: number): Promise<string> {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
     throw new Error("Choose a JPG, PNG or WebP image.");
   }
@@ -17,17 +25,17 @@ export async function prepareHeaderImage(file: File): Promise<string> {
 
   try {
     const canvas = document.createElement("canvas");
-    canvas.width = 1600;
-    canvas.height = 400;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("This image could not be prepared. Try again.");
     const scale = Math.max(canvas.width / image.width, canvas.height / image.height);
-    const width = image.width * scale;
-    const height = image.height * scale;
-    context.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+    const drawnWidth = image.width * scale;
+    const drawnHeight = image.height * scale;
+    context.drawImage(image, (canvas.width - drawnWidth) / 2, (canvas.height - drawnHeight) / 2, drawnWidth, drawnHeight);
     for (const quality of [0.85, 0.7, 0.5]) {
       const result = canvas.toDataURL("image/webp", quality);
-      if (isFormHeaderImage(result)) return result;
+      if (isFormHeaderImage(result) && result.length <= maxLength) return result;
     }
     throw new Error("This image is too detailed. Try a smaller or simpler image.");
   } finally {

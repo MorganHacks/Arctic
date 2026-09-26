@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
@@ -226,18 +228,8 @@ function SaveFeedback({
         </div>
       ) : null}
 
-      {saving.outcome ? (
-        <p
-          role="status"
-          className={
-            saving.outcome.ok
-              ? styles.saved
-              : `${styles.saved} ${styles.failed}`
-          }
-        >
-          {saving.outcome.text}
-        </p>
-      ) : null}
+      {saving.outcome?.ok ? <p role="status" className={styles.saved}>{saving.outcome.text}</p> : null}
+      <ErrorToast message={saving.outcome && !saving.outcome.ok ? saving.outcome.text : null} revision={saving.validationAttempt} />
       {saving.outcome?.conflict && saving.key ? (
         <button type="button" onClick={saving.reloadLatest} disabled={saving.saving}>
           Discard draft and reload latest version

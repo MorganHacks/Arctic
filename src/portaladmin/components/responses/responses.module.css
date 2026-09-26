@@ -14,7 +14,7 @@
 .downloadButton { color: var(--accent); }
 .headerActions { display: flex; align-items: center; gap: 10px; }
 .tableFrame { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--raised); }
-.scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 40px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 40px; }
 .scroll:focus-visible { outline: 2px solid var(--line); outline-offset: -2px; }
 .table { --respondent-width: 300px; width: 100%; min-width: calc(var(--respondent-width) + var(--answer-columns-width)); table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .respondentColumn { width: var(--respondent-width); }

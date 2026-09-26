@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { Select } from "@/components/ui/select";
 import { useActionState, useEffect, useRef, useState } from "react";
 import {
@@ -63,7 +65,7 @@ function Remove({
       <button type="submit" className="link" disabled={pending}>
         {pending ? "…" : label}
       </button>
-      {state.error ? <span className="meta"> {state.error}</span> : null}
+      <ErrorToast message={state.error} revision={state} />
     </form>
   );
 }
@@ -173,7 +175,7 @@ export function Teams({
         </form>
       ) : null}
 
-      {state.error ? <p className="error">{state.error}</p> : null}
+      {state.error ? <ErrorToast message={state.error} revision={state} /> : null}
     </section>
   );
 }
@@ -280,7 +282,7 @@ export function Grants({
         </>
       ) : null}
 
-      {state.error ? <p className="error">{state.error}</p> : null}
+      {state.error ? <ErrorToast message={state.error} revision={state} /> : null}
     </section>
   );
 }
@@ -360,7 +362,7 @@ export function Revoke({
         </button>
       )}
 
-      {state.error ? <p className="error">{state.error}</p> : null}
+      {state.error ? <ErrorToast message={state.error} revision={state} /> : null}
     </section>
   );
 }
@@ -431,7 +433,7 @@ export function Restore({
         </button>
       )}
 
-      {state.error ? <p className="error">{state.error}</p> : null}
+      {state.error ? <ErrorToast message={state.error} revision={state} /> : null}
     </section>
   );
 }
@@ -504,7 +506,7 @@ export function Unlink({
         </button>
       )}
 
-      {state.error ? <p className="error">{state.error}</p> : null}
+      {state.error ? <ErrorToast message={state.error} revision={state} /> : null}
     </section>
   );
 }

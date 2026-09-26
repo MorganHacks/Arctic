@@ -1,18 +1,27 @@
 .panel {
-  position: fixed; inset: auto; margin: 0; width: 344px; max-width: calc(100vw - 24px); overflow: auto;
-  padding: 18px; border: 1px solid var(--line-soft); border-radius: 18px; background: var(--paper); color: var(--ink);
+  position: fixed; inset: auto; margin: 0; width: 480px; max-width: calc(100vw - 24px); box-sizing: border-box; overflow: hidden;
+  padding: 0; border: 1px solid var(--line-soft); border-radius: 22px; background: var(--paper); color: var(--ink);
   box-shadow: 0 16px 48px color-mix(in srgb, var(--ink) 10%, transparent), 0 2px 8px color-mix(in srgb, var(--ink) 3%, transparent);
-  overscroll-behavior: contain; scrollbar-width: thin;
+  overscroll-behavior: contain;
 }
-.heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.panel:popover-open { display: flex; flex-direction: column; }
+.heading { display: flex; flex: none; align-items: center; justify-content: space-between; padding: 18px 22px 14px; }
 .heading h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.02em; }
+.tabs { display: flex; flex: none; gap: 4px; margin: 0 22px; padding: 4px; border-radius: 12px; background: var(--field); }
+.tabs button { flex: 1; min-height: 34px; padding: 7px 12px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 500; }
+.tabs button[aria-selected="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 6%, transparent); }
+.panelBody { min-height: 0; overflow: auto; padding: 22px; overscroll-behavior: contain; }
+.panelBody [role="tabpanel"][hidden] { display: none; }
+.paletteGrid, .typeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+.headerRow { display: flex; align-items: center; gap: 16px; }
+.headerRow > div { min-width: 0; }
 button.close { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; color: var(--muted); background: transparent; }
 button.close:hover { background: var(--field); color: var(--ink); }
-.headerPreview { display: block; width: 100%; aspect-ratio: 4 / 1; object-fit: cover; border: 1px solid var(--line-soft); border-radius: 9px; margin-bottom: 10px; }
+.headerPreview { display: block; flex: none; width: 128px; height: 60px; object-fit: contain; background: #ffffff; border: 1px solid var(--line-soft); border-radius: 12px; }
 .imageActions { display: flex; align-items: center; gap: 12px; }
-.chooseImage { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 500; }
+.chooseImage { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 500; }
 .chooseImage:hover:not(:disabled) { background: var(--field); }
-.removeImage { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 8px 12px; border: 1px solid transparent; border-radius: 9px; background: var(--field); color: var(--muted); font-size: 12px; font-weight: 500; transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease; }
+.removeImage { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 8px 12px; border: 1px solid transparent; border-radius: 999px; background: var(--field); color: var(--muted); font-size: 12px; font-weight: 500; transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease; }
 .removeImage:hover:not(:disabled) { color: var(--stop); background: var(--stop-soft); border-color: color-mix(in srgb, var(--stop) 18%, transparent); }
 .fileInput { display: none; }
 .imageHint { margin: 8px 0 0; color: var(--faint); font-size: 10px; line-height: 1.5; }
@@ -20,34 +29,25 @@ button.close:hover { background: var(--field); color: var(--ink); }
 .group { min-width: 0; margin: 0 0 18px; padding: 0; border: 0; }
 .group legend, .colorHeading > span, .sizeRow > span { padding: 0; color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.3; }
 .group legend { margin-bottom: 10px; }
-.colorHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.colorHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .customColor { position: relative; display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 5px 8px; margin: 0; border-radius: 7px; background: var(--field); color: var(--muted); font-family: var(--mono); font-size: 10px; cursor: pointer; }
 .customColor:hover { background: var(--field-active); color: var(--ink); }
 .customSwatch { width: 12px; height: 12px; flex: none; border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); border-radius: 50%; background: var(--form-accent); }
 .customColor input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; padding: 0; border: 0; }
 .customColor:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
-.swatches { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+.swatches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
 .swatches button { display: grid; place-items: center; width: 100%; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; }
 .swatches button > span { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid color-mix(in srgb, var(--ink) 5%, transparent); border-radius: 50%; transition: transform 140ms ease; }
 .swatches button:hover:not(:disabled) > span { transform: scale(1.1); }
 .swatches button[aria-pressed="true"] > span { box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px color-mix(in srgb, var(--ink) 20%, transparent); }
-.backgrounds, .fonts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.backgrounds button { display: flex; flex-direction: column; align-items: stretch; gap: 7px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; line-height: 1.3; text-align: center; }
-.backgroundSample { position: relative; display: flex; justify-content: center; height: 44px; padding: 8px 20px 0; border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; }
-.miniPaper { display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 4px; padding: 7px 6px; border: 1px solid var(--line-soft); border-top: 2px solid var(--form-accent); border-radius: 4px 4px 0 0; background: var(--raised); }
-.miniPaper i { width: 100%; height: 3px; border-radius: 2px; background: var(--field-active); }
-.miniPaper i:first-child { width: 60%; background: color-mix(in srgb, var(--ink) 18%, var(--paper)); }
-.miniPaper i:last-child { width: 75%; }
-.backgrounds button[aria-pressed="true"] { color: var(--ink); font-weight: 500; }
-.backgrounds button[aria-pressed="true"] .backgroundSample { border-color: var(--muted); }
-.selection { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; color: var(--paper); background: var(--ink); }
+.fonts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .fonts button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 58px; padding: 7px; border: 1px solid transparent; border-radius: 9px; background: var(--field); color: var(--muted); font-size: 11px; line-height: 1.3; }
 .fonts button[aria-pressed="true"] { background: var(--paper); border-color: var(--line); color: var(--ink); box-shadow: 0 2px 5px color-mix(in srgb, var(--ink) 4%, transparent); }
 .fontSample { color: var(--ink); font-size: 22px; line-height: 1.05; }
 .fontCheck { position: absolute; top: 5px; right: 5px; color: var(--muted); }
-.sizeRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 2px 0 18px; }
-.sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 200px; padding: 3px; border-radius: 9px; background: var(--field); }
-.sizes button { min-width: 0; min-height: 27px; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; }
+.sizeRow { display: grid; align-content: start; gap: 10px; margin: 0 0 18px; }
+.sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; box-sizing: border-box; padding: 3px; border-radius: 999px; background: var(--field); }
+.sizes button { min-width: 0; min-height: 32px; padding: 4px 8px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 11px; }
 .sizes button[aria-pressed="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 7%, transparent); }
 .footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 13px; border-top: 1px solid var(--line-soft); }
 .footer button { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; }
@@ -57,7 +57,14 @@ button.close:hover { background: var(--field); color: var(--ink); }
 .panel button:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 .group:disabled { opacity: .5; }
 .srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-@media (max-width: 380px) {
-  .panel { padding: 16px; }
-  .sizes { width: 185px; }
+@media (max-width: 560px) {
+  .heading { padding: 16px 18px 12px; }
+  .tabs { margin-inline: 18px; }
+  .panelBody { padding: 18px; }
+  .paletteGrid, .typeGrid { grid-template-columns: minmax(0, 1fr); }
+  .swatches { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  .headerRow { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .headerPreview { width: 100%; height: 72px; }
+  .sizeRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .sizes { width: 200px; max-width: 72%; }
 }

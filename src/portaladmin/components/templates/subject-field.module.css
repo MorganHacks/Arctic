@@ -142,8 +142,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
 }
 
 .fieldOption {
@@ -246,8 +244,6 @@
   min-height: 0;
   margin-top: 8px;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
 }
 
 .list [frimousse-category-header] {

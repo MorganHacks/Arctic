@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { Select } from "@/components/ui/select";
 import Link from "next/link";
 import { useActionState, useState } from "react";
@@ -70,7 +72,7 @@ export function NewCampaign({
               somebody made on this screen, so it is not offered at all. */}
           <label htmlFor="templateKey">Template</label>
           {templatesError !== null ? (
-            <p className="meta">{templatesError}</p>
+            <ErrorToast message={templatesError} />
           ) : templates.length === 0 ? (
             <p className="meta">
               No broadcast templates. <Link href="/templates/new">Write one</Link>
@@ -185,9 +187,7 @@ export function NewCampaign({
       </div>
 
       {state.error ? (
-        <p className="error" style={{ marginTop: "0.9rem", marginBottom: 0 }}>
-          {state.error}
-        </p>
+        <ErrorToast message={state.error} revision={state} />
       ) : null}
     </form>
   );

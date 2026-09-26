@@ -31,12 +31,20 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 html,
 body {
   margin: 0;
   padding: 0;
+  overscroll-behavior: none;
   background: var(--sunken);
   color: var(--ink);
   font-family: var(--font-inter), var(--body);
@@ -52,7 +60,7 @@ body {
    * dark page, which is a flash of the wrong colour in the middle of an
    * otherwise finished form.
    */
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 /*
@@ -93,52 +101,6 @@ html {
 
 a {
   color: var(--accent);
-}
-
-/* The frame -------------------------------------------------------------- */
-
-/*
- * The strip across the top, and the one thing in it.
- *
- * It is in the root layout rather than on the form, so the wordmark is in the
- * same place on all six of this site's pages — the form, a form that closed, a
- * code that leads nowhere, the sign-in step, the error and the page after
- * submitting. A mark that moves between them is one somebody has to find again
- * each time.
- *
- * Right-aligned, and there is deliberately nothing on the left. The left of a
- * bar is where a product puts navigation, and there is none here: a form is
- * reached by its code and there is nowhere else to go. Filling the space with
- * something would mean writing copy this site does not have.
- */
-.chrome {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0.7rem 1rem;
-  background: var(--raised);
-  border-bottom: 1px solid var(--line);
-}
-
-@media (min-width: 40rem) {
-  .chrome {
-    padding: 0.85rem 1.5rem;
-  }
-}
-
-@media (min-width: 64rem) {
-  .chrome {
-    padding: 1rem 2rem;
-  }
-}
-
-.wordmark {
-  font-size: var(--step-2);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0;
 }
 
 /* The page ------------------------------------------------------------- */
@@ -1566,21 +1528,6 @@ button[type="submit"]:disabled {
 
 .formTheme .page, .formTheme input, .formTheme textarea, .formTheme select, .formTheme button, .formTheme .step-of {
   font-family: var(--form-font);
-}
-
-body:has(#mlh-trust-badge) .chrome {
-  padding-right: calc(clamp(16px, 3vw, 50px) + clamp(60px, 7vw, 90px) + 20px);
-}
-
-.formTheme:has(#mlh-trust-badge) {
-  padding-top: clamp(76px, 10vw, 128px);
-}
-
-@media (min-width: 64rem) {
-  .formTheme:has(#mlh-trust-badge) { padding-top: 0; }
-  .formTheme:has(#mlh-trust-badge) .page {
-    padding-inline: calc(clamp(16px, 3vw, 50px) + clamp(60px, 7vw, 90px) + 20px);
-  }
 }
 
 .formHeaderImage { display: block; grid-column: 1 / -1; width: 100%; aspect-ratio: 4 / 1; object-fit: cover; margin-bottom: 1.5rem; border-radius: 14px; }

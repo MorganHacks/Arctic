@@ -27,7 +27,7 @@
 .on { background: var(--field); color: var(--ink); font-weight: 600; }
 .on .tallyCount { background: var(--ink); color: var(--raised); }
 .tableFrame { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; background: var(--raised); }
-.scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 44px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 44px; }
 .scroll:focus-visible { outline: 2px solid var(--line); outline-offset: -2px; }
 .table { width: 100%; min-width: 930px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .personColumn { width: 31%; }
@@ -83,7 +83,7 @@
   .eventPicker { max-width: 100%; }
   .searchActions { flex-wrap: wrap; gap: 10px; }
   .search { width: 100%; }
-  .tallies { flex-wrap: nowrap; margin-block: 20px 16px; padding-bottom: 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  .tallies { flex-wrap: nowrap; margin-block: 20px 16px; padding-bottom: 6px; overflow-x: auto; overscroll-behavior-x: contain; }
   .tableFrame { flex: none; }
   .scroll { max-height: 65dvh; }
   .table { min-width: 880px; }

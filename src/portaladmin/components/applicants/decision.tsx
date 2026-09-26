@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { Select } from "@/components/ui/select";
 import { useActionState } from "react";
 import { changeStatus } from "@/app/applicants/actions";
@@ -94,7 +96,7 @@ export function Decision({
         </button>
       </div>
 
-      {state.error ? <p className="error">{state.error}</p> : null}
+      {state.error ? <ErrorToast message={state.error} revision={state} /> : null}
     </form>
   );
 }

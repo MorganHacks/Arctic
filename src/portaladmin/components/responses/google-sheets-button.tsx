@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useRef, useState } from "react";
 import { Cancel01Icon, Download01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -140,7 +142,7 @@ function SheetsDialog({ formId, name, onCreated, onClose }: {
             ? "Create a spreadsheet with all responses in your Google Drive. Choose the account you want to save it to."
             : "Google Sheets isn’t connected for this workspace yet. You can still download the CSV and import it into a new spreadsheet."}</p>
         {!configured ? <ol><li>Download your responses below.</li><li>In Google Sheets, open <strong>File</strong>, select <strong>Import</strong>, then <strong>Upload</strong>.</li></ol> : null}
-        {error ? <p className={styles.failed} role="alert">{error}</p> : null}
+        <ErrorToast title="Google Sheets could not be opened" message={error} />
         <div className={styles.sheetsActions}>
           {url ? (
             <a className={styles.primaryButton} href={url} target="_blank" rel="noopener noreferrer" onClick={onClose}>

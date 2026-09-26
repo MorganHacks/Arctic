@@ -35,18 +35,28 @@ const updatedDate = new Intl.DateTimeFormat("en-US", {
 function TemplateThumbnail({ html, name }: { html: string; name: string }) {
   const paper = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (!paper.current) return;
     const observer = new ResizeObserver(([entry]) => setScale(entry.contentRect.width / 600));
     observer.observe(paper.current);
-    return () => observer.disconnect();
+    const intersection = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setVisible(true);
+      intersection.disconnect();
+    }, { rootMargin: "200px" });
+    intersection.observe(paper.current);
+    return () => {
+      observer.disconnect();
+      intersection.disconnect();
+    };
   }, []);
 
   return <div ref={paper} className={styles.templatePreviewPaper}>
-    <iframe className={styles.templatePreviewFrame} title={`${name} email preview`}
+    {visible ? <iframe className={styles.templatePreviewFrame} title={`${name} email preview`}
       tabIndex={-1} loading="lazy" sandbox="" referrerPolicy="no-referrer"
-      style={{ transform: `scale(${scale})` }} srcDoc={emailDocument(html, "desktop")} />
+      style={{ transform: `scale(${scale})` }} srcDoc={emailDocument(html)} /> : null}
   </div>;
 }
 
@@ -341,7 +351,7 @@ export function TemplatesTable({ templates, initialHiddenKeys, canDelete, canMan
             const isSelected = selectedKeys.has(template.key);
             const content = <>
                   <div className={styles.templatePreview} aria-hidden="true">
-                    {template.previewHtml ? (
+                    {template.previewHtml && view === "grid" ? (
                       <TemplateThumbnail html={template.previewHtml} name={name} />
                     ) : (
                       <span className={styles.previewUnavailable}>

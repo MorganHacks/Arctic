@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import Link from "next/link";
 import { useState } from "react";
 import { Attachment01Icon } from "@hugeicons/core-free-icons";
@@ -175,7 +177,7 @@ export function ApplicantsTable({
       <div className={styles.foot}>
         <div className={styles.loaded}>
           <span className={styles.note} role="status">Showing <strong>{items.length.toLocaleString("en-US")}</strong>{total !== null ? ` of ${Math.max(total, items.length).toLocaleString("en-US")}` : ""} applicants</span>
-          {failed ? <span className={styles.failed} role="alert">{failed}</span> : null}
+          {failed ? <ErrorToast message={failed} /> : null}
         </div>
 
         {cursor !== null ? (

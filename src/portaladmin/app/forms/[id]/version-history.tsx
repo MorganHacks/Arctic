@@ -1,5 +1,7 @@
 "use client";
 
+import { ErrorToast } from "@/components/ui/error-toast";
+
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Cancel01Icon, TimeScheduleIcon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -66,7 +68,7 @@ export function VersionHistory({ formId, versions, saveStatus }: {
         <h2>Version history</h2>
         <button type="button" className={styles.iconBtn} aria-label="Close version history" popoverTarget={id} popoverTargetAction="hide"><Icon icon={Cancel01Icon} size={18} /></button>
       </div>
-      {failed ? <p className={styles.historyNotice} role="status">Couldn’t refresh history. Showing the last loaded versions.</p> : null}
+      <ErrorToast message={failed ? "Couldn’t refresh history. Showing the last loaded versions." : null} />
       <ul>
         {shown.map(version => {
           const actor = version.actor;

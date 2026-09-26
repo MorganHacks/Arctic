@@ -211,6 +211,8 @@ builder.Services.AddScoped<IApplicantPortalStore, PostgresApplicantPortalStore>(
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<TemplateHtmlImporter>()
     .ConfigurePrimaryHttpMessageHandler(TemplateHtmlImporter.CreateHandler);
+builder.Services.AddHttpClient<FormLinkPreview>()
+    .ConfigurePrimaryHttpMessageHandler(TemplateHtmlImporter.CreateHandler);
 builder.Services.AddHttpClient<ISnsSignatureVerifier, SnsSignatureVerifier>();
 builder.Services.AddMemoryCache();
 
@@ -240,6 +242,14 @@ var proxySecret = builder.Configuration["Network:ProxySecret"];
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("link-preview", http => RateLimitPartition.GetFixedWindowLimiter(
+        ClientAddress.ForRateLimit(http, proxySecret), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 300,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
 
     // Generous, because SNS delivers bounce notifications in bulk after a
     // blast and throttling them means losing the record of who bounced —

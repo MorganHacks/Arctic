@@ -53,6 +53,12 @@ public static class PublicFormEndpoints
         var forms = app.MapGroup("/forms");
 
         forms.MapGet("/{code}", GetForm);
+        forms.MapGet("/link-preview", async (string url, FormLinkPreview preview, HttpContext http, CancellationToken ct) =>
+        {
+            var media = await preview.ResolveAsync(url, ct);
+            http.Response.Headers.CacheControl = "public, max-age=120";
+            return Results.Ok(media);
+        }).RequireRateLimiting("link-preview");
 
         // The same limiter the portal's magic link is behind, because it is
         // the same hazard: an endpoint open to the internet that sends mail

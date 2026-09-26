@@ -218,7 +218,6 @@
   padding: 32px 0 40px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
   scroll-padding: 24px;
   container: event-panel / inline-size;
 }
