@@ -68,8 +68,9 @@ export default async function FormPage({ params, searchParams }: Props) {
   }
 
   const theme = resolveFormTheme(form.theme);
+  const themeStyle = formThemeStyle(theme);
   const linkCard = form.open && (form.fields?.length || form.access === "signIn") ? theme.linkCard : null;
-  return <div className={`formTheme ${styles.surface}`} style={formThemeStyle(theme)} data-link-card={!!linkCard}>
+  return <div className={`formTheme ${styles.surface} ${theme.layout === "cards" ? styles.cards : ""}`} style={themeStyle} data-layout={theme.layout} data-color-scheme={themeStyle["--form-color-scheme"]} data-background={themeStyle["--form-background"]} data-link-card={!!linkCard}>
     <PageBackground theme={form.theme} />
     {theme.showMlhBadge && form.mlhSeason ? <MlhBadge season={form.mlhSeason} color={formMlhBadgeColor(theme)} /> : null}
     <FormContent form={form} expired={query.link === "expired"} />
@@ -130,15 +131,17 @@ function FormContent({ form, expired }: { form: PublicForm; expired: boolean }) 
     return <NoForm />;
   }
 
+  const cards = resolveFormTheme(form.theme).layout === "cards";
   return (
     <main className="page">
-      <FormIntro form={form} />
+      {cards ? <HeaderImage form={form} /> : <FormIntro form={form} />}
 
       <Questions
         code={form.code}
         fields={form.fields}
         prefill={form.prefill}
         fixed={form.fixed}
+        intro={cards ? <Masthead name={form.name} closesAt={form.closesAt} you={form.you} /> : undefined}
       />
     </main>
   );
@@ -183,7 +186,13 @@ function Masthead({
         </p>
       ) : null}
       {closesAt ? <div className={styles.deadline}>
-        <span>Submission deadline</span>
+        <span className={styles.deadlineLabel}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M16 3v4M8 3v4M3 11h18M8 15h2m4 0h2M8 18h2" />
+          </svg>
+          Submission deadline
+        </span>
         <time dateTime={closesAt}>{longDate(closesAt)}</time>
         <DeadlineCountdown closesAt={closesAt} />
       </div> : null}

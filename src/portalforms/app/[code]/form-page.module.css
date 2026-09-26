@@ -19,10 +19,12 @@
   color: var(--ink);
 }
 
-.surface:has(:global(#mlh-trust-badge)) {
+.surface:where(:has(:global(#mlh-trust-badge))) {
   padding-top: 128px;
   padding-right: calc(clamp(16px, 3vw, 50px) + clamp(60px, 7vw, 90px) + 24px);
 }
+
+.surface[data-background="#000000"] { --form-link-card-background: #1f1f1f; }
 
 :global(html):has(.surface),
 :global(body):has(.surface),
@@ -70,6 +72,8 @@
 .surface :global(.lede) { margin-top: 20px; font-size: var(--form-font-size); line-height: 1.7; overflow-wrap: anywhere; }
 .deadline { display: grid; gap: 6px; margin-top: 32px; padding-top: 24px; border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
 .deadline span { font-size: 12px; color: var(--muted); }
+.deadlineLabel { display: inline-flex; align-items: center; gap: 6px; }
+.deadlineLabel svg { flex: none; }
 .deadline time { font-size: var(--form-font-size); line-height: 1.6; }
 .countdown { margin-top: 14px; flex-basis: 100%; }
 .countdown > p { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
@@ -201,8 +205,8 @@
   .surface :global(.choices .choice:hover), .surface :global(.agreement:hover) { background: var(--control-hover); border-color: transparent; }
 }
 .surface :global(.choices .choice:has(input:checked)), .surface :global(.agreement:has(input:checked)) {
-  background: color-mix(in srgb, var(--form-accent) 9%, var(--form-background));
-  border-color: color-mix(in srgb, var(--focus) 35%, transparent);
+  background: var(--control-fill);
+  border-color: var(--control-border);
 }
 .surface :global(.choice:has(input:focus-visible)) { outline: 2px solid var(--focus); outline-offset: 3px; }
 .surface :global(.choice input) { width: 18px; height: 18px; margin: 2px 0 0; border: 1.5px solid #8a94a3; border-radius: 4px; background: var(--paper); }
@@ -239,7 +243,7 @@
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line-soft);
-  border-radius: 999px;
+  border-radius: 8px;
   vertical-align: middle;
 }
 @media (hover: hover) {
@@ -278,7 +282,7 @@
   .surface :global(.page) { gap: 48px; grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); }
 }
 @media (max-width: 900px) {
-  .surface, .surface:has(:global(#mlh-trust-badge)) { padding: 104px 24px 48px; }
+  .surface, .surface:where(:has(:global(#mlh-trust-badge))) { padding: 104px 24px 48px; }
   .surface :global(.page) { display: block; max-width: 680px; }
   .intro { position: static; margin-bottom: 32px; }
   .surface :global(.formHeaderImage) { max-width: 260px; margin-bottom: 26px; }
@@ -287,7 +291,7 @@
   .surface :global(.step) { padding: 18px 0 20px; }
 }
 @media (max-width: 480px) {
-  .surface, .surface:has(:global(#mlh-trust-badge)) { padding: 104px 24px 32px; }
+  .surface, .surface:where(:has(:global(#mlh-trust-badge))) { padding: 104px 24px 32px; }
   .surface :global(.formHeaderImage) { max-width: min(216px, 100%); margin-bottom: 24px; }
   .intro { margin: 0 0 32px; }
   .surface h1 { font-size: clamp(28px, 7.5vw, 32px); line-height: 1.15; }
@@ -326,4 +330,146 @@
 
 @media (forced-colors: active) {
   .surface :global(input:not([type="checkbox"]):not([type="radio"]):focus), .surface select:focus, .surface textarea:focus { outline: 2px solid Highlight; outline-offset: 2px; }
+}
+
+.cards {
+  --ink: var(--form-ink);
+  --muted: var(--form-muted);
+  --faint: var(--form-faint);
+  --sunken: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  --line: color-mix(in srgb, var(--ink) 16%, var(--paper));
+  --line-soft: color-mix(in srgb, var(--ink) 8%, var(--paper));
+  --control-fill: transparent;
+  --control-hover: transparent;
+  --control-border: var(--line);
+  --stop: color-mix(in srgb, #b23b4a 70%, var(--ink));
+  --card-ui-font: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+.cards[data-color-scheme="dark"] { --paper: color-mix(in srgb, var(--form-ink) 6%, var(--form-background)); }
+.cards[data-background="#000000"] { --paper: #1f1f1f; }
+.cards, .cards:has(:global(.page)) {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  padding: 12px 24px 64px;
+}
+.cards[data-link-card="true"] { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+.cards :global(.page) { display: block; height: auto; max-width: 680px; }
+.cards :global(.page > form), .cards[data-link-card="true"] :global(.page > form) {
+  height: auto;
+  overflow: visible;
+  padding: 0;
+  overscroll-behavior: auto;
+}
+.cards .intro { position: static; margin-bottom: 16px; }
+.cards :global(.formHeaderImage) {
+  max-width: none;
+  margin: 0 0 16px;
+  object-fit: cover;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+}
+.cards :global(.card-intro), .cards .intro :global(.masthead) {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 16px;
+  padding-top: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--paper);
+}
+.cards :global(.card-intro)::before, .cards .intro :global(.masthead)::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 10px;
+  background: var(--form-accent);
+}
+.cards :global(.card-intro-content), .cards .intro :global(.masthead) { padding: 26px 26px 24px; }
+.cards .intro :global(.masthead) { padding-top: 36px; }
+.cards h1 { max-width: none; font-size: clamp(23px, 2.4vw, 28px); line-height: 1.4; letter-spacing: -.025em; text-wrap: initial; }
+.cards .deadline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 16px; padding-top: 16px; }
+.cards .deadlineLabel { gap: 8px; line-height: 20px; white-space: nowrap; }
+.cards .deadline time { font-size: 13px; font-weight: 500; line-height: 20px; }
+.cards :global(.section-intro), .cards :global(.step) { position: static; padding: 0; margin-top: 16px; border: 0; background: transparent; }
+.cards :global(.section-intro h2), .cards :global(.step-title) { font-size: var(--form-font-size); font-weight: 600; }
+.cards :global(.section-intro p), .cards :global(.step-help) { margin-top: 8px; font-family: var(--card-ui-font); font-size: var(--form-font-size); line-height: 1.7; }
+.cards :global(.step-of) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.cards :global(.card-required) { margin: 0; padding: 14px 26px; border-top: 1px solid var(--line-soft); font-family: var(--card-ui-font); font-size: 12px; color: var(--muted); }
+.cards :global(.card-required span) { margin-right: 4px; color: var(--stop); }
+.cards :global(.step-body) { display: grid; gap: 16px; }
+.cards :global(.question) {
+  padding: 24px 26px;
+  margin: 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--paper);
+  scroll-margin-top: 24px;
+}
+.cards :global(.question > .prompt), .cards :global(.question > legend) { font-size: var(--form-font-size); font-weight: 600; margin-bottom: 16px; }
+.cards :global(.ordinal), .cards :global(.optional), .cards :global(.counter) { display: none; }
+.cards :global(.answer) { margin: 0; }
+.cards :global(input:not([type="checkbox"]):not([type="radio"]):not([type="file"])), .cards select, .cards textarea {
+  max-width: 420px;
+  height: 42px;
+  min-height: 42px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  font-size: var(--form-font-size);
+  line-height: 1.5;
+  background: transparent;
+}
+.cards textarea { max-width: none; min-height: 80px; height: auto; }
+.cards select { padding-right: 34px; }
+.cards :global(.select::after) { right: 10px; }
+.cards :global(input::placeholder), .cards textarea::placeholder { color: var(--faint); }
+.cards select:global([data-empty]) { color: var(--ink); }
+.cards :global(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus), .cards textarea:focus, .cards select:focus { border-color: var(--line); background: transparent; box-shadow: none; }
+.cards :global(input:not([type="checkbox"]):not([type="radio"])[aria-invalid="true"]), .cards textarea:global([aria-invalid="true"]), .cards select:global([aria-invalid="true"]) { border-bottom-color: var(--stop); }
+.cards :global(.select) { max-width: 420px; }
+.cards :global(.choices) { grid-template-columns: 1fr; gap: 2px 24px; margin: 8px -8px 0; }
+.cards :global(.choices[data-multiple="true"]) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.cards :global(.choices .choice), .cards :global(.agreement) { border: 0; border-radius: 10px; background: transparent; padding: 10px 8px; min-height: 44px; font-size: var(--form-font-size); }
+.cards :global(.choices .choice:hover) { background: var(--sunken); }
+.cards :global(.choices .choice:has(input:checked)) { background: transparent; border: 0; }
+.cards :global(.choice input) { border-color: var(--faint); }
+.cards :global(.choices .choice input[type="checkbox"]) { border-radius: 5px; }
+.cards :global(.agreement), .cards :global(.agreement:has(input:checked)) { min-height: 0; padding: 0; gap: 8px; border-radius: 0; background: transparent; border: 0; }
+.cards :global(.agreement input) { margin-top: 3px; }
+.cards :global(.answer > .help:first-child) { margin: -8px 0 16px; font-size: var(--form-font-size); line-height: 1.6; }
+.cards :global(.question[data-type="consent"] .help) { margin: 8px 0 0; }
+.cards :global(.upload input[type="file"]) { min-height: 44px; padding: 4px 0; border: 0; border-radius: 0; font-size: var(--form-font-size); background: transparent; }
+.cards :global(input[type="file"]::file-selector-button) { min-height: 36px; padding: 8px 14px; border: 0; font: inherit; background: var(--sunken); }
+.cards :global(.submit) { justify-content: space-between; align-items: center; gap: 20px; margin: 0; padding: 24px 0 0; border: 0; border-radius: 0; background: transparent; }
+.cards :global(.submit-actions) { order: -1; width: auto; }
+.cards :global(.submit .footnote) { text-align: left; font-family: var(--card-ui-font); }
+.cards :global(.submit button[type="submit"]), .cards :global(.back) { flex: none; min-width: 0; min-height: 42px; padding: 10px 26px; border: 0; font-family: var(--card-ui-font); font-size: 13px; font-weight: 600; line-height: 1.5; }
+.cards :global(.back) { color: var(--ink); background: var(--paper); }
+.cards :global(.page-progress) { flex: none; justify-content: flex-end; max-width: none; margin: 0; color: var(--form-muted); }
+.cards :global(.page-progress-track) { flex: none; width: 140px; height: 6px; }
+.cards :global(.page-progress p) { font-family: var(--card-ui-font); font-size: 12px; font-weight: 400; }
+.cards :global(.page-progress-track span) { background: #2da653; }
+.cards :global(.notice) { padding: 28px; border-radius: 16px; background: var(--paper); }
+@media (max-width: 900px) {
+  .surface.cards:where(:has(:global(#mlh-trust-badge))) { padding-top: 128px; }
+  .surface.cards:where(:has(:global(#mlh-trust-badge))):has(:global(.formHeaderImage)) { padding-top: 12px; }
+  .cards:where(:has(:global(#mlh-trust-badge))) :global(.formHeaderImage) { width: calc(100% - clamp(60px, 7vw, 90px) - 24px); }
+}
+@media (max-width: 600px) {
+  .cards, .cards:has(:global(.page)) { padding-inline: 16px; }
+  .cards :global(.card-intro-content), .cards .intro :global(.masthead), .cards :global(.question) { padding: 20px 18px; }
+  .cards .intro :global(.masthead) { padding-top: 30px; }
+  .cards .deadline { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 4px 8px; }
+  .cards .deadlineLabel, .cards .countdown, .cards .deadlineClosed { grid-column: 1 / -1; }
+  .cards .deadline time { grid-column: 2; }
+  .cards :global(.card-required) { padding: 14px 18px; }
+  .cards :global(.page-progress) { max-width: none; }
+}
+@media (max-width: 480px) {
+  .surface.cards:where(:has(:global(#mlh-trust-badge))) { padding-top: 96px; }
+  .cards:where(:has(:global(#mlh-trust-badge))) :global(.formHeaderImage) { width: calc(100% - 60px); }
 }

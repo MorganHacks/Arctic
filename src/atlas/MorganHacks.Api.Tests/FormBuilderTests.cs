@@ -744,6 +744,45 @@ public class FormBuilderTests(ApplicationsDatabase db)
     }
 
     [Fact]
+    public async Task Responder_layouts_follow_the_draft_publish_cycle()
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        var code = draft["form"]!["code"]!.GetValue<string>();
+        Assert.Equal("split", draft["draft"]!["theme"]!["layout"]!.GetValue<string>());
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        foreach (var layout in new[] { "cards", "split" })
+        {
+            await (await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie)).EnsureSuccess();
+            await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
+                new { fields, theme = new { layout, background = "#000000" } })).EnsureSuccess();
+            await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields })).EnsureSuccess();
+            draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+            Assert.Equal(layout, draft["draft"]!["theme"]!["layout"]!.GetValue<string>());
+            var live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+            Assert.NotEqual(layout, live["theme"]!["layout"]!.GetValue<string>());
+            await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+            live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+            Assert.Equal(layout, live["theme"]!["layout"]!.GetValue<string>());
+            Assert.Equal("#000000", live["theme"]!["background"]!.GetValue<string>());
+        }
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task Invalid_layouts_leave_the_saved_draft_unchanged(string? layout)
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var response = await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
+            new { fields, theme = new { layout } });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Equal("split", draft["draft"]!["theme"]!["layout"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Link_cards_follow_the_draft_publish_cycle_and_can_be_removed()
     {
         var (cookie, form, fields) = await OpenBuilderAsync();

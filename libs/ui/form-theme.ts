@@ -17,6 +17,7 @@ export type FormLinkCard = {
 };
 
 export type FormTheme = {
+  layout: "split" | "cards";
   accent: string;
   background: "neutral" | "tint" | "white" | `#${string}`;
   font: "sans" | "serif" | "mono";
@@ -55,6 +56,7 @@ export function isFormHeaderImage(value: unknown): value is string {
 }
 
 export const DEFAULT_FORM_THEME: FormTheme = {
+  layout: "split",
   accent: "#003970",
   background: "white",
   font: "sans",
@@ -67,6 +69,7 @@ export const DEFAULT_FORM_THEME: FormTheme = {
 
 export function resolveFormTheme(value?: Partial<FormTheme> | null): FormTheme {
   return {
+    layout: value?.layout === "cards" ? "cards" : "split",
     accent: /^#[0-9a-f]{6}$/i.test(value?.accent ?? "") ? value!.accent! : DEFAULT_FORM_THEME.accent,
     background: isFormBackground(value?.background) ? value.background : DEFAULT_FORM_THEME.background,
     font: value?.font === "serif" || value?.font === "mono" ? value.font : "sans",
