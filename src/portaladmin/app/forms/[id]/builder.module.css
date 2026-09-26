@@ -705,7 +705,6 @@ button.previewPrevious { background: var(--raised); color: var(--ink); }
 .headerNavigation { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 20px; min-height: var(--shell-heading-height); }
 .sectionNavigation { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line-soft); }
 .canvas { flex: 1; min-height: 0; overflow: auto; margin-top: 24px; padding: 28px 32px 40px; border-radius: 20px 20px 0 0; background: var(--field); }
-.builder[data-preview="true"] .canvas { background: var(--form-background, #ffffff); }
 .builder[data-preview="false"][data-editable="true"] .canvas { padding-bottom: 112px; }
 .canvasInner { width: 100%; max-width: 760px; margin-inline: auto; }
 .card[data-active="true"] { padding: 36px 24px 24px; }

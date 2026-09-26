@@ -121,8 +121,8 @@ export function Question({
     >
       <legend>
         <span className="ordinal" aria-hidden="true">{String(index).padStart(2, "0")}</span>
-        <span className="prompt-text">{field.type === "consent" ? "Agreement" : field.label}</span>
-        <Requiredness field={field} />
+        <span className="prompt-text">{field.type === "consent" ? "Agreement" : field.label}{field.required ? <Requiredness field={field} /> : null}</span>
+        {!field.required ? <Requiredness field={field} /> : null}
       </legend>
       <div className="answer">{body}</div>
     </fieldset>
@@ -130,8 +130,8 @@ export function Question({
     <div className={`question${problem ? " wrong" : ""}`} data-key={field.key}>
       <label className="prompt" htmlFor={id}>
         <span className="ordinal" aria-hidden="true">{String(index).padStart(2, "0")}</span>
-        <span className="prompt-text">{field.label}</span>
-        <Requiredness field={field} />
+        <span className="prompt-text">{field.label}{field.required ? <Requiredness field={field} /> : null}</span>
+        {!field.required ? <Requiredness field={field} /> : null}
       </label>
       <div className="answer">{body}</div>
     </div>
@@ -205,14 +205,12 @@ export function fieldId(key: string): string {
 /**
  * Whether an answer is needed.
  *
- * A word rather than a red asterisk. Being required is not an error, and on a
- * page where --stop means "something went wrong" it must not look like one.
  * Optional questions are marked too, because on a long form the useful thing to
  * know is which ones can be skipped.
  */
 function Requiredness({ field }: { field: Field }) {
   return field.required ? (
-    <span className="needed">Required</span>
+    <span className="needed"><span aria-hidden="true">*</span><span className="required-label"> Required</span></span>
   ) : (
     <span className="optional">Optional</span>
   );

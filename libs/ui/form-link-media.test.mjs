@@ -16,10 +16,14 @@ function storage(t) {
   return values;
 }
 
-test("the home recap link uses its existing hosted video without a metadata request", async t => {
+test("recap links and the original video resolve to the same playable preview without a metadata request", async t => {
   t.mock.method(globalThis, "fetch", () => { throw new Error("Metadata should not be requested"); });
-  for (const url of [MORGAN_HACKS_RECAP.url, "https://instagram.com/reel/DXE7YimkZVk?igsh=example"]) {
-    assert.deepEqual(await loadFormLinkMedia(url, new AbortController().signal), { image: null, video: MORGAN_HACKS_RECAP.video });
+  for (const url of [
+    MORGAN_HACKS_RECAP.url,
+    "https://instagram.com/reel/DXE7YimkZVk?igsh=example",
+    "https://res.cloudinary.com/kardusers/video/upload/v1790236201/reference-02b08846cc82817c0074d6612e6b3e70cf4ce12a2afa7016b603c8e68dbfa4ac_xdbiqx.mp4",
+  ]) {
+    assert.deepEqual(await loadFormLinkMedia(url, new AbortController().signal), { image: MORGAN_HACKS_RECAP.image, video: MORGAN_HACKS_RECAP.video });
   }
   assert.equal(videoLinkMedia("https://instagram.com/p/anotherPost/"), null);
   assert.equal(videoLinkMedia("https://instagram.com.example.com/p/DXE7YimkZVk/"), null);

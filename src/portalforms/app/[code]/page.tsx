@@ -1,7 +1,9 @@
 import { PageBackground } from "./page-background";
 import { FormLinkCard } from "@/components/ui/form-link-card";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { loadForm, type PublicForm } from "@/lib/api";
+import { formShareMetadata, formShareOrigin } from "@/lib/form-sharing";
 import { formMlhBadgeColor, formThemeStyle, resolveFormTheme } from "../../../../libs/ui/form-theme";
 import { NoForm } from "../no-form";
 import { Questions } from "./questions";
@@ -25,19 +27,15 @@ type Props = {
   searchParams: Promise<{ link?: string }>;
 };
 
-/**
- * The form's own name in the tab.
- *
- * Worth the second call: somebody applying has three tabs open and "Untitled"
- * on all of them is how they lose the one they were filling in.
- */
 export async function generateMetadata({
   params,
 }: Pick<Props, "params">): Promise<Metadata> {
   const { code } = await params;
-  const form = await loadForm(code);
+  const [form, requestHeaders] = await Promise.all([loadForm(code, { anonymous: true }), headers()]);
 
-  return { title: form ? `${form.name} — MorganHacks` : "MorganHacks" };
+  if (!form) return { title: "MorganHacks", description: "This form is unavailable." };
+
+  return formShareMetadata(form, formShareOrigin(requestHeaders, process.env.FORMS_ORIGIN));
 }
 
 /**

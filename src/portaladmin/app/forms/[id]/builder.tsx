@@ -459,7 +459,7 @@ export function Builder({
           <span>Preview mode</span>
         </div> : undefined} />
       {drag ? <div className={styles.dragPreview} aria-hidden="true" style={{ left: drag.x, top: drag.y }}><Icon icon={DragDropVerticalIcon} size={18} /><span>{drag.label}</span></div> : null}
-      <div className={styles.canvas} ref={canvas} style={formThemeStyle(theme)}>
+      <div className={styles.canvas} ref={canvas} style={formThemeStyle({ ...theme, background: "neutral" })}>
         {!previewOnly ? <div className={styles.canvasHistory}>
           <VersionHistory formId={formId} versions={versions} saveStatus={status} />
           <button type="button" className={styles.headerIcon} aria-pressed={editorExpanded}
