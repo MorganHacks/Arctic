@@ -39,7 +39,7 @@ export function ThemePicker({ theme, onChange, disabled }: {
   const [preparing, setPreparing] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const backgroundColor = formBackgroundColor(theme);
-  const isDefault = Object.entries(DEFAULT_FORM_THEME).every(([key, value]) => key === "showMlhBadge" || key === "mlhBadgeColor" || key === "linkCard" || theme[key as keyof FormTheme] === value);
+  const isDefault = Object.entries(DEFAULT_FORM_THEME).every(([key, value]) => key === "layout" || key === "showMlhBadge" || key === "mlhBadgeColor" || key === "linkCard" || theme[key as keyof FormTheme] === value);
 
   useLayoutEffect(() => { latest.current = { theme, onChange }; });
 
@@ -199,7 +199,7 @@ export function ThemePicker({ theme, onChange, disabled }: {
       </div>
 
       <div className={styles.footer}>
-        <button type="button" disabled={disabled || preparing || isDefault} onClick={() => { setImageError(null); onChange({ ...DEFAULT_FORM_THEME, showMlhBadge: theme.showMlhBadge, mlhBadgeColor: theme.mlhBadgeColor, linkCard: theme.linkCard }); }}><Icon icon={Undo03Icon} size={14} />Reset theme</button>
+        <button type="button" disabled={disabled || preparing || isDefault} onClick={() => { setImageError(null); onChange({ ...DEFAULT_FORM_THEME, layout: theme.layout, showMlhBadge: theme.showMlhBadge, mlhBadgeColor: theme.mlhBadgeColor, linkCard: theme.linkCard }); }}><Icon icon={Undo03Icon} size={14} />Reset theme</button>
         <span>Autosaves to draft</span>
       </div>
       </div>

@@ -10,7 +10,8 @@ public sealed record FormTheme(
     string? HeaderImage = null,
     bool ShowMlhBadge = false,
     FormLinkCard? LinkCard = null,
-    string MlhBadgeColor = "white")
+    string MlhBadgeColor = "white",
+    string Layout = "split")
 {
     public static FormTheme Default { get; } = new();
 
@@ -20,6 +21,7 @@ public sealed record FormTheme(
             || Background is not null && Regex.IsMatch(Background, "^#[0-9a-fA-F]{6}$"))
         && Font is "sans" or "serif" or "mono"
         && Size is "small" or "medium" or "large"
+        && Layout is "split" or "cards"
         && ValidHeaderImage(HeaderImage)
         && MlhBadgeColor is "auto" or "white" or "black" or "gray" or "red" or "blue" or "yellow"
         && (LinkCard is null || LinkCard.IsValid());

@@ -443,7 +443,7 @@ button.previewBack:hover { background: var(--field); color: var(--ink); }
    the same surface rather than a white box that happens to hold the same
    questions. */
 .previewRule {
-  height: 4px;
+  height: 10px;
   background: var(--accent);
 }
 
@@ -466,7 +466,7 @@ button.previewBack:hover { background: var(--field); color: var(--ink); }
   padding: 24px 26px; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--raised); animation: arrive 180ms ease-out;
 }
 
-.previewIntro { overflow: hidden; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--raised); }
+.previewIntro { overflow: hidden; border: 0; border-radius: 8px; background: var(--raised); }
 .previewHeaderImage { margin-bottom: 16px; border: 1px solid var(--line-soft); border-radius: 16px; }
 .previewTop .pageHeading { margin: 16px 0 0; font-size: var(--form-font-size, 14px); }
 .previewTop .help { margin-top: 8px; line-height: 1.7; }
@@ -485,10 +485,10 @@ button.previewSubmit { background: var(--accent); color: var(--accent-ink); }
 button.previewSubmit:hover { filter: brightness(.94); }
 button.previewPrevious { background: var(--raised); color: var(--ink); }
 .previewProgress { display: flex; align-items: center; gap: 14px; color: var(--form-muted, var(--muted)); font-size: 12px; }
-.previewProgress progress { appearance: none; width: 140px; height: 6px; overflow: hidden; border: 0; border-radius: 999px; background: var(--line-soft); color: var(--accent); }
+.previewProgress progress { appearance: none; width: 140px; height: 6px; overflow: hidden; border: 0; border-radius: 999px; background: var(--line-soft); color: #2da653; }
 .previewProgress progress::-webkit-progress-bar { background: var(--line-soft); border-radius: 999px; }
-.previewProgress progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
-.previewProgress progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+.previewProgress progress::-webkit-progress-value { background: #2da653; border-radius: 999px; }
+.previewProgress progress::-moz-progress-bar { background: #2da653; border-radius: 999px; }
 .previewNote { margin: 20px 0 0; color: var(--form-faint, var(--faint)); font-size: 11px; line-height: 1.6; }
 .previewComplete { display: grid; justify-items: start; gap: 12px; padding: 28px; margin-top: 16px; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--raised); }
 .previewComplete > svg { color: var(--ok); }
@@ -578,7 +578,7 @@ button.previewPrevious { background: var(--raised); color: var(--ink); }
   cursor: pointer;
 }
 .choice:hover { background: var(--field); }
-.choice:has(input:checked) { background: var(--accent-soft); }
+.choice:has(input:checked) { background: transparent; }
 .choice:has(input:focus-visible) { background: var(--field-active); }
 .choice > span { min-width: 0; overflow-wrap: anywhere; }
 .preview .choice input[type="checkbox"], .preview .choice input[type="radio"] { flex: none; width: 18px; height: 18px; min-width: 18px; min-height: 18px; margin: 2px 0 0; border: 1.5px solid var(--faint); background: var(--raised); box-shadow: none; }
@@ -684,7 +684,7 @@ button.previewPrevious { background: var(--raised); color: var(--ink); }
 .preview textarea.answerInput { display: block; max-width: none; min-height: 80px; resize: vertical; }
 .previewSelect { width: 100%; max-width: 420px; }
 .preview .answerInput[type="file"] { max-width: none; padding: 4px 0; border: 0; color: var(--muted); }
-.preview .answerInput::file-selector-button { min-height: 36px; margin-right: 12px; padding: 8px 14px; border: 0; border-radius: 999px; background: var(--field); color: var(--ink); font: inherit; cursor: pointer; }
+.preview .answerInput::file-selector-button { min-height: 36px; margin-right: 12px; padding: 8px 14px; border: 0; border-radius: 8px; background: var(--field); color: var(--ink); font: inherit; cursor: pointer; }
 .preview .answerInput::file-selector-button:hover { background: var(--field-active); }
 .preview input:focus, .preview select:focus, .preview textarea:focus { outline: none; box-shadow: none; }
 .preview .answerInput:focus { background: transparent; }

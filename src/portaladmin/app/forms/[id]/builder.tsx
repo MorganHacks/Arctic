@@ -27,6 +27,7 @@ import { Question } from "./question";
 import { Schedule } from "./schedule";
 import { Unpublish } from "./unpublish";
 import { ThemePicker } from "./theme-picker";
+import { LayoutPicker } from "./layout-picker";
 import { QuestionToolbar } from "./question-toolbar";
 import { VersionHistory } from "./version-history";
 import { PublishControl } from "./publish-control";
@@ -388,6 +389,7 @@ export function Builder({
       </span>
       <div className={styles.quickActions}>
         <ThemePicker theme={theme} onChange={changeTheme} disabled={!canEdit || publishing} />
+        <LayoutPicker theme={theme} onChange={changeTheme} disabled={!canEdit || publishing} />
         <button type="button" className={styles.headerIcon} aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)"
           disabled={!canEdit || !history.past.length || publishing} onClick={() => restore("undo")}><Icon icon={Undo03Icon} size={20} /></button>
         <button type="button" className={styles.headerIcon} aria-label="Redo" title="Redo (⌘⇧Z / Ctrl+Shift+Z)"

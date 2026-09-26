@@ -24,6 +24,22 @@ test("custom background colors survive unsaved draft recovery", () => {
   assert.notEqual(draftFingerprint(original), draftFingerprint(changed));
 });
 
+test("layout changes are saved and recovered without breaking older drafts", async () => {
+  const original = draft();
+  const changed = { ...original, theme: { ...original.theme, layout: "cards" } };
+  const calls = [];
+  const saver = createDraftAutosave({ draft: original, revision: 0 }, async value => { calls.push(value); return ok; });
+  saver.update(changed, 1);
+  const recovered = readRecovery(encodeRecovery(saver.getSnapshot()));
+  assert.equal(recovered.draft.theme.layout, "cards");
+  assert.equal(recoveryAction(recovered, original), "restore");
+  assert.equal(recoveryAction(recovered, changed), "saved");
+  assert.equal(draftFingerprint(original), draftFingerprint({ ...original, theme: { ...original.theme, layout: "split" } }));
+  assert.equal(readRecovery(JSON.stringify({ ...recovered, draft: { ...changed, theme: { ...changed.theme, layout: "unknown" } } })), null);
+  await saver.flush();
+  assert.equal(calls[0].theme.layout, "cards");
+});
+
 test("link cards are saved, recovered and removable without recovery conflicts", async () => {
   const original = draft();
   const linkCard = { label: "Morgan Hacks 2026", title: "Watch the recap", url: "https://example.com/recap", image: null };

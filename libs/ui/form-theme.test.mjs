@@ -2,6 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_FORM_THEME, MLH_BADGE_OPTIONS, formBackgroundColor, formMlhBadgeColor, formThemeStyle, isFormBackground, isFormLinkCard, isFormLinkUrl, mlhBadgeImageUrl, resolveFormTheme } from "./form-theme.ts";
 
+test("responder layouts survive resolution without changing the chosen background", () => {
+  for (const layout of ["split", "cards"]) {
+    const theme = resolveFormTheme({ layout, background: "#000000" });
+    assert.equal(theme.layout, layout);
+    assert.equal(theme.background, "#000000");
+  }
+});
+
+test("existing forms and invalid layouts keep the split layout", () => {
+  assert.equal(resolveFormTheme().layout, "split");
+  for (const layout of [undefined, null, "unknown", ""]) {
+    assert.equal(resolveFormTheme({ layout }).layout, "split");
+  }
+});
+
 test("all official MLH badge choices survive resolution and override background matching", () => {
   for (const { value } of MLH_BADGE_OPTIONS) {
     for (const background of ["white", "#000000", "#fff6e8"]) {

@@ -1,6 +1,6 @@
 import { ErrorToasts } from "@/components/ui/error-toast";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Geist, Inter } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -8,6 +8,8 @@ const inter = Inter({
   display: "swap",
   variable: "--font-inter",
 });
+
+const geist = Geist({ subsets: ["latin"], display: "swap", variable: "--font-geist-sans", preload: false });
 
 export const metadata: Metadata = {
   title: "MorganHacks",
@@ -28,7 +30,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={inter.variable} data-theme="light">
+    <html lang="en" className={`${inter.variable} ${geist.variable}`} data-theme="light">
       <body>{children}<ErrorToasts /></body>
     </html>
   );

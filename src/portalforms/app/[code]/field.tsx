@@ -25,12 +25,14 @@ export function Question({
   answer,
   problem,
   fixed,
+  cards = false,
   onChange,
   onBusy,
 }: {
   code: string;
   field: Field;
   index: number;
+  cards?: boolean;
   answer: Answer | undefined;
   problem: string | undefined;
 
@@ -79,7 +81,7 @@ export function Question({
 
   const body = (
     <>
-      {field.help ? (
+      {field.help && !(cards && field.type === "consent") ? (
         <p className="help" id={helpId}>
           {field.help}
         </p>
@@ -90,11 +92,14 @@ export function Question({
         field={field}
         id={id}
         answer={answer}
-        describedBy={grouped ? undefined : describedBy}
+        describedBy={grouped && !(cards && field.type === "consent") ? undefined : describedBy}
         wrong={Boolean(problem)}
+        cards={cards}
         onChange={onChange}
         onBusy={onBusy}
       />
+
+      {field.help && cards && field.type === "consent" ? <p className="help" id={helpId}>{field.help}</p> : null}
 
       {cap === null ? null : (
         <p className="counter" id={counterId}>
@@ -112,10 +117,17 @@ export function Question({
   // reader announces each option with no idea what the question was. The hint
   // and the complaint hang off the group rather than off each option, so they
   // are said once instead of once per choice.
+  if (cards && field.type === "consent") {
+    return <div className={`question${problem ? " wrong" : ""}`} data-key={field.key} data-type={field.type}>
+      <div className="answer">{body}</div>
+    </div>;
+  }
+
   return grouped ? (
     <fieldset
       className={`question${problem ? " wrong" : ""}`}
       data-key={field.key}
+      data-type={field.type}
       aria-describedby={describedBy}
       aria-invalid={problem ? true : undefined}
     >
@@ -127,7 +139,7 @@ export function Question({
       <div className="answer">{body}</div>
     </fieldset>
   ) : (
-    <div className={`question${problem ? " wrong" : ""}`} data-key={field.key}>
+    <div className={`question${problem ? " wrong" : ""}`} data-key={field.key} data-type={field.type}>
       <label className="prompt" htmlFor={id}>
         <span className="ordinal" aria-hidden="true">{String(index).padStart(2, "0")}</span>
         <span className="prompt-text">{field.label}{field.required ? <Requiredness field={field} /> : null}</span>
@@ -223,6 +235,7 @@ function Control({
   answer,
   describedBy,
   wrong,
+  cards,
   onChange,
   onBusy,
 }: {
@@ -232,6 +245,7 @@ function Control({
   answer: Answer | undefined;
   describedBy: string | undefined;
   wrong: boolean;
+  cards: boolean;
   onChange: (key: string, value: Answer | undefined) => void;
   onBusy: (key: string, busy: boolean) => void;
 }) {
@@ -251,8 +265,8 @@ function Control({
       return (
         <textarea
           {...shared}
-          rows={4}
-          placeholder="Write your answer…"
+          rows={cards ? 3 : 4}
+          placeholder={cards ? "Your answer" : "Write your answer…"}
           value={text}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
@@ -268,7 +282,7 @@ function Control({
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
-          placeholder="name@example.com"
+          placeholder={cards ? "Your email" : "name@example.com"}
           value={text}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
@@ -281,7 +295,7 @@ function Control({
           type="tel"
           inputMode="tel"
           autoComplete="tel"
-          placeholder="Phone number"
+          placeholder={cards ? "Your phone number" : "Phone number"}
           value={text}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
@@ -339,7 +353,7 @@ function Control({
           >
             {/* Empty and first, so an untouched dropdown does not silently
                 answer with whichever option happened to be listed first. */}
-            <option value="">Choose one…</option>
+            <option value="">{cards ? "Select an option" : "Choose one…"}</option>
             {field.options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -407,13 +421,14 @@ function Control({
             name={field.key}
             type="checkbox"
             checked={answer === true}
+            aria-describedby={cards ? describedBy : undefined}
             aria-invalid={wrong || undefined}
             onChange={(e) => onChange(field.key, e.target.checked)}
           />
           {/* The wording is somebody else's legal text and is not ours to
               shorten. It sits beside the tick rather than above it so the two
               read as one act. */}
-          <span>{field.label}</span>
+          <span>{field.label}{cards && field.required ? <Requiredness field={field} /> : null}</span>
         </label>
       );
 

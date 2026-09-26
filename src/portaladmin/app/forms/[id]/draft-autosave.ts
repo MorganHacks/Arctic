@@ -74,6 +74,7 @@ export function draftFingerprint(draft: EditorDraft): string {
       accent: draft.theme.accent.toLowerCase(), background: draft.theme.background,
       font: draft.theme.font, size: draft.theme.size, headerImage: draft.theme.headerImage ?? null,
       showMlhBadge: draft.theme.showMlhBadge === true,
+      ...(draft.theme.layout === "cards" ? { layout: "cards" } : {}),
       ...(draft.theme.mlhBadgeColor && draft.theme.mlhBadgeColor !== "auto" && draft.theme.mlhBadgeColor !== "white" ? { mlhBadgeColor: draft.theme.mlhBadgeColor } : {}),
       ...(draft.theme.linkCard ? { linkCard: {
         label: draft.theme.linkCard.label, title: draft.theme.linkCard.title,
@@ -120,6 +121,7 @@ export function readRecovery(raw: string | null): DraftRecovery | null {
       || !["small", "medium", "large"].includes(theme.size)
       || theme.headerImage != null && (typeof theme.headerImage !== "string" || !theme.headerImage.startsWith("data:image/webp;base64,"))) return null;
     if (theme.mlhBadgeColor != null && !["auto", "white", "black", "gray", "red", "blue", "yellow"].includes(theme.mlhBadgeColor)) return null;
+    if (theme.layout != null && !["split", "cards"].includes(theme.layout)) return null;
     if (theme.linkCard != null) {
       const card = theme.linkCard;
       if (typeof card.label !== "string" || card.label.length > 60

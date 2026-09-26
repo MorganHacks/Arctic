@@ -2,7 +2,7 @@
 
 import { summarizeErrors } from "../../../../libs/ui/error-notifications";
 import { ErrorToast } from "@/components/ui/error-toast";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Field, Prefill } from "@/lib/api";
 import {
@@ -59,9 +59,11 @@ export function Questions({
   fields,
   prefill,
   fixed,
+  intro,
 }: {
   code: string;
   fields: Field[];
+  intro?: ReactNode;
 
   /**
    * What we already hold, keyed by question. Empty on a form anybody can open.
@@ -481,16 +483,18 @@ export function Questions({
     }
   }
 
+  const sectionIntro = stepped ? <Step heading={heading} section={step.section} at={at} total={steps.length} />
+    : step.section ? <div className="section-intro">
+      <h2>{step.section.label}</h2>
+      {step.section.help ? <p>{step.section.help}</p> : null}
+    </div> : null;
+
   return (
     <form className="response-form" ref={form} onSubmit={submit} noValidate aria-busy={sending || undefined}>
-      {stepped ? (
-        <Step
-          heading={heading}
-          section={step.section}
-          at={at}
-          total={steps.length}
-        />
-      ) : null}
+      {intro ? <div className="card-intro">
+        <div className="card-intro-content">{intro}{sectionIntro}</div>
+        {fields.some(field => field.type !== "section" && field.required) ? <p className="card-required"><span>*</span> Indicates a required question</p> : null}
+      </div> : stepped ? sectionIntro : null}
 
       <ErrorToast
         title={listed.length ? "Check your answers" : "Could not submit"}
@@ -516,10 +520,7 @@ export function Questions({
        * one fact rather than as a set of them.
        */}
       <div className="step-body" data-from={from ?? undefined} key={at}>
-        {!stepped && step.section ? <div className="section-intro">
-          <h2>{step.section.label}</h2>
-          {step.section.help ? <p>{step.section.help}</p> : null}
-        </div> : null}
+        {!intro && !stepped ? sectionIntro : null}
         {step.fields.map((field) => (
           <Question
             key={field.key}
@@ -529,6 +530,7 @@ export function Questions({
             answer={answers[field.key]}
             problem={problems[field.key]}
             fixed={locked.has(field.key)}
+            cards={!!intro}
             onChange={set}
             onBusy={setBusy}
           />
