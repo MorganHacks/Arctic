@@ -8,7 +8,12 @@ public sealed record FormVersion(
     string Status,
     IReadOnlyList<FormField> Fields,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? PublishedAt);
+    DateTimeOffset? PublishedAt,
+    FormTheme? Theme = null,
+    DateTimeOffset? UpdatedAt = null,
+    FormVersionActor? Actor = null);
+
+public sealed record FormVersionActor(Guid Id, string? FullName, string Email, string? AvatarUrl);
 
 /// <summary>Thrown when a form is not in a state to be published.</summary>
 public sealed class FormNotPublishableException(IReadOnlyList<FormProblem> problems)
@@ -43,6 +48,10 @@ public interface IFormStore
 
     Task<IReadOnlyList<Form>> ForEventAsync(Guid eventId, CancellationToken ct = default);
 
+    Task<Form?> RenameAsync(Guid formId, string name, CancellationToken ct = default);
+
+    Task<bool> RemoveAsync(Guid formId, CancellationToken ct = default);
+
     /// <summary>The version applicants are currently being shown, if any.</summary>
     /// <summary>Takes a live form down, leaving its answers and its history.</summary>
     /// <remarks>False when nothing was published, so pressing twice is harmless.</remarks>
@@ -65,7 +74,10 @@ public interface IFormStore
     Task<FormVersion> DraftAsync(Guid formId, Guid? actorId, CancellationToken ct = default);
 
     Task SaveDraftAsync(
-        Guid formId, IReadOnlyList<FormField> fields, CancellationToken ct = default);
+        Guid formId, IReadOnlyList<FormField> fields, CancellationToken ct = default,
+        FormTheme? theme = null, Guid? actorId = null);
+
+    Task<long> ResponseCountAsync(Form form, CancellationToken ct = default);
 
     /// <summary>
     /// Makes the draft the live version.

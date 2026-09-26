@@ -1,8 +1,13 @@
+"use client";
+
+import { useRef } from "react";
+import { Calendar03Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
 import { Select } from "@/components/ui/select";
 import Form from "next/form";
 import Link from "next/link";
-import styles from "./applicants.module.css";
-import { STATUSES, figureClass, label } from "./status";
+import styles from "./applicants-list.module.css";
+import { STATUSES, label } from "./status";
 import type { EventSummary, Status } from "./types";
 
 /**
@@ -37,6 +42,7 @@ export function Filters({
   counts: Partial<Record<Status, number>>;
 }) {
   const chose = new Set(statuses);
+  const form = useRef<HTMLFormElement>(null);
 
   // Every status with rows on this event, plus any the reader has already
   // picked. The second half matters: a filter that matches nothing has to stay
@@ -47,44 +53,43 @@ export function Filters({
 
   return (
     <>
-      <Form action="/applicants" className={styles.controls}>
-        {events.length > 1 ? (
-          <div className={styles.field}>
-            <label htmlFor="event">Event</label>
-            <Select id="event" name="event" defaultValue={chosen.id}>
+      <Form ref={form} key={`${chosen.id}:${q}:${statuses.join(",")}`} action="/applicants" className={styles.controls} role="search" aria-label="Find applicants">
+        <div className={styles.eventPicker}>
+          <Icon icon={Calendar03Icon} size={18} />
+          {events.length > 1 ? (
+            <Select aria-label="Event" name="event" defaultValue={chosen.id} onChange={() => form.current?.requestSubmit()}>
               {events.map((event) => (
                 <option key={event.id} value={event.id}>
                   {event.name}
                 </option>
               ))}
             </Select>
-          </div>
-        ) : (
-          <input type="hidden" name="event" value={chosen.id} />
-        )}
-
-        <div className={`${styles.field} ${styles.search}`}>
-          <label htmlFor="q">Search</label>
-          <input
-            id="q"
-            name="q"
-            type="search"
-            placeholder="Name or email"
-            defaultValue={q}
-          />
+          ) : <><span>{chosen.name}</span><input type="hidden" name="event" value={chosen.id} /></>}
         </div>
 
-        {statuses.map((status) => (
-          <input key={status} type="hidden" name="status" value={status} />
-        ))}
+        <div className={styles.searchActions}>
+          <div className={styles.search}>
+            <Icon icon={Search01Icon} size={18} />
+            <input
+              aria-label="Search applicants by name or email"
+              name="q"
+              type="search"
+              enterKeyHint="search"
+              placeholder="Search by name or email"
+              defaultValue={q}
+            />
+          </div>
 
-        <button type="submit">Search</button>
+          {statuses.map((status) => (
+            <input key={status} type="hidden" name="status" value={status} />
+          ))}
 
-        {q || statuses.length > 0 ? (
-          <Link href={to(chosen.id, "", [])} className="button">
-            Clear
-          </Link>
-        ) : null}
+          {q || statuses.length > 0 ? (
+            <Link href={to(chosen.id, "", [])} className={styles.clear} scroll={false}>
+              Clear filters
+            </Link>
+          ) : null}
+        </div>
       </Form>
 
       {/*
@@ -94,17 +99,19 @@ export function Filters({
         saved views and once below — and a number that appears twice on one
         screen is a number a reader has to check against itself.
       */}
-      <ul className={styles.tallies}>
+      <ul className={styles.tallies} aria-label="Filter applicants by status">
         <li>
           <Link
             href={to(chosen.id, q, [])}
+            scroll={false}
+            aria-current={statuses.length === 0 ? "true" : undefined}
             className={
               statuses.length === 0 ? `${styles.tally} ${styles.on}` : styles.tally
             }
           >
-            <span className={styles.tallyLabel}>All</span>
-            <span className={`${styles.tallyCount} ${styles.figureUndecided}`}>
-              {total(counts)}
+            <span className={styles.tallyLabel}>All applicants</span>
+            <span className={styles.tallyCount}>
+              {total(counts).toLocaleString("en-US")}
             </span>
           </Link>
         </li>
@@ -116,20 +123,18 @@ export function Filters({
                 would mean reading two lists and merging them by eye. */}
             <Link
               href={to(chosen.id, q, toggle(statuses, status))}
+              scroll={false}
+              aria-current={chose.has(status) ? "true" : undefined}
               className={[
                 styles.tally,
-                // The one rule on the strip, where nothing has been decided
-                // yet ends and an outcome begins. It is the division a reader
-                // acts on, so it is the one that is drawn.
-                status === "accepted" ? styles.divide : "",
                 chose.has(status) ? styles.on : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
               <span className={styles.tallyLabel}>{label(status)}</span>
-              <span className={`${styles.tallyCount} ${figureClass(status)}`}>
-                {counts[status] ?? 0}
+              <span className={styles.tallyCount}>
+                {(counts[status] ?? 0).toLocaleString("en-US")}
               </span>
             </Link>
           </li>

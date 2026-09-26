@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { loadForm } from "@/lib/api";
+import { loadForm, type PublicForm } from "@/lib/api";
+import { formThemeStyle, resolveFormTheme } from "../../../../libs/ui/form-theme";
 import { NoForm } from "../no-form";
 import { Questions } from "./questions";
 import { SignIn } from "./sign-in";
+import { MlhBadge } from "./mlh-badge";
 import { ZONE } from "../../../../libs/ui/zone";
 
 type Props = {
@@ -63,6 +65,14 @@ export default async function FormPage({ params, searchParams }: Props) {
     return <NoForm />;
   }
 
+  return <div className="formTheme" style={formThemeStyle(form.theme)}>
+    {resolveFormTheme(form.theme).showMlhBadge && form.mlhSeason ? <MlhBadge season={form.mlhSeason} /> : null}
+    <FormContent form={form} expired={query.link === "expired"} />
+  </div>;
+}
+
+function FormContent({ form, expired }: { form: PublicForm; expired: boolean }) {
+
   /*
    * Closed and empty are separate answers, and conflating them told somebody
    * with a live link that the deadline had passed.
@@ -94,8 +104,9 @@ export default async function FormPage({ params, searchParams }: Props) {
   if (form.access === "signIn") {
     return (
       <main className="page">
+        <HeaderImage form={form} />
         <Masthead name={form.name} closesAt={form.closesAt} />
-        <SignIn code={form.code} expired={query.link === "expired"} />
+        <SignIn code={form.code} expired={expired} />
       </main>
     );
   }
@@ -116,6 +127,7 @@ export default async function FormPage({ params, searchParams }: Props) {
 
   return (
     <main className="page">
+      <HeaderImage form={form} />
       <Masthead name={form.name} closesAt={form.closesAt} you={form.you} />
 
       <Questions
@@ -126,6 +138,11 @@ export default async function FormPage({ params, searchParams }: Props) {
       />
     </main>
   );
+}
+
+function HeaderImage({ form }: { form: PublicForm }) {
+  const image = resolveFormTheme(form.theme).headerImage;
+  return image ? <img className="formHeaderImage" src={image} alt="" /> : null;
 }
 
 /**

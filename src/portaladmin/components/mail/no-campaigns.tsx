@@ -1,3 +1,5 @@
+import { EmptyState } from "@/components/ui/empty-state";
+
 /**
  * Nothing has been mailed yet.
  *
@@ -7,9 +9,7 @@
  */
 export function NoCampaigns() {
   return (
-    <div className="empty">
-      No campaigns yet. A new one is a draft, and nothing goes out until its
-      recipients have been previewed.
-    </div>
+    <EmptyState size="page" title="No campaigns yet"
+      description="A new campaign is a draft. Nothing goes out until its recipients have been previewed." />
   );
 }

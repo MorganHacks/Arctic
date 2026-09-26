@@ -22,7 +22,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     };
 
     private const string Columns =
-        "id, form_id, version, status, fields, created_at, published_at";
+        "id, form_id, version, status, fields, created_at, published_at, theme";
 
     /// <remarks>
     /// <c>eligible_statuses</c> rides along with <c>requires_sign_in</c>
@@ -71,7 +71,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     public async Task<Form?> ByCodeAsync(string code, CancellationToken ct = default)
     {
         await using var cmd = dataSource.CreateCommand(
-            $"SELECT {FormColumns} FROM applications.forms WHERE code = @code");
+            $"SELECT {FormColumns} FROM applications.forms WHERE code = @code AND removed_at IS NULL");
         cmd.Parameters.AddWithValue("code", code.Trim().ToLowerInvariant());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -81,7 +81,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     public async Task<Form?> ByIdAsync(Guid id, CancellationToken ct = default)
     {
         await using var cmd = dataSource.CreateCommand(
-            $"SELECT {FormColumns} FROM applications.forms WHERE id = @id");
+            $"SELECT {FormColumns} FROM applications.forms WHERE id = @id AND removed_at IS NULL");
         cmd.Parameters.AddWithValue("id", id);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -93,7 +93,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     {
         await using var cmd = dataSource.CreateCommand(
             $"SELECT {FormColumns} FROM applications.forms "
-            + "WHERE event_id = @eventId ORDER BY kind, name");
+            + "WHERE event_id = @eventId AND removed_at IS NULL ORDER BY kind, name");
         cmd.Parameters.AddWithValue("eventId", eventId);
 
         var forms = new List<Form>();
@@ -104,6 +104,39 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
         }
 
         return forms;
+    }
+
+    public async Task<Form?> RenameAsync(Guid formId, string name, CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand(
+            "UPDATE applications.forms SET name = @name "
+            + $"WHERE id = @id AND removed_at IS NULL RETURNING {FormColumns}");
+        cmd.Parameters.AddWithValue("id", formId);
+        cmd.Parameters.AddWithValue("name", name);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? ReadForm(reader) : null;
+    }
+
+    public async Task<bool> RemoveAsync(Guid formId, CancellationToken ct = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using (var cmd = new NpgsqlCommand(
+            "UPDATE applications.forms SET removed_at = now() "
+            + "WHERE id = @id AND removed_at IS NULL", connection, transaction))
+        {
+            cmd.Parameters.AddWithValue("id", formId);
+            if (await cmd.ExecuteNonQueryAsync(ct) == 0) return false;
+        }
+        await using (var cmd = new NpgsqlCommand(
+            "UPDATE applications.form_versions SET status = 'retired' "
+            + "WHERE form_id = @id AND status = 'published'", connection, transaction))
+        {
+            cmd.Parameters.AddWithValue("id", formId);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        await transaction.CommitAsync(ct);
+        return true;
     }
 
     private static Form ReadForm(NpgsqlDataReader reader) => new(
@@ -132,7 +165,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
             $"UPDATE applications.forms "
             + "SET requires_sign_in = @gated, "
             + "    eligible_statuses = CASE WHEN @gated THEN @statuses ELSE '{}' END "
-            + $"WHERE id = @id RETURNING {FormColumns}");
+            + $"WHERE id = @id AND removed_at IS NULL RETURNING {FormColumns}");
 
         cmd.Parameters.AddWithValue("id", formId);
         cmd.Parameters.AddWithValue("gated", requiresSignIn);
@@ -178,7 +211,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     {
         await using var cmd = dataSource.CreateCommand(
             "UPDATE applications.forms SET closes_at = @closesAt "
-            + $"WHERE id = @id RETURNING {FormColumns}");
+            + $"WHERE id = @id AND removed_at IS NULL RETURNING {FormColumns}");
 
         cmd.Parameters.AddWithValue("id", formId);
         cmd.Parameters.AddWithValue("closesAt", (object?)closesAt ?? DBNull.Value);
@@ -223,19 +256,20 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
 
         const string insert = """
             INSERT INTO applications.form_versions
-                (form_id, event_id, version, status, fields, created_by)
+                (form_id, event_id, version, status, fields, created_by, theme)
             VALUES (
                 @formId,
                 (SELECT event_id FROM applications.forms WHERE id = @formId),
                 coalesce((SELECT max(version) FROM applications.form_versions
                            WHERE form_id = @formId), 0) + 1,
-                'draft', @fields::jsonb, @actorId)
-            RETURNING id, form_id, version, status, fields, created_at, published_at
+                'draft', @fields::jsonb, @actorId, @theme::jsonb)
+            RETURNING id, form_id, version, status, fields, created_at, published_at, theme
             """;
 
         await using var create = dataSource.CreateCommand(insert);
         create.Parameters.AddWithValue("formId", formId);
         create.Parameters.AddWithValue("fields", JsonSerializer.Serialize(seed, Json));
+        create.Parameters.AddWithValue("theme", JsonSerializer.Serialize(published?.Theme ?? FormTheme.Default, Json));
         create.Parameters.AddWithValue("actorId", (object?)actorId ?? DBNull.Value);
 
         await using var created = await create.ExecuteReaderAsync(ct);
@@ -244,16 +278,31 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     }
 
     public async Task SaveDraftAsync(
-        Guid formId, IReadOnlyList<FormField> fields, CancellationToken ct = default)
+        Guid formId, IReadOnlyList<FormField> fields, CancellationToken ct = default,
+        FormTheme? theme = null, Guid? actorId = null)
     {
         // Only the draft. A published form is frozen by a trigger as well, so
         // this narrowing is convenience rather than the guarantee.
         await using var cmd = dataSource.CreateCommand(
-            "UPDATE applications.form_versions SET fields = @fields::jsonb "
-            + "WHERE form_id = @formId AND status = 'draft'");
+            "UPDATE applications.form_versions SET fields = @fields::jsonb, theme = coalesce(@theme::jsonb, theme), "
+            + "updated_at = now(), updated_by = @actorId "
+            + "WHERE form_id = @formId AND status = 'draft' "
+            + "AND (fields IS DISTINCT FROM @fields::jsonb OR theme IS DISTINCT FROM coalesce(@theme::jsonb, theme))");
         cmd.Parameters.AddWithValue("formId", formId);
         cmd.Parameters.AddWithValue("fields", JsonSerializer.Serialize(fields, Json));
+        cmd.Parameters.AddWithValue("theme", NpgsqlTypes.NpgsqlDbType.Text,
+            theme is null ? DBNull.Value : JsonSerializer.Serialize(theme, Json));
+        cmd.Parameters.AddWithValue("actorId", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)actorId ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<long> ResponseCountAsync(Form form, CancellationToken ct = default)
+    {
+        await using var cmd = dataSource.CreateCommand(form.IsApplication
+            ? "SELECT count(*) FROM applications.applications WHERE event_id = @id AND submitted_at IS NOT NULL"
+            : "SELECT count(*) FROM applications.form_submissions WHERE form_id = @id");
+        cmd.Parameters.AddWithValue("id", form.IsApplication ? form.EventId : form.Id);
+        return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 
     public async Task<FormVersion> PublishAsync(
@@ -277,6 +326,14 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
         await using var connection = await dataSource.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
 
+        await using (var cmd = new NpgsqlCommand(
+            "SELECT id FROM applications.forms WHERE id = @id AND removed_at IS NULL FOR UPDATE",
+            connection, transaction))
+        {
+            cmd.Parameters.AddWithValue("id", formId);
+            if (await cmd.ExecuteScalarAsync(ct) is null) throw new KeyNotFoundException("No such form.");
+        }
+
         // Retire first. A unique index allows one published form per event, so
         // doing this the other way round fails on the index rather than
         // swapping cleanly.
@@ -292,7 +349,7 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
             UPDATE applications.form_versions
                SET status = 'published', published_at = now(), published_by = @actorId
              WHERE id = @id
-            RETURNING id, form_id, version, status, fields, created_at, published_at
+            RETURNING id, form_id, version, status, fields, created_at, published_at, theme
             """;
 
         FormVersion published;
@@ -312,16 +369,29 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
     public async Task<IReadOnlyList<FormVersion>> HistoryAsync(
         Guid formId, CancellationToken ct = default)
     {
-        await using var cmd = dataSource.CreateCommand(
-            $"SELECT {Columns} FROM applications.form_versions "
-            + "WHERE form_id = @formId ORDER BY version DESC");
+        await using var cmd = dataSource.CreateCommand("""
+            SELECT v.id, v.form_id, v.version, v.status, v.fields, v.created_at, v.published_at, v.theme,
+                   v.updated_at, p.id, p.full_name, p.email, p.avatar_url
+              FROM applications.form_versions v
+              LEFT JOIN identity.people p ON p.id = CASE
+                  WHEN v.published_at IS NOT NULL THEN v.published_by
+                  WHEN v.updated_at IS NOT NULL THEN v.updated_by
+                  ELSE v.created_by END
+             WHERE v.form_id = @formId ORDER BY v.version DESC
+            """);
         cmd.Parameters.AddWithValue("formId", formId);
 
         var versions = new List<FormVersion>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            versions.Add(Read(reader));
+            versions.Add(Read(reader) with
+            {
+                UpdatedAt = reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
+                Actor = reader.IsDBNull(9) ? null : new FormVersionActor(
+                    reader.GetGuid(9), reader.IsDBNull(10) ? null : reader.GetString(10),
+                    reader.GetString(11), reader.IsDBNull(12) ? null : reader.GetString(12)),
+            });
         }
 
         return versions;
@@ -334,5 +404,6 @@ public sealed class PostgresFormStore(NpgsqlDataSource dataSource) : IFormStore
         reader.GetString(3),
         JsonSerializer.Deserialize<List<FormField>>(reader.GetString(4), Json) ?? [],
         reader.GetFieldValue<DateTimeOffset>(5),
-        reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6));
+        reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6),
+        JsonSerializer.Deserialize<FormTheme>(reader.GetString(7), Json) ?? FormTheme.Default);
 }

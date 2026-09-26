@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
 import type { FormField } from "@/lib/api";
+import { columnsFor } from "./columns";
 import { ResponseDetail } from "./response-detail";
+import { ResponseColumns } from "./response-columns";
 import { ResponsesTable } from "./responses-table";
+import { isIdentityField } from "./respondent";
 import styles from "./responses.module.css";
 import type { ItemResult, PageResult, ResponseItem } from "./types";
 
@@ -27,7 +32,7 @@ export function Responses({
   initialCursor,
   loadMore,
   openResponse,
-  csvHref,
+  responseCount,
   canViewResume,
 }: {
   fields: FormField[];
@@ -40,8 +45,7 @@ export function Responses({
   /** Bound to this form on the server. Returns one response, with its resume link. */
   openResponse: (responseId: string) => Promise<ItemResult>;
 
-  /** Null where this person may not export. */
-  csvHref: string | null;
+  responseCount: number;
 
   canViewResume: boolean;
 }) {
@@ -49,6 +53,10 @@ export function Responses({
   const [cursor, setCursor] = useState(initialCursor);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const columns = columnsFor(fields, items);
+  const [visibleColumns, setVisibleColumns] = useState(() => new Set(
+    columns.filter((column) => !isIdentityField(column.field)).slice(0, 3).map((column) => column.key),
+  ));
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ResponseItem | null>(null);
@@ -62,7 +70,14 @@ export function Responses({
     setLoading(true);
     setFailed(null);
 
-    const result = await loadMore(cursor);
+    let result: PageResult;
+    try {
+      result = await loadMore(cursor);
+    } catch {
+      setFailed("Could not load more responses. Please try again.");
+      setLoading(false);
+      return;
+    }
 
     if (!result.ok) {
       // The cursor is kept. A failed page is a page to try again, not the end
@@ -101,7 +116,13 @@ export function Responses({
       setDetail(null);
       setDetailFailed(null);
 
-      const result = await openResponse(id);
+      let result: ItemResult;
+      try {
+        result = await openResponse(id);
+      } catch {
+        if (wanted.current === id) setDetailFailed("Could not open this response. Please try again.");
+        return;
+      }
 
       if (wanted.current !== id) {
         return;
@@ -124,36 +145,39 @@ export function Responses({
   }, []);
 
   return (
-    <>
-      {csvHref ? (
-        <div className={styles.actions}>
-          {/* A plain link, not a fetch. The browser is already carrying the
-              session cookie to this origin, and letting it handle the download
-              means a large export never passes through this page's memory. */}
-          <a className="button" href={csvHref}>
-            Export CSV
-          </a>
+    <section className={styles.workspace} aria-label="Form responses">
+      <div className={styles.tableFrame}>
+        <div className={styles.toolbar}>
+          <div className={styles.summary}>
+            <h2>All responses <span className={styles.totalCount}>{responseCount.toLocaleString("en-US")}</span></h2>
+          </div>
+          <div className={styles.tableActions}>
+            <span className={styles.sortNote}>Newest first</span>
+            <ResponseColumns columns={columns} selected={visibleColumns} onChange={setVisibleColumns} />
+          </div>
         </div>
-      ) : null}
 
-      <ResponsesTable
-        fields={fields}
-        items={items}
-        openId={openId}
-        onOpen={open}
-        showResume={canViewResume}
-      />
+        <ResponsesTable
+          fields={fields}
+          items={items}
+          openId={openId}
+          onOpen={open}
+          showResume={canViewResume}
+          columns={columns.filter((column) => visibleColumns.has(column.key))}
+        />
 
-      <div className={styles.foot}>
-        {cursor !== null ? (
-          <button type="button" onClick={more} disabled={loading}>
-            {loading ? "Loading…" : "Load more"}
-          </button>
-        ) : null}
-
-        <span className={styles.note}>{items.length} loaded</span>
-
-        {failed ? <span className={styles.failed}>{failed}</span> : null}
+        <div className={styles.foot}>
+          <span className={styles.note} role="status">
+            Showing <strong>{items.length.toLocaleString("en-US")}</strong> of {Math.max(responseCount, items.length).toLocaleString("en-US")} responses
+          </span>
+          {failed ? <span className={styles.failed} role="alert">{failed}</span> : null}
+          {cursor !== null ? (
+            <button type="button" className={styles.moreButton} onClick={more} disabled={loading}>
+              {loading ? "Loading…" : "Load more"}
+              <Icon icon={ArrowDown01Icon} size={16} />
+            </button>
+          ) : <span className={styles.note}>All caught up</span>}
+        </div>
       </div>
 
       {openId !== null ? (
@@ -165,6 +189,6 @@ export function Responses({
           onClose={close}
         />
       ) : null}
-    </>
+    </section>
   );
 }

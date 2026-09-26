@@ -260,12 +260,6 @@
   color: var(--stop);
 }
 
-.table .empty {
-  height: auto;
-  padding: 18px 16px;
-  color: var(--members-muted);
-}
-
 .sectionTitle {
   margin-bottom: 18px;
 }

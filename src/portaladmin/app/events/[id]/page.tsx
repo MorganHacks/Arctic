@@ -1,9 +1,12 @@
-import Link from "next/link";
+import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import { NavigationLink as Link } from "@/components/ui/navigation-link";
+import { Icon } from "@/components/ui/icon";
 import { notFound, redirect } from "next/navigation";
 import { currentPerson } from "@/lib/api";
-import { Announcements } from "@/components/events/announcements";
-import { ScheduleForm } from "@/components/events/schedule";
-import { registrationState, type Registration } from "@/components/events/types";
+import { EventDetails } from "@/components/events/event-details";
+import { registrationState } from "@/components/events/types";
+import { ZONE } from "@/components/events/zone";
+import styles from "@/components/events/events.module.css";
 import { Shell } from "../../shell";
 import { listEvents } from "../api";
 import { listAnnouncements } from "../announcements";
@@ -51,9 +54,7 @@ export default async function Event({
   if (result.state === "forbidden") {
     return (
       <Shell personId={person.personId}>
-        <Link href="/events" className="back">
-          ← Events
-        </Link>
+        <BackToEvents />
         <h1>Event</h1>
         <p className="refusal">
           You do not have permission to see events. Ask an admin.
@@ -65,9 +66,7 @@ export default async function Event({
   if (result.state === "failed") {
     return (
       <Shell personId={person.personId}>
-        <Link href="/events" className="back">
-          ← Events
-        </Link>
+        <BackToEvents />
         <h1>Event</h1>
         <div className="empty">Events could not be loaded.</div>
       </Shell>
@@ -79,62 +78,28 @@ export default async function Event({
     notFound();
   }
 
+  const start = event.startsAt ? Date.parse(event.startsAt) : NaN;
+  const end = event.endsAt ? Date.parse(event.endsAt) : NaN;
+  const date = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, month: "short", day: "numeric", year: "numeric" });
+  const dateLabel = Number.isNaN(start) ? "Dates to be decided" : (
+    !Number.isNaN(end) && end >= start ? date.formatRange(start, end) : date.format(start)
+  ).replace(/\s+/gu, " ");
+
   return (
     <Shell personId={person.personId}>
-      <Link href="/events" className="back">
-        ← Events
-      </Link>
-
-      <div className="page-head">
-        <div>
-          <h1>{event.name}</h1>
-          <p className="lede mono">{event.slug}</p>
-        </div>
-
-        {/* Read the same way as the list, from the same two dates, so the two
-            screens cannot disagree about whether applications are being
-            taken. */}
-        <div className="page-actions">
-          <RegistrationPill state={registrationState(event, Date.now())} />
-        </div>
-      </div>
-
-      <ScheduleForm event={event} />
-
-      {/*
-        A refusal on the list is not a reason to hide the panel. The permission
-        is one somebody may plausibly lack while still administering the event,
-        and a section that vanished would leave them wondering whether
-        announcements exist at all rather than knowing they cannot post one.
-      */}
-      <Announcements
-        eventId={event.id}
+      <EventDetails
+        key={event.id}
+        event={event}
+        dateLabel={`${dateLabel}${!Number.isNaN(start) ? " · Eastern Time" : ""}`}
+        registration={registrationState(event, Date.now())}
         announcements={notices.state === "ok" ? notices.announcements : []}
+        canManage={person.permissions.has("events.manage")}
         canPost={notices.state === "ok"}
       />
     </Shell>
   );
 }
 
-/**
- * Whether applications are being taken, said in full.
- *
- * Longer than the list's version because there is no column heading here to
- * lean on, and a pill reading "Open" beside five date fields is a pill that
- * could mean any of them.
- */
-function RegistrationPill({ state }: { state: Registration }) {
-  if (state === "open") {
-    return <span className="pill ok">Registration open</span>;
-  }
-
-  if (state === "upcoming") {
-    return <span className="pill">Registration not open yet</span>;
-  }
-
-  if (state === "closed") {
-    return <span className="pill lapsed">Registration closed</span>;
-  }
-
-  return <span className="pill lapsed">Registration not decided yet</span>;
+function BackToEvents() {
+  return <Link href="/events" className={styles.backLink}><Icon icon={ArrowLeft01Icon} size={18} />Events</Link>;
 }

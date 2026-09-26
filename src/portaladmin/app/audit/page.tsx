@@ -1,6 +1,7 @@
 import { NavigationLink as Link } from "@/components/ui/navigation-link";
 import { ArrowLeft01Icon, ArrowRight01Icon, Audit02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
+import { EmptyState } from "@/components/ui/empty-state";
 import { apiFetch, type AuditEntry, type Listed } from "@/lib/api";
 import { readPageData } from "@/lib/page-data";
 import { Shell } from "../shell";
@@ -64,11 +65,10 @@ export default async function Audit({ searchParams }: {
           ) : (
             <>
               {shown.length ? <Trail entries={shown} people={people} filters={filters} /> : (
-                <div className={styles.empty}>
-                  <Icon icon={Audit02Icon} size={24} />
-                  <p>{Object.keys(filters).length || before ? "No activity matches these filters." : "No activity yet."}</p>
-                  {Object.keys(filters).length || before ? <Link href="/audit">View all activity</Link> : null}
-                </div>
+                <EmptyState variant="files" size="page"
+                  title={Object.keys(filters).length || before ? "No activity found" : "No activity yet"}
+                  description={Object.keys(filters).length || before ? "No activity matches these filters." : "Access changes will appear here as they happen."}
+                  action={Object.keys(filters).length || before ? <Link href="/audit">View all activity</Link> : null} />
             )}
             <footer className={styles.footer}>
               <nav className={styles.pagination} aria-label="Audit log pages">

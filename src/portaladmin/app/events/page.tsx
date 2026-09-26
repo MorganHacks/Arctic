@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { readPageData } from "@/lib/page-data";
-import { EventsTable } from "@/components/events/events-table";
-import { NewEvent } from "@/components/events/new-event";
-import { NoEvents } from "@/components/events/no-events";
+import { EventsList } from "@/components/events/events-list";
 import { Shell } from "../shell";
 import { listEvents } from "./api";
 
@@ -46,35 +44,7 @@ export default async function Events() {
 
   return (
     <Shell personId={person.personId}>
-      <div className="page-head">
-        <div>
-          <h1>Events</h1>
-          <p className="lede">
-            Everything in the console belongs to an event. Forms, applicants and
-            mail are each scoped to one.
-          </p>
-        </div>
-      </div>
-
-      {/* Shown to everybody. Hiding it would be a courtesy to somebody who
-          cannot use it, not a control over anything: the API refuses the write
-          whether or not this panel rendered, and that refusal is the boundary. */}
-      <NewEvent />
-
-      {result.events.length === 0 ? (
-        <NoEvents />
-      ) : (
-        /*
-         * The clock is read once, here, and handed down.
-         *
-         * An event whose registration closes while this page is being rendered
-         * would otherwise be able to come out Open in one row's reckoning and
-         * Closed in the next, which is a bug nobody would ever reproduce.
-         */
-        <div className="table-wrap">
-          <EventsTable events={result.events} now={Date.now()} />
-        </div>
-      )}
+      <EventsList events={result.events} now={Date.now()} canManage={person.permissions.has("events.manage")} />
     </Shell>
   );
 }

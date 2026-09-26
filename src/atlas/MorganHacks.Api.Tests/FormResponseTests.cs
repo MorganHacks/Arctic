@@ -50,6 +50,20 @@ public class FormResponseTests(ApplicationsDatabase db)
         return Task.CompletedTask;
     }
 
+    [Fact]
+    public async Task Response_count_includes_all_submitted_applications_and_excludes_unfinished_attempts_and_other_events()
+    {
+        var form = await PublishedAsync();
+        await SubmitAsync(form);
+        await RepublishAsync(form.Id, Question("anything", "Anything else?"));
+        await SubmitAsync(form);
+        using var scope = _app.Services.CreateScope();
+        var applications = scope.ServiceProvider.GetRequiredService<IApplicationStore>();
+        await applications.StartAsync(form.EventId, Unique("unfinished"));
+        await SubmitAsync(await PublishedAsync());
+        Assert.Equal(2, await Forms.ResponseCountAsync(form));
+    }
+
     // ------------------------------------------------------------- fixtures ---
 
     private PostgresFormStore Forms => new(db.DataSource);
@@ -490,6 +504,57 @@ public class FormResponseTests(ApplicationsDatabase db)
             Request($"/admin/forms/{form.Id}/responses.csv", await SignIn(id)));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Sheets_configuration_requires_export_permission()
+    {
+        var form = await PublishedAsync();
+        var path = $"/admin/forms/{form.Id}/responses/sheets-config";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Client().GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await Client().SendAsync(Request(path, await ReaderAsync()))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Sheets_configuration_returns_only_the_public_client_id_and_checks_the_form()
+    {
+        var form = await PublishedAsync();
+        var id = await db.AddPersonAsync(Unique("exporter"));
+        await db.GrantAsync(id, "applications.export");
+        var cookie = await SignIn(id);
+        using var app = _app.WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Google:SheetsClientId", "sheets-client-id");
+            b.UseSetting("Google:ClientSecret", "must-not-be-returned");
+        });
+        using var client = app.CreateClient();
+        var response = await client.SendAsync(Request($"/admin/forms/{form.Id}/responses/sheets-config", cookie));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Single(body.RootElement.EnumerateObject());
+        Assert.Equal("sheets-client-id", body.RootElement.GetProperty("clientId").GetString());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.SendAsync(Request($"/admin/forms/{Guid.NewGuid()}/responses/sheets-config", cookie))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Sheets_configuration_reports_when_google_is_not_set_up()
+    {
+        var form = await PublishedAsync();
+        var id = await db.AddPersonAsync(Unique("exporter"));
+        await db.GrantAsync(id, "applications.export");
+        using var app = _app.WithWebHostBuilder(b =>
+        {
+            b.UseSetting("Google:SheetsClientId", "");
+            b.UseSetting("Google:ClientId", "");
+        });
+        using var client = app.CreateClient();
+        var response = await client.SendAsync(Request($"/admin/forms/{form.Id}/responses/sheets-config", await SignIn(id)));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("clientId").ValueKind);
     }
 
     // --------------------------------------------------------------- reading ---

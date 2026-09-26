@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
 import { createEvent } from "@/app/events/actions";
-import styles from "./events.module.css";
+import styles from "./events-list.module.css";
 
 /**
  * Starts an event, and goes into it.
@@ -18,63 +20,58 @@ import styles from "./events.module.css";
  * rest of it gets filled in as it is settled.
  */
 export function NewEvent() {
+  const [open, setOpen] = useState(false);
+
+  return <>
+    <button type="button" className={`button primary ${styles.newButton}`} onClick={() => setOpen(true)}>
+      <Icon icon={Add01Icon} size={18} />New event
+    </button>
+    {open ? <NewEventDialog onClose={() => setOpen(false)} /> : null}
+  </>;
+}
+
+function NewEventDialog({ onClose }: { onClose: () => void }) {
   const [state, action, pending] = useActionState(createEvent, {});
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const dialog = useRef<HTMLDialogElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    dialog.current?.showModal();
+    nameInput.current?.focus();
+  }, []);
 
   return (
-    <form action={action} className={styles.newEvent}>
-      {/* The caveat beside the heading rather than under it. It is the one
-          thing worth knowing before pressing Create, and a line of small print
-          on its own row is a line that gets scrolled past. */}
-      <div className={styles.newEventHead}>
-        <h2>New event</h2>
-        <p className={styles.newEventNote}>
-          A slug and a name are enough. The dates and the capacity are set
-          afterwards, as they are decided.
-        </p>
-      </div>
-
-      <div className="row">
-        <div className="field grow">
-          <label htmlFor="slug">Slug</label>
-          <input
-            id="slug"
-            name="slug"
-            required
-            autoComplete="off"
-            spellCheck={false}
-            className={styles.slugInput}
-          />
-          <p className="hint">It identifies the event and cannot be changed here.</p>
+    <dialog ref={dialog} className={styles.dialog} aria-labelledby="new-event-title" aria-describedby="new-event-description"
+      onClose={onClose} onCancel={(event) => { if (pending) event.preventDefault(); }}>
+      <form action={action}>
+        <div className={styles.dialogHeader}>
+          <h2 id="new-event-title">Create an event</h2>
+          <button type="button" className={styles.closeButton} aria-label="Close new event" disabled={pending}
+            onClick={() => dialog.current?.close()}><Icon icon={Cancel01Icon} size={20} /></button>
         </div>
-
-        <div className="field grow">
-          <label htmlFor="name">Name</label>
-          <input
-            id="name"
-            name="name"
-            required
-            autoComplete="off"
-            className={styles.nameInput}
-          />
-          <p className="hint">What the console calls this event on every screen.</p>
+        <p id="new-event-description" className={styles.dialogDescription}>Start with a name. You can set the dates, registration and capacity next.</p>
+        <div className={styles.field}>
+          <label htmlFor="event-name">Event name</label>
+          <input ref={nameInput} id="event-name" name="name" required autoComplete="off" placeholder="e.g. MorganHacks 2028"
+            value={name} onChange={(event) => setName(event.target.value)} disabled={pending} />
         </div>
-
-      </div>
-
-      {/* On its own line rather than beside the fields. Both fields carry a
-          sentence under them, so a button in the row would sit level with the
-          small print instead of with the boxes it submits. */}
-      <div className={styles.createActions}>
-        <button type="submit" className="button primary" disabled={pending}>
-          {pending ? "Creating…" : "Create event"}
-        </button>
-      </div>
-
-      {state.error ? (
-        <p className="error" style={{ marginTop: "0.9rem", marginBottom: 0 }}>
-          {state.error}
-        </p>
-      ) : null}
-    </form>
+        <div className={styles.field}>
+          <label htmlFor="event-slug">Event slug</label>
+          <input id="event-slug" name="slug" required autoComplete="off" spellCheck={false} placeholder="e.g. mh2028"
+            minLength={2} maxLength={40} pattern="[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*" className={styles.slugInput}
+            value={slug} onChange={(event) => setSlug(event.target.value)} aria-describedby="event-slug-hint" disabled={pending} />
+          <p id="event-slug-hint">A unique identifier for this event. Use letters, numbers and single hyphens. This cannot be changed later.</p>
+        </div>
+        {state.error ? <p className={styles.formError} role="alert">{state.error}</p> : null}
+        <div className={styles.dialogActions}>
+          <button type="button" className={styles.secondaryButton} disabled={pending} onClick={() => dialog.current?.close()}>Cancel</button>
+          <button type="submit" className={`button primary ${styles.newButton}`} disabled={pending || !name.trim() || !slug.trim()}>
+            {pending ? "Creating…" : "Create event"}
+          </button>
+        </div>
+      </form>
+    </dialog>
   );
 }

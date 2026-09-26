@@ -1,4 +1,5 @@
 using MorganHacks.Applications.Services;
+using MorganHacks.Applications.Data;
 using MorganHacks.Identity.Domain;
 using MorganHacks.Observability;
 
@@ -61,19 +62,12 @@ public static class AnnouncementEndpoints
     /// The whole of what posting one takes.
     /// </summary>
     /// <remarks>
-    /// One field, because one sentence is the entire idea. No title, no
-    /// scheduled time and nobody to send it to — every one of those turns a
-    /// thing somebody types in ten seconds while walking into something they
-    /// sit down to compose, and the notice that does not get posted is worse
-    /// than the one that is not formatted.
-    /// <para>
     /// Nullable and checked in the handler for the reason every other admin
     /// body here is: minimal APIs bind before endpoint filters run, so a
     /// required body answers a request with no session by complaining about
     /// JSON instead of asking them to sign in.
-    /// </para>
     /// </remarks>
-    public sealed record PostAnnouncementRequest(string? Body);
+    public sealed record PostAnnouncementRequest(string? Body, AnnouncementContent? Content = null, DateTimeOffset? PublishAt = null);
 
     /// <summary>The longest a notice may be.</summary>
     /// <remarks>
@@ -96,11 +90,18 @@ public static class AnnouncementEndpoints
     /// that happens is somebody retracting it again to be sure.
     /// </remarks>
     private static async Task<IResult> List(
-        Guid eventId, IAnnouncementStore announcements, CancellationToken ct) =>
-        Results.Ok(new
+        Guid eventId, IAnnouncementStore announcements,
+        PostgresAnnouncementResponseStore responses, PostgresAnnouncementReactionStore reactions, CancellationToken ct)
+    {
+        var posted = await announcements.ForEventAsync(eventId, ct);
+        var tallies = await responses.TalliesAsync(posted.Where(a => a.Content?.IsQuestion == true)
+            .Select(a => a.Id).ToArray(), Guid.Empty, ct);
+        var reactionTallies = await reactions.TalliesAsync(posted.Select(a => a.Id).ToArray(), Guid.Empty, ct);
+        return Results.Ok(new
         {
-            announcements = (await announcements.ForEventAsync(eventId, ct)).Select(Describe),
+            announcements = posted.Select(a => Describe(a, tallies.GetValueOrDefault(a.Id), reactionTallies.GetValueOrDefault(a.Id))),
         });
+    }
 
     /// <summary>
     /// Posts one. Requires <c>announcements.post</c>.
@@ -138,10 +139,16 @@ public static class AnnouncementEndpoints
             });
         }
 
+        if (request?.Content?.Validate() is { } contentError)
+            return Results.BadRequest(new { error = contentError });
+
+        if (request?.PublishAt is { } publishAt && publishAt <= DateTimeOffset.UtcNow)
+            return Results.BadRequest(new { error = "Choose a future date and time for your post." });
+
         Announcement posted;
         try
         {
-            posted = await announcements.PostAsync(eventId, body, http.PersonId(), ct);
+            posted = await announcements.PostAsync(eventId, body, http.PersonId(), ct, request?.Content, request?.PublishAt);
         }
         catch (Npgsql.PostgresException e) when (e.SqlState == "23503")
         {
@@ -218,12 +225,17 @@ public static class AnnouncementEndpoints
     /// neither that nor <c>postedBy</c>.
     /// </para>
     /// </remarks>
-    private static object Describe(Announcement announcement) => new
+    private static object Describe(Announcement announcement, AnnouncementTally? tally = null, AnnouncementReactions? reactions = null) => new
     {
         id = announcement.Id,
         eventId = announcement.EventId,
         body = announcement.Body,
+        content = announcement.Content,
+        results = AnnouncementPresentation.Results(announcement.Content, tally, organizer: true),
+        reactions = reactions ?? AnnouncementReactions.Empty(),
         postedAt = announcement.PostedAt,
+        publishAt = announcement.PublishAt ?? announcement.PostedAt,
+        scheduled = announcement.RetractedAt is null && announcement.PublishAt > DateTimeOffset.UtcNow,
         postedBy = announcement.PostedBy,
 
         // Said plainly as well as by the timestamp, because the console has to

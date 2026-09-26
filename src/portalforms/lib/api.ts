@@ -117,6 +117,8 @@ export type Prefill = string | string[] | boolean | number;
  * invite a form rendered behind a banner somebody scrolls straight past.
  */
 export type PublicForm = {
+  mlhSeason?: number | null;
+  theme?: import("../../../libs/ui/form-theme").FormTheme;
   code: string;
   name: string;
   kind: string;

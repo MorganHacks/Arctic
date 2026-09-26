@@ -54,7 +54,7 @@ function Breakdown({ title, subtitle, items, total, empty, icon, loading, limit 
           style={{ width: `${Math.min(100, item.count / total * 100)}%`, backgroundColor: colors?.[item.label] ?? categoryColor(item.label) }} /></div>
       </li>)}
     </ol> : loading ? <div className={styles.loadingEmpty}><p>{empty}</p></div>
-      : <EmptyState className={styles.breakdownEmpty} title={schools ? "No schools yet" : "No data to display"} description={empty} />}
+      : <EmptyState variant="data" className={styles.breakdownEmpty} title={schools ? "No schools yet" : "No data to display"} description={empty} />}
     {items.length > limit ? <button type="button" className={styles.textButton} onClick={onViewAll ?? (() => setExpanded(!expanded))}>
       {onViewAll ? <>View all schools<Icon icon={ArrowRight01Icon} size={15} /></> : expanded ? "Show less" : `Show all ${numbers.format(items.length)}`}
     </button> : null}
@@ -82,7 +82,7 @@ function Attention({ analytics, eventId, loading }: { analytics: ApplicantAnalyt
         <b>{numbers.format(item.count)}</b><Icon icon={ArrowRight01Icon} size={15} />
       </Link>
     </li>)}</ul> : loading ? <div className={styles.loadingEmpty}><p>Loading applications…</p></div>
-      : <EmptyState className={styles.attentionEmpty} title={!eventId ? "A clear starting point" : "You’re all caught up"}
+      : <EmptyState variant="files" className={styles.attentionEmpty} title={!eventId ? "A clear starting point" : "You’re all caught up"}
         description={!eventId
         ? "Once applications arrive, we’ll show you what needs a closer look."
         : "No applications need your attention right now."} />}

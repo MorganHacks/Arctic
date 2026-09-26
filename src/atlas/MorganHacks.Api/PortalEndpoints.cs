@@ -1,4 +1,5 @@
 using MorganHacks.Applications.Domain;
+using MorganHacks.Applications.Data;
 using MorganHacks.Applications.Services;
 using MorganHacks.Lark.Data.Data;
 using MorganHacks.Lark.Data.Domain;
@@ -73,6 +74,9 @@ public static class PortalEndpoints
         portal.MapPost("/rsvp", AnswerRsvp);
         portal.MapGet("/messages", Messages);
         portal.MapGet("/announcements", Announcements);
+        portal.MapPost("/announcements/{id:guid}/vote", VoteAnnouncement);
+        portal.MapPut("/announcements/{id:guid}/reaction", ReactToAnnouncement);
+        portal.MapDelete("/announcements/{id:guid}/reaction", RemoveAnnouncementReaction);
         portal.MapGet("/check-in", CheckIn);
 
         // POST rather than DELETE, and no id in the path. There is no resource
@@ -600,9 +604,13 @@ public static class PortalEndpoints
     /// </para>
     /// </remarks>
     private static async Task<IResult> Announcements(
-        HttpContext http, IApplicantPortalStore store, CancellationToken ct)
+        HttpContext http, IApplicantPortalStore store,
+        PostgresAnnouncementResponseStore responses, PostgresAnnouncementReactionStore reactions, CancellationToken ct)
     {
         var posted = await store.AnnouncementsForPersonAsync(http.PersonId(), ct);
+        var tallies = await responses.TalliesAsync(posted.Where(a => a.Content?.IsQuestion == true)
+            .Select(a => a.Id).ToArray(), http.PersonId(), ct);
+        var reactionTallies = await reactions.TalliesAsync(posted.Select(a => a.Id).ToArray(), http.PersonId(), ct);
 
         return Results.Ok(new
         {
@@ -619,7 +627,55 @@ public static class PortalEndpoints
                 // deadline: the zone is a display decision and this side does
                 // not know the reader.
                 at = a.PostedAt,
+                content = AnnouncementPresentation.ForApplicant(a.Content, tallies.GetValueOrDefault(a.Id)),
+                results = AnnouncementPresentation.Results(a.Content, tallies.GetValueOrDefault(a.Id)),
+                reactions = reactionTallies.GetValueOrDefault(a.Id) ?? AnnouncementReactions.Empty(),
             }),
+        });
+    }
+
+    public sealed record AnnouncementVoteRequest(int? Choice);
+
+    public sealed record AnnouncementReactionRequest(string? Reaction);
+
+    private static Task<IResult> ReactToAnnouncement(
+        Guid id, AnnouncementReactionRequest? request, HttpContext http,
+        PostgresAnnouncementReactionStore reactions, CancellationToken ct)
+    {
+        if (request?.Reaction is null || !AnnouncementReactions.IsValid(request.Reaction))
+            return Task.FromResult<IResult>(Results.BadRequest(new { error = "Choose one of the available reactions." }));
+        return SaveAnnouncementReaction(id, request.Reaction, http, reactions, ct);
+    }
+
+    private static Task<IResult> RemoveAnnouncementReaction(
+        Guid id, HttpContext http, PostgresAnnouncementReactionStore reactions, CancellationToken ct) =>
+        SaveAnnouncementReaction(id, null, http, reactions, ct);
+
+    private static async Task<IResult> SaveAnnouncementReaction(
+        Guid id, string? reaction, HttpContext http, PostgresAnnouncementReactionStore reactions, CancellationToken ct)
+    {
+        var result = await reactions.SetAsync(id, http.PersonId(), reaction, ct);
+        if (result.Error is not null)
+            return Results.Json(new { error = result.Error }, statusCode: result.StatusCode);
+        var tallies = await reactions.TalliesAsync([id], http.PersonId(), ct);
+        return Results.Ok(new { reactions = tallies.GetValueOrDefault(id) ?? AnnouncementReactions.Empty() });
+    }
+
+    private static async Task<IResult> VoteAnnouncement(
+        Guid id, AnnouncementVoteRequest? request, HttpContext http,
+        PostgresAnnouncementResponseStore responses, CancellationToken ct)
+    {
+        if (request?.Choice is null)
+            return Results.BadRequest(new { error = "Choose an answer first." });
+        var result = await responses.VoteAsync(id, http.PersonId(), request.Choice.Value, ct);
+        if (result.Error is not null)
+            return Results.Json(new { error = result.Error }, statusCode: result.StatusCode);
+        var tallies = await responses.TalliesAsync([id], http.PersonId(), ct);
+        var tally = tallies.GetValueOrDefault(id);
+        return Results.Ok(new
+        {
+            content = AnnouncementPresentation.ForApplicant(result.Content, tally),
+            results = AnnouncementPresentation.Results(result.Content, tally),
         });
     }
 

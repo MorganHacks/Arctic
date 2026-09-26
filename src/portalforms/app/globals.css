@@ -885,20 +885,15 @@ textarea.wrong:focus {
 /* The options of one question, so a fieldset's legend, hint and complaint are
    not themselves separated by the dividing rules that belong between choices. */
 .choices {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  display: grid;
+  gap: 2px 24px;
+  margin: 8px -8px 0;
 }
 
-/*
- * Each option is a box.
- *
- * Rules between rows were cheaper and were wrong on a phone: the target was
- * the row but nothing drew where the row ended, so a thumb aimed at the words
- * and a near miss selected the option below. A bordered box says where to
- * press without anybody having to work it out, and it is the same shape as
- * every other control on the page.
- */
+.choices[data-multiple="true"] {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
 .choice {
   display: flex;
   gap: 0.65rem;
@@ -914,9 +909,25 @@ textarea.wrong:focus {
     background-color 120ms ease-out;
 }
 
+.choices .choice {
+  gap: 12px;
+  margin: 0;
+  min-height: 44px;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: var(--form-font-size, var(--step-1));
+  font-weight: 400;
+  line-height: 1.5;
+}
+
 @media (hover: hover) {
   .choice:hover {
     border-color: var(--muted);
+  }
+  .choices .choice:hover {
+    background: var(--sunken);
   }
 }
 
@@ -936,6 +947,9 @@ textarea.wrong:focus {
  */
 .choice:has(input:checked) {
   border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.choices .choice:has(input:checked) {
   background: var(--accent-soft);
 }
 
@@ -994,6 +1008,17 @@ textarea.wrong:focus {
   border-radius: 50%;
 }
 
+.choices .choice input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  border-width: 1.5px;
+}
+
+.choices .choice input[type="checkbox"] {
+  border-radius: 5px;
+}
+
 /* The accent, because it is already what the box around a chosen option
    takes. One decision, said twice at two sizes. */
 .choice input:checked {
@@ -1038,6 +1063,7 @@ textarea.wrong:focus {
 
 .choice span {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* An agreement is one tick and sixty words. The tick stays with the first
@@ -1522,3 +1548,39 @@ button[type="submit"]:disabled {
     outline-offset: -3px;
   }
 }
+
+.formTheme {
+  --accent: var(--form-accent);
+  --accent-ink: var(--form-accent-ink);
+  --accent-soft: color-mix(in srgb, var(--form-accent) 10%, var(--paper));
+  --focus: var(--form-accent);
+  --body: var(--form-font);
+  --display: var(--form-font);
+  --step-1: var(--form-font-size);
+  --step0: calc(var(--form-font-size) + 2px);
+  min-height: calc(100dvh - 54px);
+  background: var(--form-background);
+  font-family: var(--form-font);
+  font-size: var(--form-font-size);
+}
+
+.formTheme .page, .formTheme input, .formTheme textarea, .formTheme select, .formTheme button, .formTheme .step-of {
+  font-family: var(--form-font);
+}
+
+body:has(#mlh-trust-badge) .chrome {
+  padding-right: calc(clamp(16px, 3vw, 50px) + clamp(60px, 7vw, 90px) + 20px);
+}
+
+.formTheme:has(#mlh-trust-badge) {
+  padding-top: clamp(76px, 10vw, 128px);
+}
+
+@media (min-width: 64rem) {
+  .formTheme:has(#mlh-trust-badge) { padding-top: 0; }
+  .formTheme:has(#mlh-trust-badge) .page {
+    padding-inline: calc(clamp(16px, 3vw, 50px) + clamp(60px, 7vw, 90px) + 20px);
+  }
+}
+
+.formHeaderImage { display: block; grid-column: 1 / -1; width: 100%; aspect-ratio: 4 / 1; object-fit: cover; margin-bottom: 1.5rem; border-radius: 14px; }

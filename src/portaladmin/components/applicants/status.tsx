@@ -106,11 +106,11 @@ export function markClass(status: Status): string {
   return MARK[family(status)];
 }
 
-export function StatusPill({ status }: { status: Status }) {
+export function StatusPill({ status, className = "" }: { status: Status; className?: string }) {
   const known = STATUS[status];
 
   return (
-    <span className={`${styles.status} ${PILL[known?.family ?? "undecided"]}`}>
+    <span className={`${styles.status} ${PILL[known?.family ?? "undecided"]} ${className}`} data-status={status}>
       {known?.label ?? status}
     </span>
   );

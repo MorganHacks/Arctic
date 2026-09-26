@@ -29,6 +29,7 @@
   --display: var(--body);
   --mono: var(--font-geist-mono), "SFMono-Regular", ui-monospace, monospace;
   --field: #f4f4f5;
+  --field-active: color-mix(in srgb, var(--field) 93%, var(--ink));
   --surface-hover: #e5e7eb;
   --surface-selected: #ebebeb;
   --sidebar-surface: #ffffff;

@@ -145,6 +145,7 @@ public static class PublicFormEndpoints
         string code,
         HttpContext http,
         IFormStore forms,
+        IEventStore events,
         IRespondentStore respondents,
         SessionService sessions,
         TimeProvider clock,
@@ -162,6 +163,10 @@ public static class PublicFormEndpoints
             return NoSuchForm();
         }
 
+        var mlhSeason = published.Theme?.ShowMlhBadge == true
+            ? MlhSeason.For((await events.ByIdAsync(form.EventId, ct))?.StartsAt)
+            : null;
+
         if (!form.IsOpen(clock.GetUtcNow()))
         {
             // No questions with it. There is nothing to fill in, and sending
@@ -175,6 +180,8 @@ public static class PublicFormEndpoints
             {
                 code = form.Code,
                 name = form.Name,
+                theme = published.Theme ?? FormTheme.Default,
+                mlhSeason,
                 kind = form.Kind,
                 open = false,
                 closesAt = form.ClosesAt,
@@ -189,6 +196,8 @@ public static class PublicFormEndpoints
             {
                 code = form.Code,
                 name = form.Name,
+                theme = published.Theme ?? FormTheme.Default,
+                mlhSeason,
                 kind = form.Kind,
                 open = true,
                 closesAt = form.ClosesAt,
@@ -215,6 +224,8 @@ public static class PublicFormEndpoints
             {
                 code = form.Code,
                 name = form.Name,
+                theme = published.Theme ?? FormTheme.Default,
+                mlhSeason,
                 kind = form.Kind,
                 open = true,
                 closesAt = form.ClosesAt,
@@ -229,6 +240,8 @@ public static class PublicFormEndpoints
         {
             code = form.Code,
             name = form.Name,
+            theme = published.Theme ?? FormTheme.Default,
+            mlhSeason,
             kind = form.Kind,
             open = true,
             closesAt = form.ClosesAt,

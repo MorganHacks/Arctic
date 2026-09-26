@@ -30,6 +30,8 @@ public static partial class TemplateEndpoints
             return Results.BadRequest(new { error = "Sender name is required." });
 
         var current = await templates.FindAsync(key, ct);
+        if (current is null && await templates.ExistsAsync(key, ct))
+            return Results.Conflict(new { error = "This template was deleted. Create a new template to continue." });
         if (current is not null && current.Kind != draft.Kind)
             return Results.Conflict(new { error = KindIsFixed(current.Kind) });
 
@@ -39,7 +41,9 @@ public static partial class TemplateEndpoints
 
         draft = draft with { Name = draft.Name ?? current?.Name ?? CampaignName(draft.Subject) };
         var saved = await drafts.SaveAsync(draft, http.PersonId(), current?.Version, ct);
-        return Results.Ok(DraftDetail(saved));
+        return saved is null
+            ? Results.Conflict(new { error = "This template was deleted. Create a new template to continue." })
+            : Results.Ok(DraftDetail(saved));
     }
 
     private static TemplateSummary DraftSummary(WorkingTemplate saved, string? previewHtml = null) => new(

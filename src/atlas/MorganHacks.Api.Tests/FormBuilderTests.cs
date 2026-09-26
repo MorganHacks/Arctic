@@ -81,10 +81,14 @@ public class FormBuilderTests(ApplicationsDatabase db)
         var saved = await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", reader,
             new { fields = Array.Empty<object>() });
         var published = await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", reader);
+        var renamed = await Send(HttpMethod.Put, $"/admin/forms/{form}/name", reader, new { name = "Refused" });
+        var removed = await Send(HttpMethod.Delete, $"/admin/forms/{form}", reader);
 
         Assert.Equal(HttpStatusCode.Forbidden, created.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, saved.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, published.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, renamed.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, removed.StatusCode);
     }
 
     [Fact]
@@ -121,6 +125,8 @@ public class FormBuilderTests(ApplicationsDatabase db)
             (HttpMethod.Put, $"/admin/forms/{id}/draft"),
             (HttpMethod.Post, $"/admin/forms/{id}/publish"),
             (HttpMethod.Get, $"/admin/forms/{id}/versions"),
+            (HttpMethod.Put, $"/admin/forms/{id}/name"),
+            (HttpMethod.Delete, $"/admin/forms/{id}"),
         ];
 
         foreach (var (method, path) in routes)
@@ -366,6 +372,103 @@ public class FormBuilderTests(ApplicationsDatabase db)
         Assert.Matches("^[a-z2-9]{7}$", listed["code"]!.GetValue<string>());
         Assert.True(listed["published"]!.GetValue<bool>());
         Assert.Equal(1, listed["publishedVersion"]!.GetValue<int>());
+        Assert.Equal(fields[0]!["label"]!.GetValue<string>(),
+            listed["preview"]!["fields"]![0]!["label"]!.GetValue<string>());
+
+        fields[0]!["label"] = "An unpublished change";
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields }))
+            .EnsureSuccess();
+        var unchanged = (await ReadAsync(
+            await Send(HttpMethod.Get, $"/admin/forms?eventId={eventId}", cookie)))
+            ["forms"]!.AsArray().Single()!;
+        Assert.NotEqual("An unpublished change",
+            unchanged["preview"]!["fields"]![0]!["label"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task The_list_previews_saved_draft_questions_and_choices_without_publishing()
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        fields.Insert(0, Question("interest", "radio", "What would you like to build?", true,
+            [new { value = "web", label = "Web" }, new { value = "mobile", label = "Mobile" },
+             new { value = "hardware", label = "Hardware" }, new { value = "other", label = "Other" }]));
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields }))
+            .EnsureSuccess();
+        var eventId = (await ReadAsync(
+            await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie)))
+            ["form"]!["eventId"]!.GetValue<Guid>();
+
+        var listed = (await ReadAsync(
+            await Send(HttpMethod.Get, $"/admin/forms?eventId={eventId}", cookie)))
+            ["forms"]!.AsArray().Single()!;
+        Assert.False(listed["published"]!.GetValue<bool>());
+        Assert.Equal(fields.Count, listed["preview"]!["questions"]!.GetValue<int>());
+        var preview = listed["preview"]!["fields"]!.AsArray();
+        Assert.Equal(4, preview.Count);
+        Assert.Equal("What would you like to build?", preview[0]!["label"]!.GetValue<string>());
+        Assert.Equal("radio", preview[0]!["type"]!.GetValue<string>());
+        Assert.True(preview[0]!["required"]!.GetValue<bool>());
+        Assert.Equal(["Web", "Mobile", "Hardware"], preview[0]!["options"]!.AsArray()
+            .Select(option => option!["label"]!.GetValue<string>()));
+        Assert.Null(preview[0]!["storage"]);
+        Assert.Equal(fields.Count, (await DraftFieldsAsync(cookie, form)).Count);
+    }
+
+    [Fact]
+    public async Task List_previews_follow_the_published_theme_and_keep_unpublished_changes_private()
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var theme = new
+        {
+            accent = "#6750a4",
+            background = "tint",
+            font = "serif",
+            size = "large",
+            headerImage = "data:image/webp;base64,UklGRjgAAABXRUJQVlA4ICwAAADQAQCdASoEAAEAAUAmJaACdLoB+AADsAD++X2//yU1/jblq/+LORiOy8AAAA=="
+        };
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields, theme })).EnsureSuccess();
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        var eventId = draft["form"]!["eventId"]!.GetValue<Guid>();
+        var code = draft["form"]!["code"]!.GetValue<string>();
+
+        async Task<JsonNode> PreviewTheme() => (await ReadAsync(
+            await Send(HttpMethod.Get, $"/admin/forms?eventId={eventId}", cookie)))
+            ["forms"]!.AsArray().Single()!["preview"]!["theme"]!;
+
+        var preview = await PreviewTheme();
+        Assert.Equal(theme.headerImage, preview["headerImage"]!.GetValue<string>());
+        Assert.Equal(theme.accent, preview["accent"]!.GetValue<string>());
+        Assert.Equal(theme.font, preview["font"]!.GetValue<string>());
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        var live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.True(JsonNode.DeepEquals(live["theme"], await PreviewTheme()));
+
+        await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie);
+        var next = new { accent = "#28734f", background = "white", font = "mono", size = "small" };
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields, theme = next })).EnsureSuccess();
+        Assert.True(JsonNode.DeepEquals(live["theme"], await PreviewTheme()));
+
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        preview = await PreviewTheme();
+        Assert.True(JsonNode.DeepEquals(live["theme"], preview));
+        Assert.Equal(next.accent, preview["accent"]!.GetValue<string>());
+        Assert.Null(preview["headerImage"]);
+    }
+
+    [Fact]
+    public async Task Listing_a_new_form_does_not_create_a_draft_for_its_preview()
+    {
+        var eventId = await db.AddEventAsync();
+        var cookie = await OrganizerAsync(Permission.FormsManage.Value, Permission.ApplicationsView.Value);
+        var form = await CreateFormAsync(cookie, eventId);
+
+        var listed = (await ReadAsync(
+            await Send(HttpMethod.Get, $"/admin/forms?eventId={eventId}", cookie)))
+            ["forms"]!.AsArray().Single()!;
+        Assert.Null(listed["preview"]);
+        var history = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/versions", cookie));
+        Assert.Empty(history["versions"]!.AsArray());
     }
 
     [Fact]
@@ -417,6 +520,314 @@ public class FormBuilderTests(ApplicationsDatabase db)
         // Newest first, so the draft somebody is holding is the top line.
         Assert.Equal("draft", versions[0]!["status"]!.GetValue<string>());
         Assert.Equal("published", versions[1]!["status"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Version_history_names_the_creator_latest_editor_and_publisher()
+    {
+        var (creator, form, fields) = await OpenBuilderAsync();
+        var first = (await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/versions", creator)))
+            ["versions"]![0]!;
+        var creatorId = first["actor"]!["id"]!.GetValue<Guid>();
+        Assert.Null(first["updatedAt"]);
+
+        var editorId = await db.AddPersonAsync($"editor-{Guid.NewGuid():N}@example.com");
+        await db.GrantAsync(editorId, Permission.FormsManage.Value);
+        await using (var profile = db.DataSource.CreateCommand(
+            "UPDATE identity.people SET full_name = 'Form Editor', avatar_url = 'https://example.com/editor.png' WHERE id = @id"))
+        {
+            profile.Parameters.AddWithValue("id", editorId);
+            await profile.ExecuteNonQueryAsync();
+        }
+        var editor = await SignInAsync(editorId);
+        var reader = await OrganizerAsync(Permission.ApplicationsView.Value);
+        fields[0]!["label"] = "Updated email question";
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", editor, new { fields })).EnsureSuccess();
+
+        var edited = (await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/versions", reader)))
+            ["versions"]![0]!;
+        Assert.Equal(editorId, edited["actor"]!["id"]!.GetValue<Guid>());
+        Assert.Equal("Form Editor", edited["actor"]!["fullName"]!.GetValue<string>());
+        Assert.Equal("https://example.com/editor.png", edited["actor"]!["avatarUrl"]!.GetValue<string>());
+        Assert.NotNull(edited["updatedAt"]);
+
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", creator, new { fields })).EnsureSuccess();
+        var unchanged = (await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/versions", reader)))
+            ["versions"]![0]!;
+        Assert.True(JsonNode.DeepEquals(edited, unchanged));
+
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", creator,
+            new { fields, theme = new { accent = "#7c3aed" } })).EnsureSuccess();
+        var themed = (await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/versions", reader)))
+            ["versions"]![0]!;
+        Assert.Equal(creatorId, themed["actor"]!["id"]!.GetValue<Guid>());
+
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", editor)).EnsureSuccess();
+        await (await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", creator)).EnsureSuccess();
+        var versions = (await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/versions", reader)))
+            ["versions"]!.AsArray();
+        Assert.Equal(creatorId, versions[0]!["actor"]!["id"]!.GetValue<Guid>());
+        Assert.Equal(editorId, versions[1]!["actor"]!["id"]!.GetValue<Guid>());
+        Assert.Equal("published", versions[1]!["status"]!.GetValue<string>());
+        Assert.NotNull(versions[1]!["publishedAt"]);
+
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/unpublish", editor)).EnsureSuccess();
+        var retired = (await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/versions", reader)))
+            ["versions"]![1]!;
+        Assert.Equal(editorId, retired["actor"]!["id"]!.GetValue<Guid>());
+        Assert.Equal("retired", retired["status"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Renaming_a_live_form_keeps_its_code_questions_and_published_version()
+    {
+        var (cookie, form, _) = await OpenBuilderAsync();
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        var before = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/name", cookie,
+            new { name = "  New application name  " })).EnsureSuccess();
+
+        var after = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Equal("New application name", after["form"]!["name"]!.GetValue<string>());
+        Assert.Equal(before["form"]!["code"]!.GetValue<string>(), after["form"]!["code"]!.GetValue<string>());
+        Assert.True(JsonNode.DeepEquals(before["draft"], after["draft"]));
+        Assert.True(JsonNode.DeepEquals(before["published"], after["published"]));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task A_blank_rename_is_refused_without_changing_the_form(string? name)
+    {
+        var (cookie, form, _) = await OpenBuilderAsync();
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Send(HttpMethod.Put, $"/admin/forms/{form}/name", cookie, new { name })).StatusCode);
+        var after = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Equal("Application", after["form"]!["name"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_long_name_and_a_missing_form_are_handled_without_server_errors()
+    {
+        var (cookie, form, _) = await OpenBuilderAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Put,
+            $"/admin/forms/{form}/name", cookie, new { name = new string('a', 201) })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Put,
+            $"/admin/forms/{Guid.NewGuid()}/name", cookie, new { name = "Missing" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(HttpMethod.Delete, $"/admin/forms/{Guid.NewGuid()}", cookie)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Removing_a_live_form_hides_it_retires_it_and_preserves_its_answers_and_history()
+    {
+        var (cookie, form, _) = await OpenBuilderAsync();
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        using var scope = _app.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<MorganHacks.Applications.Forms.IFormStore>();
+        var original = (await store.ByIdAsync(form))!;
+        var history = await store.HistoryAsync(form);
+        var person = await db.AddPersonAsync($"answer-{Guid.NewGuid():N}@example.com");
+        await using (var insert = db.DataSource.CreateCommand("""
+            INSERT INTO applications.form_submissions (form_id, form_version, person_id, answers)
+            VALUES (@form, @version, @person, '{"test_answer":"Keep this answer"}')
+            """))
+        {
+            insert.Parameters.AddWithValue("form", form);
+            insert.Parameters.AddWithValue("version", history[0].Version);
+            insert.Parameters.AddWithValue("person", person);
+            await insert.ExecuteNonQueryAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Send(HttpMethod.Delete, $"/admin/forms/{form}", cookie)).StatusCode);
+
+        Assert.Null(await store.ByCodeAsync(original.Code));
+        Assert.Null(await store.ByIdAsync(form));
+        Assert.Null(await store.PublishedAsync(form));
+        Assert.DoesNotContain(await store.ForEventAsync(original.EventId), item => item.Id == form);
+        var retained = await store.HistoryAsync(form);
+        Assert.Equal(history.Count, retained.Count);
+        Assert.Equal(history[0].Id, retained[0].Id);
+        Assert.Equal("retired", retained[0].Status);
+        await using var answer = db.DataSource.CreateCommand(
+            "SELECT answers->>'test_answer' FROM applications.form_submissions WHERE form_id = @form");
+        answer.Parameters.AddWithValue("form", form);
+        Assert.Equal("Keep this answer", await answer.ExecuteScalarAsync());
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Send(HttpMethod.Delete, $"/admin/forms/{form}", cookie)).StatusCode);
+        var replacement = await CreateFormAsync(cookie, original.EventId);
+        Assert.NotEqual(form, replacement);
+    }
+
+    [Fact]
+    public async Task Removing_an_untouched_draft_does_not_create_a_version_or_touch_another_form()
+    {
+        var cookie = await OrganizerAsync(Permission.FormsManage.Value, Permission.ApplicationsView.Value);
+        var eventId = await db.AddEventAsync();
+        var first = await CreateFormAsync(cookie, eventId);
+        var other = await ReadAsync(await Send(HttpMethod.Post, $"/admin/forms?eventId={eventId}", cookie,
+            new { name = "Keep this survey", kind = "survey" }));
+        await (await Send(HttpMethod.Delete, $"/admin/forms/{first}", cookie)).EnsureSuccess();
+
+        using var scope = _app.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<MorganHacks.Applications.Forms.IFormStore>();
+        Assert.Empty(await store.HistoryAsync(first));
+        var remaining = Assert.Single(await store.ForEventAsync(eventId));
+        Assert.Equal(other["id"]!.GetValue<Guid>(), remaining.Id);
+    }
+
+    [Fact]
+    public async Task Themes_save_with_the_draft_and_only_reach_the_public_form_after_publishing()
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var theme = new
+        {
+            accent = "#6750a4",
+            background = "tint",
+            font = "serif",
+            size = "large",
+            showMlhBadge = true,
+            headerImage = "data:image/webp;base64,UklGRjgAAABXRUJQVlA4ICwAAADQAQCdASoEAAEAAUAmJaACdLoB+AADsAD++X2//yU1/jblq/+LORiOy8AAAA=="
+        };
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields, theme })).EnsureSuccess();
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields })).EnsureSuccess();
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Equal(theme.accent, draft["draft"]!["theme"]!["accent"]!.GetValue<string>());
+        Assert.True(draft["draft"]!["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Equal(theme.headerImage, draft["draft"]!["theme"]!["headerImage"]!.GetValue<string>());
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        var code = draft["form"]!["code"]!.GetValue<string>();
+        var live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.Equal(theme.font, live["theme"]!["font"]!.GetValue<string>());
+        Assert.True(live["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Equal(theme.headerImage, live["theme"]!["headerImage"]!.GetValue<string>());
+        draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Equal(theme.accent, draft["draft"]!["theme"]!["accent"]!.GetValue<string>());
+        Assert.Equal(theme.headerImage, draft["draft"]!["theme"]!["headerImage"]!.GetValue<string>());
+        var updated = new { accent = "#28734f", background = "white", font = "mono", size = "small" };
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie, new { fields, theme = updated })).EnsureSuccess();
+        live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.Equal(theme.accent, live["theme"]!["accent"]!.GetValue<string>());
+        Assert.True(live["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Equal(theme.headerImage, live["theme"]!["headerImage"]!.GetValue<string>());
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.Equal(updated.accent, live["theme"]!["accent"]!.GetValue<string>());
+        Assert.Equal(updated.size, live["theme"]!["size"]!.GetValue<string>());
+        Assert.False(live["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Null(live["theme"]!["headerImage"]);
+        await using var mutate = db.DataSource.CreateCommand(
+            "UPDATE applications.form_versions SET theme = '{}' WHERE form_id = @form AND status = 'published'");
+        mutate.Parameters.AddWithValue("form", form);
+        var error = await Assert.ThrowsAsync<Npgsql.PostgresException>(() => mutate.ExecuteNonQueryAsync());
+        Assert.Equal("23001", error.SqlState);
+    }
+
+    [Fact]
+    public async Task Mlh_badge_uses_the_forms_event_date_and_updates_when_the_event_moves()
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.False(draft["draft"]!["theme"]!["showMlhBadge"]!.GetValue<bool>());
+        Assert.Null(draft["mlhSeason"]);
+        var eventId = draft["form"]!["eventId"]!.GetValue<Guid>();
+        var code = draft["form"]!["code"]!.GetValue<string>();
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
+            new { fields, theme = new { showMlhBadge = true } })).EnsureSuccess();
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        var live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.Null(live["mlhSeason"]);
+
+        using var scope = _app.Services.CreateScope();
+        var events = scope.ServiceProvider.GetRequiredService<MorganHacks.Applications.Services.IEventStore>();
+        foreach (var (date, season) in new[] { ("2027-04-03T13:00:00Z", 2027), ("2027-09-04T13:00:00Z", 2028) })
+        {
+            await events.UpdateAsync(eventId, new MorganHacks.Applications.Services.EventEdit
+            {
+                StartsAt = MorganHacks.Applications.Services.Patch<DateTimeOffset>.To(DateTimeOffset.Parse(date))
+            });
+            draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+            live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+            Assert.Equal(season, draft["mlhSeason"]!.GetValue<int>());
+            Assert.Equal(season, live["mlhSeason"]!.GetValue<int>());
+        }
+
+        await (await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
+            new { fields, theme = new { showMlhBadge = false } })).EnsureSuccess();
+        await (await Send(HttpMethod.Post, $"/admin/forms/{form}/publish", cookie)).EnsureSuccess();
+        live = await ReadAsync(await _app.CreateClient().GetAsync($"/forms/{code}"));
+        Assert.Null(live["mlhSeason"]);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/header.png")]
+    [InlineData("data:image/svg+xml;base64,PHN2Zz4=")]
+    [InlineData("data:image/webp;base64,not-base64")]
+    [InlineData("data:image/webp;base64,aGVsbG8=")]
+    public async Task Invalid_header_images_do_not_change_the_saved_theme(string headerImage)
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var response = await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
+            new { fields, theme = new { headerImage } });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Null(draft["draft"]!["theme"]!["headerImage"]);
+        Assert.False(new MorganHacks.Applications.Forms.FormTheme(HeaderImage: "data:image/webp;base64," + new string('A', 350_000)).IsValid());
+    }
+
+    [Theory]
+    [InlineData("red", "neutral", "sans", "medium")]
+    [InlineData("#003970", "url(evil)", "sans", "medium")]
+    [InlineData("#003970", "neutral", "unknown", "medium")]
+    [InlineData("#003970", "neutral", "sans", "huge")]
+    public async Task Invalid_themes_are_rejected_without_changing_the_draft(string accent, string background, string font, string size)
+    {
+        var (cookie, form, fields) = await OpenBuilderAsync();
+        var response = await Send(HttpMethod.Put, $"/admin/forms/{form}/draft", cookie,
+            new { fields, theme = new { accent, background, font, size } });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form}/draft", cookie));
+        Assert.Equal("#003970", draft["draft"]!["theme"]!["accent"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Survey_response_count_includes_anonymous_and_signed_in_submissions_across_versions()
+    {
+        var cookie = await OrganizerAsync(Permission.FormsManage.Value, Permission.ApplicationsView.Value);
+        var eventId = await db.AddEventAsync();
+        using var scope = _app.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<MorganHacks.Applications.Forms.IFormStore>();
+        var form = await store.CreateAsync(eventId, "Survey", "survey", null);
+        var other = await store.CreateAsync(eventId, "Other survey", "survey", null);
+        await store.DraftAsync(form.Id, null);
+        await store.DraftAsync(other.Id, null);
+        var first = await store.PublishAsync(form.Id, null);
+        await store.DraftAsync(form.Id, null);
+        var second = await store.PublishAsync(form.Id, null);
+        var unrelated = await store.PublishAsync(other.Id, null);
+        var person = await db.AddPersonAsync($"response-{Guid.NewGuid():N}@example.com");
+        await using var insert = db.DataSource.CreateCommand("""
+            INSERT INTO applications.form_submissions (form_id, form_version, person_id, submission_key, answers)
+            VALUES (@form, @first, @person, NULL, '{}'),
+                   (@form, @second, NULL, @key, '{}'),
+                   (@other, @unrelated, NULL, @otherKey, '{}')
+            """);
+        insert.Parameters.AddWithValue("form", form.Id);
+        insert.Parameters.AddWithValue("first", first.Version);
+        insert.Parameters.AddWithValue("second", second.Version);
+        insert.Parameters.AddWithValue("person", person);
+        insert.Parameters.AddWithValue("key", Guid.NewGuid());
+        insert.Parameters.AddWithValue("other", other.Id);
+        insert.Parameters.AddWithValue("unrelated", unrelated.Version);
+        insert.Parameters.AddWithValue("otherKey", Guid.NewGuid());
+        await insert.ExecuteNonQueryAsync();
+        var draft = await ReadAsync(await Send(HttpMethod.Get, $"/admin/forms/{form.Id}/draft", cookie));
+        Assert.Equal(2, draft["responseCount"]!.GetValue<long>());
     }
 
     // --------------------------------------------------------------- helpers ---

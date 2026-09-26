@@ -1,6 +1,6 @@
 .frame {
   --shell-top-inset: 12px;
-  --shell-heading-height: 32px;
+  --shell-heading-height: 40px;
   display: flex;
   min-height: 100dvh;
   width: 100%;
@@ -42,7 +42,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
+  height: var(--shell-heading-height);
   margin-bottom: 16px;
 }
 .workspace {
@@ -50,7 +50,7 @@
   align-items: center;
   flex: 1;
   min-width: 0;
-  height: 40px;
+  height: var(--shell-heading-height);
   padding: 0 4px;
   border-radius: 8px;
   text-decoration: none;
@@ -540,6 +540,7 @@
     display: none;
   }
   .main {
+    --shell-heading-height: 32px;
     padding: 24px 20px 40px;
   }
   .mobileBar {

@@ -1,0 +1,62 @@
+.trigger { display: flex; width: 100%; min-width: 0; height: 48px; padding: 0 14px; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid transparent; border-radius: 12px; background: var(--field); color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trigger > svg { flex-shrink: 0; color: var(--muted); }
+.trigger [data-placeholder="true"] { color: var(--muted); }
+.trigger:hover:not(:disabled), .trigger[aria-expanded="true"] { background: var(--field-active); }
+.trigger:disabled { cursor: default; opacity: 0.6; }
+.trigger:focus-visible { background: var(--field-active); outline: none; }
+.picker { position: fixed; inset: auto; margin: 0; padding: 14px; width: 296px; max-width: calc(100vw - 24px); overflow: auto; border: 1px solid var(--line-soft); border-radius: 14px; background: var(--raised); color: var(--ink); box-shadow: 0 8px 24px #0000000c, 0 1px 3px #00000005; overscroll-behavior: contain; scrollbar-width: thin; font-family: var(--body); }
+.picker button { font-family: inherit; cursor: pointer; }
+.picker button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.picker button:disabled { opacity: 0.35; cursor: default; }
+.heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.monthTitle { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 6px; padding: 6px 2px; background: transparent; color: var(--ink); font-size: 13px; font-weight: 600; }
+.year { color: var(--muted); font-weight: 400; }
+.navigation { display: flex; gap: 4px; }
+.navigation button { display: grid; place-items: center; height: 28px; width: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); }
+.navigation button:hover:not(:disabled) { background: var(--field); color: var(--ink); }
+.calendar { display: grid; gap: 2px; }
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.week > span { display: grid; place-items: center; height: 26px; font-size: 10px; color: var(--faint); font-weight: 500; }
+.week > div { display: grid; place-items: center; }
+.week button { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.week button[data-outside="true"] { color: var(--faint); }
+.week button[data-today="true"]::after { content: ""; position: absolute; bottom: 4px; left: calc(50% - 1.5px); width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+.week button:hover:not(:disabled) { background: var(--field); }
+.week button[data-selected="true"] { color: var(--accent-ink); background: var(--accent); }
+.week button[data-selected="true"]:hover { background: var(--accent); }
+.months { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 0; min-height: 206px; }
+.months button { border: 0; border-radius: 10px; background: var(--field); color: var(--ink); font-size: 13px; }
+.months button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.timeSection { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 57px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.timeHeading { display: grid; gap: 4px; flex-shrink: 0; color: var(--faint); font-size: 10px; }
+.timeHeading > span:first-child { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; }
+.timeSection[data-editing="true"] .timeHeading { display: none; }
+.timeReadout { display: inline-flex; height: 38px; align-items: center; gap: 10px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--field); color: var(--ink); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.timeReadout > svg { color: var(--muted); }
+.timeReadout:hover { background: var(--line-soft); }
+.readoutPeriod { color: var(--muted); font-size: 11px; }
+.colon { padding: 0 3px; color: var(--faint); }
+.timePill { display: grid; width: 100%; grid-template-columns: 1fr 8px 1fr 76px 32px; gap: 5px; align-items: center; animation: timeExpand 180ms ease-out; }
+.timeReadout[hidden], .timePill[hidden] { display: none; }
+.picker .timeSegment { display: flex; align-items: center; justify-content: center; height: 38px; margin: 0; border-radius: 8px; background: var(--field); color: var(--muted); cursor: text; }
+.picker .timeSegment input { appearance: textfield; -moz-appearance: textfield; width: 32px; min-width: 0; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; box-shadow: none; font: inherit; font-size: 14px; font-weight: 500; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; }
+.timeSegment input::-webkit-inner-spin-button, .timeSegment input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.picker .timeSegment:focus-within { background: var(--field-active); }
+.picker .timeSegment input:focus { background: transparent; outline: none; box-shadow: none; }
+.period { display: flex; align-items: center; justify-content: center; padding: 3px; height: 38px; background: var(--field); border-radius: 8px; }
+.period button { height: 30px; padding: 0 6px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 10px; font-weight: 500; }
+.period button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: 0 1px 2px #00000008; }
+.timeToggle { display: grid; place-items: center; height: 38px; width: 32px; padding: 0; border: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
+.timeToggle:hover { background: var(--accent); color: var(--accent-ink); }
+@keyframes timeExpand { from { opacity: 0; transform: translateX(4px); } to { opacity: 1; transform: translateX(0); } }
+.footer { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+.footer button { padding: 8px 12px; border: 0; border-radius: 999px; font-size: 12px; font-weight: 500; }
+.today { margin-right: auto; background: transparent; color: var(--muted); }
+.today:hover { background: var(--field); }
+.cancel { background: transparent; color: var(--muted); }
+.cancel:hover { background: var(--field); }
+.done { background: var(--accent); color: var(--accent-ink); }
+.error { font-size: 11px; color: var(--stop); margin: 10px 0 0; line-height: 1.5; }
+@media (max-width: 48rem) { .picker .timeSegment input { font-size: 16px; } }
+@media (prefers-reduced-motion: reduce) { .timePill { animation: none; } }

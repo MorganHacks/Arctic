@@ -49,7 +49,7 @@ export function HomeEmailView({ data, error }: { data?: EmailAnalytics; error?: 
               <div className={styles.barHeading}><span>{template.name}</span><strong>{numbers.format(template.clicks)}<small>clicks</small></strong></div>
               <div className={styles.barTrack} aria-hidden="true"><span style={{ width: `${template.clicks / data.totalClicks * 100}%`, backgroundColor: categoryColor(template.name) }} /></div>
             </li>)}
-          </ol> : data ? <EmptyState title="No clicks yet"
+          </ol> : data ? <EmptyState variant="data" title="No clicks yet"
             description="Clicks will appear when recipients follow links in an email with tracking enabled." /> : <div className={styles.emailEmpty}>
             <Icon icon={Link01Icon} size={23} />
             <p>Loading click activity…</p>

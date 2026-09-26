@@ -21,7 +21,7 @@ import {
   Select01Icon,
   SmartPhone01Icon,
   TextNumberSignIcon,
-  Upload02Icon,
+  Rocket01Icon,
 } from "@hugeicons/core-free-icons";
 import { Icon, type IconSvgElement } from "@/components/ui/icon";
 import type { FieldType } from "@/lib/api";
@@ -55,7 +55,7 @@ export function Save() {
   return <Icon icon={FloppyDiskIcon} size={16} />;
 }
 export function Publish() {
-  return <Icon icon={Upload02Icon} size={16} />;
+  return <Icon icon={Rocket01Icon} size={16} />;
 }
 export function PageBreakIcon({ size = 18 }: { size?: number }) {
   return <Icon icon={Layout2RowIcon} size={size} />;

@@ -33,7 +33,6 @@
  *   each behind `applications.view`.
  * - People is `GET /admin/people`, behind `people.view`.
  * - Mail is `GET /admin/campaigns`, behind `email.view_stats`.
- * - Templates is `GET /admin/templates`, behind `email.manage_templates`.
  * - Audit is `GET /admin/audit`, behind `audit.view`.
  *
  * Deliberately not listed: the permissions that let somebody change what is on
@@ -80,7 +79,7 @@ const SECTIONS: readonly GatedSection[] = [
   { href: "/forms", label: "Forms", needs: ["applications.view"] },
   { href: "/applicants", label: "Applicants", needs: ["applications.view"] },
   { href: "/mail", label: "Mail", needs: ["email.view_stats"] },
-  { href: "/templates", label: "Templates", needs: ["email.manage_templates"] },
+  { href: "/templates", label: "Templates", needs: ["email.manage_templates", "email.delete_templates"] },
   { href: "/audit", label: "Audit", needs: ["audit.view"] },
 ];
 
@@ -90,21 +89,19 @@ const SECTIONS: readonly GatedSection[] = [
  * Returns the plain `Section` and not the row it came from, so the permissions
  * stay on this side: the bar in the browser is told where it may go, not what
  * the rule was, and cannot start making the decision a second time.
- *
- * An empty result is a real answer, not a fault. A judge holds
- * `judging.score_assigned` and a volunteer holds `checkin.scan`, and the
- * console has no screen for either — both sign in to a bar with nothing in it.
- * What to draw in that case is the nav's problem, not this function's.
  */
 export function sectionsFor(mine: ReadonlySet<string>, badges: Readonly<Record<string, number>> = {}): Section[] {
-  return SECTIONS.filter((section) =>
-    section.needs.some((permission) => mine.has(permission)),
-  ).map(({ href, label }) => ({
-    href,
-    label,
-    badge: badges[href],
-    ...(href === "/forms" && mine.has("forms.manage")
-      ? { children: [{ href: "/forms#new-form", label: "New Form" }] }
-      : {}),
-  }));
+  return [
+    { href: "/", label: "Home" },
+    ...SECTIONS.filter((section) =>
+      section.needs.some((permission) => mine.has(permission)),
+    ).map(({ href, label }) => ({
+      href,
+      label,
+      badge: badges[href],
+      ...(href === "/forms" && mine.has("forms.manage")
+        ? { children: [{ href: "/forms#new-form", label: "New Form" }] }
+        : {}),
+    })),
+  ];
 }

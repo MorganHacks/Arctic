@@ -223,8 +223,28 @@ public sealed class TemplateCatalog(NpgsqlDataSource dataSource)
         return new TemplateWrite(TemplateWriteResult.Written, written);
     }
 
+    public async Task<bool> RetireAsync(string key, int version, CancellationToken ct = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await using var retire = new NpgsqlCommand("""
+            UPDATE notify.templates SET superseded_at = now()
+            WHERE key = @key AND version = @version AND superseded_at IS NULL
+            """, connection, transaction);
+        retire.Parameters.AddWithValue("key", key);
+        retire.Parameters.AddWithValue("version", version);
+        if (await retire.ExecuteNonQueryAsync(ct) == 0) return false;
+
+        await using var drafts = new NpgsqlCommand(
+            "DELETE FROM notify.template_working_drafts WHERE key = @key", connection, transaction);
+        drafts.Parameters.AddWithValue("key", key);
+        await drafts.ExecuteNonQueryAsync(ct);
+        await transaction.CommitAsync(ct);
+        return true;
+    }
+
     /// <summary>Whether this key has ever existed, live or retired.</summary>
-    private async Task<bool> ExistsAsync(string key, CancellationToken ct)
+    public async Task<bool> ExistsAsync(string key, CancellationToken ct)
     {
         await using var cmd = dataSource.CreateCommand(
             "SELECT EXISTS (SELECT 1 FROM notify.templates WHERE key = @key)");

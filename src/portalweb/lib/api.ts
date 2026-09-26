@@ -1,3 +1,5 @@
+import type { AnnouncementContent, AnnouncementResults } from "../../../libs/ui/announcements";
+import type { AnnouncementReactions } from "../../../libs/ui/announcement-reactions";
 import { cookies } from "next/headers";
 
 /**
@@ -178,6 +180,9 @@ export type Announcement = {
   id: string;
   body: string;
   at: string;
+  content: AnnouncementContent | null;
+  results: AnnouncementResults | null;
+  reactions: AnnouncementReactions;
 };
 
 /**

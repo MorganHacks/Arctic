@@ -1,146 +1,102 @@
 "use client";
 
+import { ArrowDown01Icon, ArrowRight01Icon, Attachment01Icon } from "@hugeicons/core-free-icons";
+import type { CSSProperties } from "react";
+import { Icon } from "@/components/ui/icon";
 import type { FormField } from "@/lib/api";
-import { AnswerCell, when } from "./answers";
-import { columnsFor } from "./columns";
+import { AnswerCell } from "./answers";
+import type { Column } from "./columns";
+import { ResponsePerson } from "./response-person";
+import { respondentFor, submittedAt } from "./respondent";
 import styles from "./responses.module.css";
 import type { ResponseItem } from "./types";
 
-/**
- * Every loaded response, one to a row.
- *
- * A scanning surface. Somebody works down this looking for the row worth
- * opening, so everything is one line high, dates read in the order they sort,
- * and numbers line up under each other. Nothing is coloured except the row
- * that is open, which is the only thing on the screen that changes what a
- * click does next.
- */
-export function ResponsesTable({
-  fields,
-  items,
-  openId,
-  onOpen,
-  showResume,
-}: {
+export function ResponsesTable({ fields, items, openId, onOpen, showResume, columns }: {
   fields: FormField[];
   items: ResponseItem[];
   openId: string | null;
   onOpen: (id: string) => void;
-  /** Whether this person may read resumes at all. */
   showResume: boolean;
+  columns: Column[];
 }) {
-  const columns = columnsFor(fields, items);
-
   // A resume column on a form that never asked for one is an empty column on
   // every row forever.
   const resumes = showResume && items.some((item) => item.resume !== null);
+  const widths = columns.map((column) => {
+    switch (column.field?.type) {
+      case "number": return 80;
+      case "phone": return 156;
+      case "date": return 140;
+      case "email": return 256;
+      case "consent": return 180;
+      default: return 224;
+    }
+  });
 
   return (
-    <div className={styles.scroll}>
-      <table className={styles.table}>
+    <div className={styles.scroll} role="region" aria-label="Responses table" tabIndex={0}>
+      <table className={styles.table} aria-label="Form responses"
+        style={{ "--answer-columns-width": `${184 + widths.reduce((total, width) => total + width, 0) + (resumes ? 144 : 0)}px` } as CSSProperties}>
+        <colgroup>
+          <col className={styles.respondentColumn} />
+          <col style={{ width: 184 }} />
+          {columns.map((column, index) => <col key={column.key} style={{ width: widths[index] }} />)}
+          {resumes ? <col style={{ width: 144 }} /> : null}
+        </colgroup>
         <thead>
           <tr>
-            <th className={styles.when} scope="col">
-              Submitted
-            </th>
-            {/* COPY: needs sign-off. */}
-            <th className={styles.respondent} scope="col">
-              Respondent
-            </th>
-            <th scope="col">Version</th>
-
+            <th className={styles.respondent} scope="col">Respondent</th>
+            <th scope="col" aria-sort="descending"><span className={styles.submittedHeading}>Submitted<Icon icon={ArrowDown01Icon} size={14} /></span></th>
             {columns.map((column) => (
-              <th
-                key={column.key}
-                scope="col"
+              <th key={column.key} scope="col"
+                data-numeric={column.field?.type === "number" || undefined}
                 className={column.kind === "retired" ? styles.retired : undefined}
-                // Said in a tooltip rather than in the header, because a
-                // header wide enough to explain itself is a column somebody
-                // has to scroll past on every row.
-                title={column.kind === "retired" ? "No longer on this form" : undefined}
-              >
+                title={column.kind === "retired" ? "No longer on this form" : column.label}>
                 {column.label}
               </th>
             ))}
-
             {resumes ? <th scope="col">Resume</th> : null}
           </tr>
         </thead>
-
         <tbody>
-          {items.map((item) => (
-            <tr
-              key={item.id}
-              className={
-                item.id === openId ? `${styles.row} ${styles.selected}` : styles.row
-              }
-              onClick={() => onOpen(item.id)}
-            >
-              <td className={styles.when}>
-                {/* The date is the button. A row is not focusable and a table
-                    full of rows that only a mouse can open is a table half the
-                    organizers cannot use. */}
-                <button
-                  type="button"
-                  className={styles.open}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpen(item.id);
-                  }}
-                >
-                  {when(item.submittedAt)}
-                </button>
-              </td>
-
-              {/* Which version of the form this was answered on. The reason a
-                  row has gaps where its neighbours do not, so it belongs
-                  beside them rather than buried in the panel. */}
-              {/* Who answered, where a gated form knows. Beside the date
-                  rather than among the answers, because it is not one: it
-                  comes from the session rather than from anything typed, and
-                  a column of addresses interleaved with answers reads as a
-                  question somebody was asked. */}
-              <td className={styles.respondent}>
-                {item.respondent ?? <span className="meta">&mdash;</span>}
-              </td>
-
-              <td className={styles.version}>
-                  v{item.formVersion}
-                  {/* The anonymous mark sits beside the version because it
-                      explains why a row has nobody behind it, and an
-                      explanation somebody has to open the row to find is one
-                      they will not go looking for. */}
-                  {item.anonymous ? (
-                    // COPY: needs sign-off.
-                    <span
-                      className={styles.anonymous}
-                      title="Answered without signing in"
-                    >
-                      anon
-                    </span>
-                  ) : null}
+          {items.map((item) => {
+            const submitted = submittedAt(item.submittedAt);
+            return (
+              <tr key={item.id} className={item.id === openId ? `${styles.row} ${styles.selected}` : styles.row}
+                onClick={() => onOpen(item.id)}>
+                <td className={styles.respondent}>
+                  <button type="button" className={styles.open}
+                    aria-label={`Open response from ${respondentFor(item, fields).name}, ${submitted.date} at ${submitted.time}`}
+                    aria-haspopup="dialog"
+                    onClick={(event) => { event.stopPropagation(); onOpen(item.id); }}>
+                    <ResponsePerson item={item} fields={fields} />
+                    <Icon icon={ArrowRight01Icon} size={16} className={styles.openArrow} />
+                  </button>
                 </td>
-
-              {columns.map((column) => (
-                <td key={column.key} className={styles.cell}>
-                  <AnswerCell
-                    value={item.answers[column.key]}
-                    field={column.field}
-                  />
+                <td className={styles.when}>
+                  <time dateTime={item.submittedAt} title={`${submitted.date}, ${submitted.time}`}>
+                    <span>{submitted.date}</span>
+                    <span className={styles.submissionMeta}>{submitted.time}<span className={styles.version} title={`Form version ${item.formVersion}`}>v{item.formVersion}</span></span>
+                  </time>
                 </td>
-              ))}
-
-              {resumes ? (
-                <td className={styles.cell}>
-                  {item.resume ? (
-                    <span title={item.resume.filename}>{item.resume.filename}</span>
-                  ) : (
-                    <span className={styles.blank}>—</span>
-                  )}
-                </td>
-              ) : null}
-            </tr>
-          ))}
+                {columns.map((column) => (
+                  <td key={column.key} className={styles.cell} data-numeric={column.field?.type === "number" || undefined}>
+                    <AnswerCell value={item.answers[column.key]} field={column.field} />
+                  </td>
+                ))}
+                {resumes ? (
+                  <td className={styles.cell}>
+                    {item.resume ? (
+                      <span className={styles.fileCell} title={item.resume.filename}>
+                        <Icon icon={Attachment01Icon} size={15} /><span>Resume</span>
+                        <small>{item.resume.filename.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() || "FILE"}</small>
+                      </span>
+                    ) : <span className={styles.blank}>—</span>}
+                  </td>
+                ) : null}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

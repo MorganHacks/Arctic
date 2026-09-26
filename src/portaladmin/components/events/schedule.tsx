@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Clock01Icon, Link04Icon } from "@hugeicons/core-free-icons";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { Icon } from "@/components/ui/icon";
 import { saveEvent, type EventEdit } from "@/app/events/actions";
 import styles from "./events.module.css";
 import type { EventRow } from "./types";
@@ -37,7 +40,12 @@ const DATES = [
 
 type DateKey = (typeof DATES)[number]["key"];
 
-export function ScheduleForm({ event }: { event: EventRow }) {
+export function ScheduleForm({ event, canManage, active, renderHeader }: {
+  event: EventRow;
+  canManage: boolean;
+  active: boolean;
+  renderHeader: (state: { saving: boolean; saved: boolean; dirty: boolean; canSave: boolean; discard: () => void }) => ReactNode;
+}) {
   // The wall-clock form of each stored instant, which is what the input wants.
   // Seeded once from the server and owned here after: a field somebody is
   // typing into cannot be re-seeded underneath them on every refresh.
@@ -57,10 +65,21 @@ export function ScheduleForm({ event }: { event: EventRow }) {
   // typing into, and a re-render that re-seeded it from the server would take
   // the half-typed name away mid-word.
   const [name, setName] = useState(event.name);
+  const [savedValues, setSavedValues] = useState(() => ({ name, dates, capacity }));
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const disabled = saving || !canManage;
+  const dirty = name !== savedValues.name || capacity !== savedValues.capacity || DATES.some(({ key }) => dates[key] !== savedValues.dates[key]);
+  const canSave = !disabled && dirty && name.trim() !== "";
+
+  function discard() {
+    setName(savedValues.name);
+    setDates(savedValues.dates);
+    setCapacity(savedValues.capacity);
+    touched();
+  }
 
   function edit(key: DateKey, value: string) {
     setDates((current) => ({ ...current, [key]: value }));
@@ -75,6 +94,7 @@ export function ScheduleForm({ event }: { event: EventRow }) {
   }
 
   async function save() {
+    if (!canSave) return;
     setSaving(true);
     setNotice(null);
 
@@ -98,117 +118,98 @@ export function ScheduleForm({ event }: { event: EventRow }) {
 
     if (!result.ok) {
       setNotice(result.error ?? "That did not work.");
+    } else {
+      setName(name.trim());
+      setSavedValues({ name: name.trim(), dates, capacity });
     }
   }
 
   return (
     <>
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Name</h2>
-        </div>
+      {renderHeader({ saving, saved, dirty, canSave, discard })}
+      <div className={styles.panel} role="tabpanel" id="event-panel-0" aria-labelledby="event-tab-0" hidden={!active} tabIndex={0}>
+        <form id="event-settings" className={styles.settings} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+          <section className={styles.section} aria-labelledby="event-details-title">
+            <div className={styles.sectionHeading}>
+              <h2 id="event-details-title">Event details</h2>
+              <p>Give your event a name and set its capacity.</p>
+            </div>
 
-        <div className="field">
-          <label htmlFor="name">Name</label>
-          <input
-            id="name"
-            className={styles.nameInput}
-            value={name}
-            disabled={saving}
-            autoComplete="off"
-            onChange={(e) => {
-              setName(e.target.value);
-              touched();
-            }}
-          />
-          <p className="hint">
-            What the console calls this event on every screen. The slug{" "}
-            <span className={styles.headSlug}>{event.slug}</span> is what links
-            and forms refer to it by, and cannot be changed.
-          </p>
-        </div>
-      </section>
+            <div className={styles.generalFields}>
+              <div className={styles.field}>
+                <label htmlFor="name">Event name</label>
+                <input
+                  id="name"
+                  value={name}
+                  disabled={disabled}
+                  required
+                  autoComplete="off"
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    touched();
+                  }}
+                />
+              </div>
+              <div className={styles.field}>
+                <div className={styles.fieldHead}>
+                  <label htmlFor="capacity">Capacity</label>
+                  {canManage ? <button type="button" className={styles.clear} disabled={saving || capacity === ""}
+                    aria-label="Clear capacity" onClick={() => { setCapacity(""); touched(); }}>Clear</button> : null}
+                </div>
+                <div className={styles.capacityField}>
+                  <input id="capacity" type="number" min={0} step={1} inputMode="numeric"
+                    value={capacity} disabled={disabled} placeholder="Not set"
+                    onChange={(event) => { setCapacity(event.target.value); touched(); }} />
+                  <span>places</span>
+                </div>
+              </div>
+              <p className={styles.slug}><span>Event slug</span><code><Icon icon={Link04Icon} size={15} strokeWidth={1.8} /><span>{event.slug}</span></code><span>Used in links and forms. Cannot be changed.</span></p>
+            </div>
+          </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Dates</h2>
-        </div>
+          <section className={styles.section} aria-labelledby="event-schedule-title">
+            <div className={styles.sectionHeading}>
+              <div className={styles.sectionTitle}>
+                <h2 id="event-schedule-title">Event schedule</h2>
+                <span className={styles.timezone}><Icon icon={Clock01Icon} size={14} />Eastern Time</span>
+              </div>
+              <p>Set the start and end of your event. Dates can be left open.</p>
+            </div>
 
-        <p className="hint">
-          Times are Eastern, the same zone applicants see. Any date can be left
-          empty until it is decided.
-        </p>
+            <div className={styles.grid}>
+              {DATES.slice(2, 4).map((field) => (
+                <DateField
+                  key={field.key}
+                  id={field.key}
+                  label={field.label}
+                  value={dates[field.key]}
+                  disabled={disabled}
+                  canManage={canManage}
+                  onChange={(value) => edit(field.key, value)}
+                />
+              ))}
+            </div>
+          </section>
 
-        <div className={styles.grid}>
-          {DATES.map((field) => (
-            <DateField
-              key={field.key}
-              id={field.key}
-              label={field.label}
-              value={dates[field.key]}
-              disabled={saving}
-              onChange={(value) => edit(field.key, value)}
-            />
-          ))}
-        </div>
-      </section>
+          <section className={styles.section} aria-labelledby="event-registration-title">
+            <div className={styles.sectionHeading}>
+              <h2 id="event-registration-title">Registration</h2>
+              <p>Choose when applications open, close and receive a decision.</p>
+            </div>
+            <div className={`${styles.grid} ${styles.registrationFields}`}>
+              {DATES.filter((field) => field.key !== "startsAt" && field.key !== "endsAt").map((field) => (
+                <DateField key={field.key} id={field.key} label={field.label}
+                  value={dates[field.key]} disabled={disabled} canManage={canManage}
+                  onChange={(value) => edit(field.key, value)} />
+              ))}
+            </div>
+          </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Capacity</h2>
-        </div>
+          {notice ? <p className={styles.error} role="alert">{notice}</p> : null}
 
-        <div className="field">
-          <div className={styles.fieldHead}>
-            <label htmlFor="capacity">Places</label>
-            <button
-              type="button"
-              className={styles.clear}
-              disabled={saving || capacity === ""}
-              onClick={() => {
-                setCapacity("");
-                touched();
-              }}
-            >
-              Clear
-            </button>
-          </div>
-
-          <input
-            id="capacity"
-            type="number"
-            min={0}
-            step={1}
-            inputMode="numeric"
-            className={styles.capacityInput}
-            value={capacity}
-            disabled={saving}
-            onChange={(e) => {
-              setCapacity(e.target.value);
-              touched();
-            }}
-          />
-
-          <p className={styles.echo}>
-            {capacity.trim() === "" ? "Not decided yet." : null}
-          </p>
-        </div>
-      </section>
-
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className="button primary"
-          disabled={saving}
-          onClick={() => void save()}
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-
-        {saved ? <span className={styles.saved}>Saved</span> : null}
+          {!canManage ? <p className={styles.saveHint}>You can view these settings. An event admin can make changes.</p> : null}
+        </form>
       </div>
-
-      {notice ? <p className="error">{notice}</p> : null}
     </>
   );
 }
@@ -229,41 +230,39 @@ function DateField({
   label,
   value,
   disabled,
+  canManage,
   onChange,
 }: {
   id: string;
   label: string;
   value: string;
   disabled: boolean;
+  canManage: boolean;
   onChange: (value: string) => void;
 }) {
   const resolved = readable(fromLocalInput(value));
 
   return (
-    <div className="field">
+    <div className={styles.field}>
       <div className={styles.fieldHead}>
         <label htmlFor={id}>{label}</label>
         {/* Only offered when there is something to remove. A button that does
             nothing is a button somebody presses to find out. */}
-        <button
+        {canManage ? <button
           type="button"
           className={styles.clear}
           disabled={disabled || value === ""}
+          aria-label={`Clear ${label.toLowerCase()}`}
           onClick={() => onChange("")}
         >
           Clear
-        </button>
+        </button> : null}
       </div>
 
-      <input
-        id={id}
-        type="datetime-local"
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <DateTimePicker id={id} label={label} value={value} disabled={disabled}
+        describedBy={`${id}-description`} onChange={onChange} />
 
-      <p className={styles.echo}>{resolved ?? "Not decided yet."}</p>
+      <p id={`${id}-description`} className={styles.echo}>{resolved ?? "Not decided yet."}</p>
     </div>
   );
 }

@@ -1,0 +1,24 @@
+.badge {
+  position: absolute;
+  top: 0;
+  right: clamp(16px, 3vw, 50px);
+  z-index: 10;
+  display: block;
+  width: clamp(60px, 7vw, 90px);
+  line-height: 0;
+}
+
+.badge img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.badge:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+@media (min-width: 64rem) {
+  .badge { position: fixed; }
+}

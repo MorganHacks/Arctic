@@ -1,357 +1,148 @@
-/*
- * The responses screen.
- *
- * A module rather than more rules in globals.css. Nothing here is reused by
- * another screen, and the console's shared stylesheet is edited by everybody —
- * a class named `.table` in it would collide with the next person's.
- *
- * Every colour is a token from libs/ui/tokens.css. Not one hex, and almost no
- * colour at all: the rule the palette is built on is that colour carries
- * meaning or it is absent, and a table somebody scans for an hour is the exact
- * place where a decorative tint would cost the reader the ability to trust the
- * ones that mean something.
- */
-
-.head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
+:global(main):has(.page) { display: flex; flex-direction: column; height: 100dvh; padding-bottom: 24px; overflow: hidden; }
+.page { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.header { flex: none; }
+.workspace { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding-top: 20px; }
+.toolbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 12px 18px; }
+.summary { display: flex; align-items: center; min-width: 0; }
+.tableActions { display: flex; align-items: center; gap: 20px; }
+.summary h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.02em; display: flex; align-items: center; gap: 9px; }
+.sortNote { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.secondaryButton, .downloadButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--field); color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.secondaryButton:hover, .downloadButton:hover { background: var(--field-active); text-decoration: none; }
+.secondaryButton > svg { color: var(--muted); transition: color 150ms; }
+.secondaryButton:hover > svg { color: var(--accent); }
+.downloadButton { color: var(--accent); }
+.headerActions { display: flex; align-items: center; gap: 10px; }
+.tableFrame { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--raised); }
+.scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 40px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.scroll:focus-visible { outline: 2px solid var(--line); outline-offset: -2px; }
+.table { --respondent-width: 300px; width: 100%; min-width: calc(var(--respondent-width) + var(--answer-columns-width)); table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.respondentColumn { width: var(--respondent-width); }
+.table th, .table td { padding: 10px 18px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 75%, transparent); text-align: left; white-space: nowrap; vertical-align: middle; }
+.table thead th { position: sticky; top: 0; z-index: 2; height: 40px; max-width: 280px; padding-block: 9px; overflow: hidden; background: var(--field); color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; text-overflow: ellipsis; }
+.table thead th:first-child, .table thead th:last-child { border-radius: 0; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table .respondent { position: sticky; left: 0; z-index: 1; width: var(--respondent-width); min-width: var(--respondent-width); max-width: var(--respondent-width); background: var(--raised); box-shadow: none; }
+.table thead .respondent { z-index: 3; background: var(--field); }
+.table td.respondent { padding-block: 10px; }
+.table [data-numeric="true"] { text-align: right; }
+.row { cursor: pointer; }
+.row:hover td, .row:focus-within td, .row.selected td { background: color-mix(in srgb, var(--accent) 4%, var(--raised)); }
+.open { display: flex; justify-content: flex-start; width: 100%; gap: 8px; padding: 0; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; }
+.open:hover { background: transparent; }
+.open:focus-visible { outline: 2px solid var(--line); outline-offset: 4px; }
+.person { display: flex; flex: 1; align-items: center; gap: 11px; min-width: 0; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; color: var(--ink); font-size: 11px; font-weight: 600; }
+.anonymousAvatar { display: grid; place-items: center; background: var(--field); color: var(--muted); }
+.personText { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.personName { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 500; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.personSecondary { overflow: hidden; color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.openArrow { flex: none; color: var(--muted); opacity: 0; transform: translateX(-3px); transition: opacity 150ms, transform 150ms; }
+.row:hover .openArrow, .open:focus-visible .openArrow, .selected .openArrow { opacity: 1; transform: translateX(0); }
+.submittedHeading { display: flex; align-items: center; gap: 6px; }
+.when { font-variant-numeric: tabular-nums; }
+.when time { display: flex; flex-direction: column; gap: 3px; font-size: 12px; line-height: 1.4; }
+.submissionMeta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; }
+.version { display: inline-flex; align-items: center; padding-left: 8px; border-left: 1px solid var(--line); color: var(--faint); font-size: 10px; font-variant-numeric: tabular-nums; }
+.cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.numeric { font-variant-numeric: tabular-nums; }
+.blank { color: var(--faint); }
+.table .retired { font-family: var(--mono); font-weight: 400; }
+.fileCell { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--raised); color: var(--ink); font-size: 11px; }
+.fileCell small { color: var(--faint); font-size: 9px; font-weight: 500; }
+.fileCell > span { overflow: hidden; text-overflow: ellipsis; }
+.fileCell > svg { flex: none; color: var(--muted); }
+.row:hover .fileCell > svg { color: var(--accent); }
+.foot { display: flex; flex: none; min-height: 52px; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 18px; border-top: 1px solid var(--line-soft); }
+.note { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.note strong { color: var(--ink); font-weight: 500; }
+.failed { color: var(--stop); font-size: 12px; }
+.moreButton { min-height: 32px; gap: 8px; border: 0; background: var(--field); padding: 6px 12px; font-size: 12px; }
+.moreButton:hover { background: var(--field-active); }
+.columnOptions { position: fixed; inset: auto; width: min(320px, calc(100vw - 24px)); margin: 0; padding: 16px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 18px; background: var(--raised); color: var(--ink); box-shadow: 0 16px 48px rgb(0 0 0 / 12%); }
+.columnsHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.columnOptions > p { margin: 4px 0 14px; color: var(--muted); font-size: 12px; }
+.columnList { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.columnList label { position: relative; display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 8px; border-radius: 8px; color: var(--ink); font-size: 13px; font-weight: 400; cursor: pointer; }
+.columnList label:hover { background: var(--field); }
+.columnList label input[type="checkbox"] { position: absolute; width: 18px; height: 18px; margin: 0; opacity: 0; }
+.columnList label > span { overflow-wrap: anywhere; }
+.columnList small { display: block; margin-top: 2px; color: var(--faint); font-size: 11px; }
+.columnsFoot { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.columnsFoot button { padding: 4px 8px; border: 0; background: none; color: var(--muted); font-size: 12px; }
+.columnsFoot button:hover { background: var(--field); color: var(--ink); }
+.iconButton { display: grid; place-items: center; width: 32px; height: 32px; flex: none; padding: 0; border: 0; border-radius: 50%; background: var(--field); color: var(--muted); }
+.iconButton:hover { color: var(--ink); background: var(--field-active); }
+.panel { position: fixed; inset: 12px 12px 12px auto; width: min(500px, calc(100vw - 24px)); height: calc(100dvh - 24px); max-width: none; max-height: none; margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 24px; background: var(--raised); color: var(--ink); box-shadow: 0 20px 80px rgb(0 0 0 / 15%); }
+.panel[open] { display: flex; flex-direction: column; }
+.panel::backdrop { background: rgb(0 0 0 / 20%); }
+.panelHead { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 24px; border-bottom: 1px solid var(--line-soft); }
+.panelHead h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.panelBody { flex: 1; min-height: 0; padding: 0 24px 24px; overflow-y: auto; overscroll-behavior: contain; }
+.detailPerson { padding: 24px 0; border-bottom: 1px solid var(--line-soft); }
+.detailPerson .avatar { width: 42px; height: 42px; font-size: 13px; }
+.detailPerson .personName { font-size: 15px; }
+.detailPerson .personSecondary { font-size: 12px; }
+.detailMeta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; color: var(--muted); font-size: 12px; }
+.stamp { margin: 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.qa { padding: 20px 0; border-bottom: 1px solid var(--line-soft); }
+.qa:last-child { border-bottom: 0; }
+.question { margin: 0 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.questionKey { font-family: var(--mono); }
+.answer { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
+.numericAnswer { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.unanswered { margin: 0; color: var(--faint); font-size: 13px; }
+.ticked { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.8; }
+.section { margin: 28px 0 0; color: var(--faint); font-size: 12px; font-weight: 500; }
+.resume { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0; font-size: 13px; }
+.filename { overflow-wrap: anywhere; }
+.loadingDetail { display: grid; gap: 24px; padding-top: 24px; }
+.loadingDetail > span { display: block; height: 62px; border-radius: 10px; background: var(--field); }
+.nothing { display: flex; flex: 1; justify-content: center; min-height: 0; width: 100%; overflow-y: auto; }
+.nothing > div { width: 100%; min-height: 350px; }
+.emptyActions { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.sheetsButton { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 38px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--accent); font-size: 13px; font-weight: 500; white-space: nowrap; text-decoration: none; }
+.sheetsButton:hover { background: var(--field); }
+.sheetsDialog { width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: 24px; background: var(--raised); color: var(--ink); box-shadow: 0 24px 80px rgb(0 0 0 / 15%); }
+.sheetsDialog::backdrop { background: rgb(0 0 0 / 20%); }
+.sheetsBody { padding: 24px; }
+.sheetsBody p, .sheetsBody ol { color: var(--muted); font-size: 14px; line-height: 1.7; }
+.sheetsBody ol { padding-left: 18px; margin-bottom: 24px; }
+.sheetsBody li + li { margin-top: 8px; }
+.sheetsBody .failed { color: var(--stop); font-size: 13px; }
+.sheetsActions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.primaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 13px; text-decoration: none; }
+.primaryButton:hover { background: var(--accent); color: var(--accent-ink); }
+.primaryButton:disabled { background: var(--field); color: var(--faint); }
+.sheetsBody .sheetsNote { margin: 16px 0 0; color: var(--faint); font-size: 11px; }
+.totalCount { padding: 3px 7px; border-radius: 999px; background: var(--field); color: var(--muted); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.table thead th, .table thead .respondent { background: color-mix(in srgb, var(--field) 65%, var(--raised)); border-top: 1px solid var(--line-soft); }
+.table .respondent::after { position: absolute; inset: 0 0 0 auto; width: 1px; background: color-mix(in srgb, var(--line-soft) 70%, transparent); content: ""; }
+.table td { height: 60px; }
+.columnOptions:popover-open { display: flex; flex-direction: column; }
+.columnsHead, .columnOptions > p, .columnsFoot { flex: none; }
+@media (max-width: 700px) {
+  :global(main):has(.page) { height: auto; min-height: 100dvh; overflow: visible; padding-bottom: 16px; }
+  .toolbar { min-height: 60px; gap: 10px; }
+  .tableActions { gap: 10px; }
+  .sortNote { display: none; }
+  .summary { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .tableFrame { flex: none; }
+  .scroll { max-height: 62dvh; }
+  .table { --respondent-width: 240px; }
+  .table th, .table td { padding-inline: 14px; }
+  .foot { gap: 10px; flex-wrap: wrap; padding: 12px 14px; }
+  .headerActions { justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+  .downloadButton { min-height: 34px; padding-inline: 12px; font-size: 11px; }
+  .panelHead, .panelBody { padding-inline: 20px; }
 }
+@media (prefers-reduced-motion: reduce) { .openArrow, .secondaryButton > svg { transition: none; } }
+@media (max-width: 700px) { .sheetsButton { min-height: 34px; padding-inline: 10px; font-size: 11px; } }
+@media (max-width: 700px) { .toolbar { padding: 10px 14px; } .workspace { padding-top: 16px; } }
 
-.actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-/*
- * The table scrolls, the page does not.
- *
- * A form of twenty questions is twenty-three columns, and there is no width of
- * screen that fixes that. The choice is between the page scrolling sideways —
- * which takes the navigation and every other control with it — and the table
- * scrolling inside its own box, which keeps everything else still.
- *
- * Bounded vertically for the same reason. With a height the header can stick
- * to the top of it and the date can stick to the left of it, and a reader
- * three hundred rows down still knows which column is which.
- */
-.scroll {
-  overflow: auto;
-  max-height: min(70vh, 44rem);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--raised);
-  overscroll-behavior: contain;
-}
-
-.table {
-  /* Wider than its container when it needs to be. The global rule sets tables
-     to 100%, which inside a scrolling box means squeezing twenty columns into
-     the viewport instead of scrolling them. */
-  width: max-content;
-  min-width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.table th,
-.table td {
-  border-bottom: 1px solid var(--line-soft);
-  white-space: nowrap;
-  vertical-align: top;
-}
-
-.table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--raised);
-  border-bottom: 1px solid var(--line);
-}
-
-/* The one column that is always in view. Which response a row is stays
-   readable no matter how far right somebody has scrolled. */
-.when {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  background: var(--raised);
-  border-right: 1px solid var(--line-soft);
-}
-
-.table thead .when {
-  z-index: 3;
-}
-
-/* Repainted on hover because a sticky cell has its own background and the
-   shared row-hover rule would otherwise stop at its edge. */
-.row:hover .when {
-  background: var(--sunken);
-}
-
-.row.selected td,
-.row.selected .when {
-  background: var(--accent-soft);
-}
-
-.row {
-  cursor: pointer;
-}
-
-/*
- * The button that opens a response.
- *
- * A real button rather than a click handler on the row, so the whole table can
- * be walked with a keyboard. The row stays clickable for a mouse; the two do
- * the same thing.
- */
-.open {
-  font: inherit;
-  border: none;
-  background: none;
-  padding: 0;
-  color: inherit;
-  text-align: left;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-
-.open:hover {
-  text-decoration: underline;
-}
-
-/* Answers are one line in the table however long they are. A row that grows to
-   fit a five-hundred-word answer makes the fifty rows around it unreadable,
-   and the whole answer is one click away in the panel. */
-.cell {
-  max-width: 18rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.numeric {
-  font-variant-numeric: tabular-nums;
-}
-
-.version {
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-
-/* An unanswered question. Quiet on purpose: on an optional question this is
-   the common case, and a hundred coloured dashes would drown the things that
-   are worth noticing. */
-.blank {
-  color: var(--faint);
-}
-
-/* A column for a question the form no longer asks. Set in mono because the key
-   is all that is left of it — the label was deleted with the question. */
-.retired {
-  font-family: var(--mono);
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.foot {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.9rem;
-}
-
-.note {
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.failed {
-  color: var(--stop);
-  font-size: 0.85rem;
-}
-
-/* One response, in full ------------------------------------------------ */
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  background: color-mix(in oklab, var(--ink) 30%, transparent);
-}
-
-.panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 11;
-  width: min(38rem, 100%);
-  overflow-y: auto;
-  background: var(--raised);
-  border-left: 1px solid var(--line);
-  padding: 1.25rem 1.4rem 2.5rem;
-}
-
-.panelHead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 0.5rem;
-}
-
-.panelHead h2 {
-  margin: 0;
-}
-
-.stamp {
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-  margin: 0.15rem 0 0;
-}
-
-.qa {
-  padding: 0.8rem 0;
-  border-bottom: 1px solid var(--line-soft);
-}
-
-.qa:last-child {
-  border-bottom: none;
-}
-
-.question {
-  margin: 0 0 0.25rem;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-/* The key rather than a label, for a question that no longer exists. */
-.questionKey {
-  font-family: var(--mono);
-}
-
-.answer {
-  margin: 0;
-  /* Line breaks somebody typed are kept. A long answer reflowed into one block
-     is one nobody finishes. */
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.numericAnswer {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.unanswered {
-  margin: 0;
-  color: var(--faint);
-}
-
-.ticked {
-  margin: 0;
-  padding-left: 1.1rem;
-}
-
-.section {
-  margin: 1.25rem 0 0;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.resume {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin: 0;
-}
-
-.filename {
-  overflow-wrap: anywhere;
-}
-
-/* Nothing here yet ----------------------------------------------------- */
-
-.nothing {
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-lg);
-  padding: 2rem 1.75rem;
-  width: 100%;
-}
-
-.nothing h2 {
-  margin: 0 0 0.5rem;
-}
-
-.nothing p {
-  color: var(--muted);
-  margin: 0 0 0.75rem;
-  max-width: 34rem;
-}
-
-.waiting {
-  list-style: none;
-  margin: 0.75rem 0 0;
-  padding: 0.75rem 0 0;
-  border-top: 1px solid var(--line-soft);
-  columns: 2;
-  column-gap: 1.5rem;
-}
-
-@media (max-width: 40rem) {
-  .waiting {
-    columns: 1;
-  }
-}
-
-.waiting li {
-  break-inside: avoid;
-  padding: 0.2rem 0;
-  font-size: 0.9rem;
-}
-
-/* Answered by nobody in particular.
-
-   Beside the version rather than in its own column, because it is true of
-   almost no rows on a gated form and of every row on an open one — a column
-   would be empty or uniform, and in both cases would be a column carrying no
-   information at whatever width it took. */
-.anonymous {
-  margin-left: 0.4rem;
-  padding: 0.05rem 0.3rem;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  font-size: 0.68rem;
-  letter-spacing: 0.03em;
-  color: var(--muted);
-  text-transform: uppercase;
-}
-
-/* Who answered, where the form knew.
-
-   Sized so a long address does not push the answers off the screen: the
-   answers are what the table is for, and an address is something a reader
-   glances at to know whose they are. Wrapping rather than truncating with an
-   ellipsis, because half an address is worse than a second line — somebody
-   reading this is often about to search for it. */
-.respondent {
-  max-width: 16rem;
-  overflow-wrap: anywhere;
-  font-size: 0.86rem;
-  color: var(--muted);
-}
+.columnCheck { display: grid; place-items: center; width: 18px; height: 18px; flex: none; border: 1px solid var(--line); border-radius: 5px; background: var(--raised); color: var(--raised); }
+.columnCheck > svg { opacity: 0; }
+.columnList input:checked + .columnCheck { border-color: var(--ink); background: var(--ink); }
+.columnList input:checked + .columnCheck > svg { opacity: 1; }
+.columnList input:focus-visible + .columnCheck { outline: 2px solid var(--muted); outline-offset: 3px; }
+.columnList label:has(input:checked) { background: color-mix(in srgb, var(--field) 65%, var(--raised)); }

@@ -1,3 +1,5 @@
+import type { AnnouncementContent, AnnouncementResults } from "../../../../libs/ui/announcements";
+import type { AnnouncementReactions } from "../../../../libs/ui/announcement-reactions";
 import { apiFetch } from "@/lib/api";
 
 /**
@@ -13,9 +15,14 @@ export type AdminAnnouncement = {
   id: string;
   body: string;
   postedAt: string;
+  publishAt: string;
+  scheduled: boolean;
   postedBy: string;
   retracted: boolean;
   retractedAt: string | null;
+  content: AnnouncementContent | null;
+  results: AnnouncementResults | null;
+  reactions: AnnouncementReactions;
 };
 
 /**
@@ -85,6 +92,8 @@ async function said(response: Response, fallback: string): Promise<string> {
 export async function postAnnouncement(
   eventId: string,
   body: string,
+  content: AnnouncementContent | null = null,
+  publishAt: string | null = null,
 ): Promise<WriteResult> {
   let response: Response;
   try {
@@ -93,7 +102,7 @@ export async function postAnnouncement(
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, content, publishAt }),
       },
     );
   } catch {

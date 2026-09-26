@@ -1,3 +1,5 @@
+import { AnnouncementAttachment } from "@/components/announcement-content";
+import { AnnouncementReactions } from "@/components/announcement-reactions";
 import { redirect } from "next/navigation";
 import { announcements } from "@/lib/api";
 import { readableTime } from "../../../../../../libs/ui/zone";
@@ -49,16 +51,10 @@ export default async function Announcements() {
           <ul className="notices">
             {posted.map((announcement) => (
               <li key={announcement.id}>
-                {/*
-                  Preserving line breaks, via white-space in the stylesheet,
-                  rather than rendering markup. Somebody typing two lines meant
-                  two lines and it costs nothing to keep them; anything richer
-                  would mean this page interpreting text an organizer wrote,
-                  and the first thing that goes wrong there is a stray
-                  character turning into formatting nobody intended.
-                */}
                 <p className="notices__body">{announcement.body}</p>
+                <AnnouncementAttachment id={announcement.id} content={announcement.content} results={announcement.results} />
                 <p className="notices__at">{readableTime(announcement.at)}</p>
+                <AnnouncementReactions id={announcement.id} initial={announcement.reactions} />
               </li>
             ))}
           </ul>

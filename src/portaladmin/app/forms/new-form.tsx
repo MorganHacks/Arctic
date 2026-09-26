@@ -1,8 +1,9 @@
 "use client";
 
-import { Select } from "@/components/ui/select";
-import { useActionState } from "react";
-import styles from "@/components/formslist/formslist.module.css";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { Add01Icon, Cancel01Icon, ClipboardListIcon, FormIcon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
+import styles from "@/components/formslist/forms-page.module.css";
 import { createForm } from "./actions";
 
 /**
@@ -14,55 +15,82 @@ import { createForm } from "./actions";
  * form is the one that creates an applicant, and a survey that quietly became
  * one would be a mess nobody could untangle.
  */
-export function NewForm({ eventId }: { eventId: string }) {
+export function NewForm({ eventId, eventName, hasApplication, disabled }: {
+  eventId: string; eventName: string; hasApplication: boolean; disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    function fromHash() { if (window.location.hash === "#new-form") setOpen(true); }
+    function fromLink(event: MouseEvent) {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || disabled) return;
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!link) return;
+      const target = new URL(link.href);
+      if (target.origin === window.location.origin && target.pathname === window.location.pathname
+        && target.search === window.location.search && target.hash === "#new-form") {
+        event.preventDefault(); setOpen(true);
+      }
+    }
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    document.addEventListener("click", fromLink, true);
+    return () => { window.removeEventListener("hashchange", fromHash); document.removeEventListener("click", fromLink, true); };
+  }, [disabled]);
+
+  function close() {
+    setOpen(false);
+    if (window.location.hash === "#new-form") window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+    trigger.current?.focus();
+  }
+
+  return <>
+    <button ref={trigger} id="new-form" type="button" className={styles.primaryButton} disabled={disabled} onClick={() => setOpen(true)}><Icon icon={Add01Icon} size={18} />New form</button>
+    {open ? <NewFormDialog eventId={eventId} eventName={eventName} hasApplication={hasApplication} onClose={close} /> : null}
+  </>;
+}
+
+function NewFormDialog({ eventId, eventName, hasApplication, onClose }: {
+  eventId: string; eventName: string; hasApplication: boolean; onClose: () => void;
+}) {
   const [state, action, pending] = useActionState(createForm, {});
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState("survey");
+  const dialog = useRef<HTMLDialogElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
 
-  return (
-    <form id="new-form" action={action} className={styles.newForm} aria-labelledby="new-form-title" tabIndex={-1}>
-      {/* The caveat beside the heading rather than under it. It is the one
-          thing worth knowing before pressing Create, and a line of small print
-          on its own row is a line that gets scrolled past. */}
-      <div className={styles.newFormHead}>
-        <h2 id="new-form-title">New form</h2>
-        <p className={styles.newFormNote}>
-          An application form starts with a standard set of questions, and there
-          can only be one per event.
-        </p>
+  useEffect(() => { dialog.current?.showModal(); nameInput.current?.focus(); }, []);
+
+  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="new-form-title" aria-describedby="new-form-description"
+    onClose={onClose} onCancel={event => { if (pending) event.preventDefault(); }}>
+    <form action={action}>
+      <div className={styles.dialogHeader}><h2 id="new-form-title">New form</h2><button type="button" className={styles.closeButton} aria-label="Close new form" disabled={pending} onClick={() => dialog.current?.close()}><Icon icon={Cancel01Icon} size={20} /></button></div>
+      <p id="new-form-description" className={styles.dialogDescription}>Create a form for <strong>{eventName}</strong>.</p>
+      <input type="hidden" name="eventId" value={eventId} />
+      <div className={styles.field}>
+        <label htmlFor="form-name">Form name</label>
+        <input ref={nameInput} id="form-name" name="name" required autoComplete="off" placeholder="e.g. Mentor sign-up" value={name} onChange={event => setName(event.target.value)} disabled={pending} />
       </div>
-
-      <div className="row">
-        <input type="hidden" name="eventId" value={eventId} />
-
-        <div className="grow">
-          <label htmlFor="name">Name</label>
-          <input
-            id="name"
-            name="name"
-            required
-            autoComplete="off"
-            placeholder="Mentor sign-up"
-            style={{ width: "100%" }}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="kind">Kind</label>
-          <Select id="kind" name="kind" defaultValue="survey">
-            <option value="survey">Survey</option>
-            <option value="application">Application</option>
-          </Select>
-        </div>
-
-        <button type="submit" className="button primary" disabled={pending}>
-          {pending ? "Creating…" : "Create"}
-        </button>
+      <fieldset className={styles.formTypes} disabled={pending}>
+        <legend>Form type</legend>
+        <label className={styles.typeChoice} data-kind="survey">
+          <Icon icon={ClipboardListIcon} size={22} />
+          <span><strong>Survey</strong><small>Sign-ups, feedback and custom questions.</small></span>
+          <input type="radio" name="kind" value="survey" checked={kind === "survey"} onChange={() => setKind("survey")} />
+        </label>
+        <label className={styles.typeChoice} data-kind="application" data-disabled={hasApplication}>
+          <Icon icon={FormIcon} size={22} />
+          <span><strong>Application</strong><small>{hasApplication ? "This event already has an application form." : "Starts with standard applicant questions. One per event."}</small></span>
+          <input type="radio" name="kind" value="application" checked={kind === "application"} onChange={() => setKind("application")} disabled={hasApplication || pending} />
+        </label>
+      </fieldset>
+      <p className={styles.formHint}>The form type cannot be changed later.</p>
+      {state.error ? <p className={styles.error} role="alert">{state.error}</p> : null}
+      <div className={styles.dialogActions}>
+        <button type="button" className={styles.secondaryButton} disabled={pending} onClick={() => dialog.current?.close()}>Cancel</button>
+        <button type="submit" className={styles.primaryButton} disabled={pending || !name.trim()}>{pending ? "Creating…" : "Create form"}</button>
       </div>
-
-      {state.error ? (
-        <p className="error" style={{ marginTop: "0.9rem", marginBottom: 0 }}>
-          {state.error}
-        </p>
-      ) : null}
     </form>
-  );
+  </dialog>;
 }

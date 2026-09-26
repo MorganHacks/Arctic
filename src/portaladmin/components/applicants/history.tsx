@@ -36,7 +36,7 @@ export function History({ steps }: { steps: Step[] }) {
             {step.from ? (
               <>
                 <StatusPill status={step.from} />
-                <span className="meta">→</span>
+                <span className="meta">to</span>
               </>
             ) : null}
             <StatusPill status={step.to} />

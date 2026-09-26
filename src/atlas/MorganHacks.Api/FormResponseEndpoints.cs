@@ -72,8 +72,23 @@ public static class FormResponseEndpoints
         // cannot be confused with a response whose id happens to be "csv".
         responses.MapGet("/responses.csv", Export)
                  .RequirePermission(Permission.ApplicationsExport);
+        responses.MapGet("/responses/sheets-config", SheetsConfig)
+                 .RequirePermission(Permission.ApplicationsExport);
 
         return app;
+    }
+
+    private static async Task<IResult> SheetsConfig(
+        Guid id, HttpContext http, IFormStore forms, IConfiguration config, CancellationToken ct)
+    {
+        if (await forms.ByIdAsync(id, ct) is null)
+        {
+            return Results.NotFound(new { error = "No such form." });
+        }
+
+        http.Response.Headers.CacheControl = "no-store";
+        var clientId = config["Google:SheetsClientId"] ?? config["Google:ClientId"];
+        return Results.Ok(new { clientId = string.IsNullOrWhiteSpace(clientId) ? null : clientId });
     }
 
     // ------------------------------------------------------------- reading ---

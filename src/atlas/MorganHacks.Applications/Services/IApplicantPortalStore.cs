@@ -31,7 +31,7 @@ public sealed record ApplicantApplication(
 /// human to be annoyed at about a schedule change. There are no retraction
 /// fields either, because a retracted notice never reaches this type at all.
 /// </remarks>
-public sealed record PortalAnnouncement(Guid Id, string Body, DateTimeOffset PostedAt);
+public sealed record PortalAnnouncement(Guid Id, string Body, DateTimeOffset PostedAt, AnnouncementContent? Content = null);
 /// The resume currently attached to an applicant's own application.
 /// </summary>
 /// <remarks>
