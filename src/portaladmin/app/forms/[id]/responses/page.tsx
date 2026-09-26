@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { NoResponses } from "@/components/responses/no-responses";
 import { Responses } from "@/components/responses/responses";
+import { GoogleSheetsButton } from "@/components/responses/google-sheets-button";
+import styles from "@/components/responses/responses.module.css";
 import {
   apiFetch,
   currentPerson,
@@ -60,7 +62,7 @@ export default async function FormResponses({
     return <Denied personId={person.personId}>That form could not be loaded.</Denied>;
   }
 
-  const { form, draft, published } = (await draftResponse.json()) as DraftView;
+  const { form, draft, published, responseCount } = (await draftResponse.json()) as DraftView;
 
   if (!first.ok) {
     return (
@@ -78,37 +80,46 @@ export default async function FormResponses({
 
   return (
     <Shell personId={person.personId}>
-      <FormHeader form={form} published={published} tab="responses" />
+      <div className={styles.page}>
+        <div className={styles.header}>
+          <FormHeader form={form} published={published} tab="responses" responseCount={responseCount}
+            actions={mine.has("applications.export") && responseCount > 0 ? (
+              <div className={styles.headerActions}>
+                <GoogleSheetsButton formId={id} name={form.name} />
+                <a href={`/api/admin/forms/${id}/responses.csv`} className={styles.downloadButton}>
+                  Download responses (.csv)
+                </a>
+              </div>
+            ) : undefined} />
+        </div>
 
-      {/* Scaffolding, and says so. Goes with the fixtures in api.ts the moment
-          the endpoints land. */}
-      {first.mocked ? (
-        <p className="error">
-          Showing example data. The responses API is not available yet.
-        </p>
-      ) : null}
+        {/* Scaffolding, and says so. Goes with the fixtures in api.ts the moment
+            the endpoints land. */}
+        {first.mocked ? (
+          <p className="error">
+            Showing example data. The responses API is not available yet.
+          </p>
+        ) : null}
 
-      {first.page.items.length === 0 ? (
-        <NoResponses
-          formId={id}
-          publishedVersion={published?.version ?? null}
-          fields={draft.fields}
-        />
-      ) : (
-        <Responses
-          fields={draft.fields}
-          initialItems={first.page.items}
-          initialCursor={first.page.nextCursor}
-          loadMore={loadResponses.bind(null, id)}
-          openResponse={openResponse.bind(null, id)}
-          csvHref={
-            mine.has("applications.export")
-              ? `/api/admin/forms/${id}/responses.csv`
-              : null
-          }
-          canViewResume={mine.has("applications.view_resume")}
-        />
-      )}
+        {first.page.items.length === 0 ? (
+          <NoResponses
+            formId={id}
+            code={form.code}
+            published={published !== null}
+            closed={published !== null && form.closesAt !== null && Date.parse(form.closesAt) <= Date.now()}
+          />
+        ) : (
+          <Responses
+            fields={draft.fields}
+            initialItems={first.page.items}
+            initialCursor={first.page.nextCursor}
+            loadMore={loadResponses.bind(null, id)}
+            openResponse={openResponse.bind(null, id)}
+            responseCount={responseCount}
+            canViewResume={mine.has("applications.view_resume")}
+          />
+        )}
+      </div>
     </Shell>
   );
 }

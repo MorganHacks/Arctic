@@ -7,11 +7,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import styles from "./home-notifications.module.css";
 
 const categories = [
-  { id: "all", label: "All", title: "No notifications yet", description: "Your workspace updates will appear here." },
-  { id: "applicants", label: "Applicants", title: "No applicant updates", description: "Notifications about applications will appear here." },
-  { id: "forms", label: "Forms", title: "No form updates", description: "Notifications about your forms will appear here." },
-  { id: "mail", label: "Mail", title: "No mail updates", description: "Notifications about your mail will appear here." },
-  { id: "team", label: "Team", title: "No team updates", description: "Notifications about your team will appear here." },
+  { id: "all", variant: "files", label: "All", title: "No notifications yet", description: "Your workspace updates will appear here." },
+  { id: "applicants", variant: "data", label: "Applicants", title: "No applicant updates", description: "Notifications about applications will appear here." },
+  { id: "forms", variant: "document", label: "Forms", title: "No form updates", description: "Notifications about your forms will appear here." },
+  { id: "mail", variant: "document", label: "Mail", title: "No mail updates", description: "Notifications about your mail will appear here." },
+  { id: "team", variant: "data", label: "Team", title: "No team updates", description: "Notifications about your team will appear here." },
 ] as const;
 
 export function HomeNotifications() {
@@ -97,7 +97,7 @@ export function HomeNotifications() {
         </div>
       </div>
       <div id={`${id}-content`} className={styles.content} role="status" aria-live="polite" aria-atomic="true">
-        <EmptyState title={category.title} description={category.description} />
+        <EmptyState variant={category.variant} size="compact" title={category.title} description={category.description} />
       </div>
     </div>
   </>;

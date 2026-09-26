@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { apiFetch, type FormsView } from "@/lib/api";
-import { FormsTable } from "@/components/formslist/forms-table";
-import { NoForms } from "@/components/formslist/no-forms";
+import { FormsList } from "@/components/formslist/forms-list";
+import { EmptyState } from "@/components/ui/empty-state";
 import { readPageData } from "@/lib/page-data";
 import { Shell } from "../shell";
-import { NewForm } from "./new-form";
 
 /**
  * The forms on one event.
@@ -54,57 +52,25 @@ export default async function Forms({
     return (
       <Shell personId={person.personId}>
         <h1>Forms</h1>
-        <div className="empty">
-          There is no event yet. A form belongs to one, so create an event
-          under Events first.
-        </div>
+        <EmptyState variant="canvas" size="page" title="Create an event first"
+          description="A form belongs to an event. Create one under Events to start collecting responses." />
       </Shell>
     );
   }
 
+  /*
+   * The clock is read once, here, and handed down.
+   *
+   * A form that closes while this page is being rendered would otherwise
+   * be able to come out Live in one row's reckoning and Closed in the
+   * next, which is a bug nobody would ever reproduce.
+   */
+  const now = Date.now();
+
   return (
     <Shell personId={person.personId}>
-      <h1>Forms</h1>
-      <p className="lede">
-        Everything an applicant, mentor or volunteer is asked to fill in. Each
-        one has a code that goes on the flyer and outlives every edit.
-      </p>
-
-      {/* Only when there is a choice to make. One event is the normal case and
-          a dropdown with one option in it is furniture. */}
-      {events.length > 1 ? (
-        <div className="filters">
-          <div>
-            <label htmlFor="event">Event</label>
-            <div className="tabs">
-              {events.map((option) => (
-                <Link
-                  key={option.id}
-                  href={`/forms?event=${option.id}`}
-                  className={option.id === chosen.id ? "tab on" : "tab"}
-                >
-                  {option.name}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {mine.has("forms.manage") ? <NewForm eventId={chosen.id} /> : null}
-
-      {forms.length === 0 ? (
-        <NoForms event={chosen.name} />
-      ) : (
-        /*
-         * The clock is read once, here, and handed down.
-         *
-         * A form that closes while this page is being rendered would otherwise
-         * be able to come out Live in one row's reckoning and Closed in the
-         * next, which is a bug nobody would ever reproduce.
-         */
-        <FormsTable forms={forms} now={Date.now()} />
-      )}
+      <FormsList key={chosen.id} events={events} chosen={chosen} forms={forms}
+        now={now} canManage={mine.has("forms.manage")} />
     </Shell>
   );
 }

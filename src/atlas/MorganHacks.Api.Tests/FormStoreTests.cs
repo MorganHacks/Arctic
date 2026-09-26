@@ -20,6 +20,21 @@ public class FormStoreTests(ApplicationsDatabase db) : IClassFixture<Application
         await Store.CreateAsync(await db.AddEventAsync(), "Application", "application", null);
 
     [Fact]
+    public async Task History_leaves_unknown_authors_empty_and_does_not_change_them_when_read()
+    {
+        var form = await ApplicationFormAsync();
+        await Store.DraftAsync(form.Id, null);
+        var draft = Assert.Single(await Store.HistoryAsync(form.Id));
+        Assert.Null(draft.Actor);
+        Assert.Null(draft.UpdatedAt);
+        await Store.PublishAsync(form.Id, null);
+        var published = Assert.Single(await Store.HistoryAsync(form.Id));
+        Assert.Null(published.Actor);
+        Assert.Null(published.UpdatedAt);
+        Assert.NotNull(published.PublishedAt);
+    }
+
+    [Fact]
     public async Task A_new_form_starts_with_MLHs_questions_on_it()
     {
         // Starting empty means every form begins with somebody copying an

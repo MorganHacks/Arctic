@@ -8,6 +8,7 @@ import {
   Audit02Icon,
   Calendar03Icon,
   FormIcon,
+  Home03Icon,
   InformationCircleIcon,
   Layout01Icon,
   Mail01Icon,
@@ -26,7 +27,7 @@ function NavSection({ section, badge, pathname, collapsed, onNavigate }: {
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
-  const active = pathname === section.href || pathname.startsWith(`${section.href}/`);
+  const active = pathname === section.href || (section.href !== "/" && pathname.startsWith(`${section.href}/`));
   const [expanded, setExpanded] = useState(true);
   const submenuId = useId();
   const query = useSearchParams();
@@ -68,6 +69,7 @@ function NavSection({ section, badge, pathname, collapsed, onNavigate }: {
 }
 
 const sectionIcons: Record<string, IconSvgElement> = {
+  "/": Home03Icon,
   "/events": Calendar03Icon,
   "/people": UserGroupIcon,
   "/forms": FormIcon,

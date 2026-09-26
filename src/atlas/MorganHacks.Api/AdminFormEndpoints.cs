@@ -36,6 +36,10 @@ public static class AdminFormEndpoints
 
         forms.MapPost("", CreateForm)
              .RequirePermission(Permission.FormsManage);
+        forms.MapPut("/{id:guid}/name", Rename)
+             .RequirePermission(Permission.FormsManage);
+        forms.MapDelete("/{id:guid}", Remove)
+             .RequirePermission(Permission.FormsManage);
         forms.MapPut("/{id:guid}/draft", SaveDraft)
              .RequirePermission(Permission.FormsManage);
         forms.MapPost("/{id:guid}/publish", Publish)
@@ -65,7 +69,9 @@ public static class AdminFormEndpoints
     /// </remarks>
     public sealed record CreateFormRequest(string? Name, string? Kind);
 
-    public sealed record SaveDraftRequest(IReadOnlyList<FormField>? Fields);
+    public sealed record RenameFormRequest(string? Name);
+
+    public sealed record SaveDraftRequest(IReadOnlyList<FormField>? Fields, FormTheme? Theme = null);
 
     public sealed record AudienceRequest(
         bool? RequiresSignIn, IReadOnlyList<string>? EligibleStatuses);
@@ -102,8 +108,7 @@ public static class AdminFormEndpoints
         var chosen = all.FirstOrDefault(e => e.Id == eventId) ?? all[0];
         var listed = await forms.ForEventAsync(chosen.Id, ct);
 
-        // One extra query per form, and deliberately so. A form's live version
-        // is what the list is for — "is this the one on the flyer" is the
+        // A form's live version is what the list is for — "is this the one on the flyer" is the
         // question somebody opens this screen to answer — and an event has a
         // handful of forms, not a page of them. The moment that stops being
         // true this wants a join in the store rather than a loop here.
@@ -111,6 +116,7 @@ public static class AdminFormEndpoints
         foreach (var form in listed)
         {
             var published = await forms.PublishedAsync(form.Id, ct);
+            var preview = published ?? (await forms.HistoryAsync(form.Id, ct)).FirstOrDefault();
             rows.Add(new
             {
                 id = form.Id,
@@ -123,6 +129,19 @@ public static class AdminFormEndpoints
                 published = published is not null,
                 publishedVersion = published?.Version,
                 questions = published is null ? (int?)null : Questions(published.Fields),
+                preview = preview is null ? null : new
+                {
+                    questions = Questions(preview.Fields),
+                    theme = preview.Theme ?? FormTheme.Default,
+                    fields = preview.Fields.Take(4).Select(field => new
+                    {
+                        field.Type,
+                        field.Label,
+                        field.Help,
+                        field.Required,
+                        options = field.Options.Take(3).Select(option => new { option.Label }),
+                    }),
+                },
             });
         }
 
@@ -147,7 +166,7 @@ public static class AdminFormEndpoints
     /// button.
     /// </remarks>
     private static async Task<IResult> GetDraft(
-        Guid id, HttpContext http, IFormStore forms, CancellationToken ct)
+        Guid id, HttpContext http, IFormStore forms, IEventStore events, CancellationToken ct)
     {
         var form = await Find(forms, id, ct);
         if (form is null)
@@ -160,15 +179,18 @@ public static class AdminFormEndpoints
         // make it theirs, and DraftAsync only uses this on creation.
         var draft = await forms.DraftAsync(id, http.PersonId(), ct);
         var published = await forms.PublishedAsync(id, ct);
+        var eventDetail = await events.ByIdAsync(form.EventId, ct);
 
         return Results.Ok(new
         {
             form = Describe(form),
+            mlhSeason = MlhSeason.For(eventDetail?.StartsAt),
             draft = new
             {
                 id = draft.Id,
                 version = draft.Version,
                 fields = draft.Fields,
+                theme = draft.Theme ?? FormTheme.Default,
             },
             published = published is null ? null : new
             {
@@ -182,6 +204,7 @@ public static class AdminFormEndpoints
             // second round trip to fill a checkbox group is a waterfall for no
             // benefit.
             statuses = EligibleStatuses.All,
+            responseCount = await forms.ResponseCountAsync(form, ct),
         });
     }
 
@@ -210,6 +233,8 @@ public static class AdminFormEndpoints
                 questions = Questions(v.Fields),
                 createdAt = v.CreatedAt,
                 publishedAt = v.PublishedAt,
+                updatedAt = v.UpdatedAt,
+                actor = v.Actor,
             }),
         });
     }
@@ -298,6 +323,11 @@ public static class AdminFormEndpoints
             return Results.BadRequest(new { error = "The draft's questions are required." });
         }
 
+        if (request.Theme is not null && !request.Theme.IsValid())
+        {
+            return Results.BadRequest(new { error = "Choose a valid theme color, background, font, text size, and header image." });
+        }
+
         var form = await Find(forms, id, ct);
         if (form is null)
         {
@@ -314,7 +344,7 @@ public static class AdminFormEndpoints
         // against a form nobody has opened updates nothing and answers 204,
         // which looks exactly like success.
         await forms.DraftAsync(id, http.PersonId(), ct);
-        await forms.SaveDraftAsync(id, request.Fields, ct);
+        await forms.SaveDraftAsync(id, request.Fields, ct, request.Theme, http.PersonId());
 
         log.LogInformation(
             "Draft saved. {actor} {form} {questions} {event}",
@@ -331,12 +361,36 @@ public static class AdminFormEndpoints
         });
     }
 
+    private static async Task<IResult> Rename(
+        Guid id, RenameFormRequest? request, HttpContext http,
+        IFormStore forms, ILogger<Form> log, CancellationToken ct)
+    {
+        var name = request?.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 200)
+            return Results.BadRequest(new { error = "Use a form name between 1 and 200 characters." });
+
+        var saved = await forms.RenameAsync(id, name, ct);
+        if (saved is null) return Results.NotFound(new { error = "No such form." });
+
+        log.LogInformation("Form renamed. {actor} {form} {event}", http.PersonId(), id, Events.FormRenamed);
+        return Results.Ok(new { id = saved.Id, name = saved.Name });
+    }
+
+    private static async Task<IResult> Remove(
+        Guid id, HttpContext http, IFormStore forms, ILogger<Form> log, CancellationToken ct)
+    {
+        if (!await forms.RemoveAsync(id, ct)) return Results.NotFound(new { error = "No such form." });
+
+        log.LogInformation("Form removed. {actor} {form} {event}", http.PersonId(), id, Events.FormRemoved);
+        return Results.NoContent();
+    }
+
     /// <summary>Takes a live form down. Its link stops serving; its answers stay.</summary>
     /// <remarks>
     /// The opposite of publishing rather than the opposite of creating. A form
     /// that was live and is not any more still has a draft to edit, a history to
     /// read, and every answer it collected, so this is reversible by publishing
-    /// again. Deleting is not offered anywhere and this is not it.
+    /// again.
     /// </remarks>
     private static async Task<IResult> Unpublish(
         Guid id,
@@ -425,6 +479,10 @@ public static class AdminFormEndpoints
         {
             return Problems(
                 "This form is not ready to go in front of applicants.", refused.Problems);
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound(new { error = "No such form." });
         }
 
         log.LogInformation(

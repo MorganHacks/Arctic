@@ -1,7 +1,8 @@
 import { ApplicantsTable } from "@/components/applicants/applicants-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Filters } from "@/components/applicants/filters";
 import { STATUSES } from "@/components/applicants/status";
-import styles from "@/components/applicants/applicants.module.css";
+import styles from "@/components/applicants/applicants-list.module.css";
 import type { Status } from "@/components/applicants/types";
 import { readPageData } from "@/lib/page-data";
 import { Shell } from "../shell";
@@ -55,47 +56,49 @@ export default async function Applicants({
 
   if (!chosen) {
     return (
-      <Denied personId={person.personId}>
-        There is no event yet. Create one under Events, and applicants
-        will appear here once a form collects them.
-      </Denied>
+      <Shell personId={person.personId}>
+        <h1>Applicants</h1>
+        <EmptyState variant="data" size="page" title="No applicants yet"
+          description="Create an event under Events. Applicants will appear here once a form collects them." />
+      </Shell>
     );
   }
 
   return (
     <Shell personId={person.personId}>
-      {/* Which event this is, beside the heading rather than inside the filter
-          bar. It is not a filter — it is what the whole screen is about, and
-          every count under it is a count about this one event. */}
-      <div className={styles.head}>
-        <h1>Applicants</h1>
-        <p className={styles.scope}>{chosen.name}</p>
-      </div>
-
-      <Filters
-        events={events}
-        chosen={chosen}
-        q={q ?? ""}
-        statuses={filter.status ?? []}
-        counts={counts}
-      />
-
-      {items.length === 0 ? (
-        <div className="empty">
-          {q || asked.length > 0
-            ? "Nothing matches that."
-            : "Nobody has applied yet."}
+      <div className={styles.page}>
+        <div className={styles.head}>
+          <h1>Applicants</h1>
+          <p>Review applications for your event.</p>
         </div>
-      ) : (
-        <ApplicantsTable
-          initialItems={items}
-          initialCursor={nextCursor}
-          // Bound to this filter on the server, so the next page is a page of
-          // the same list. A cursor read against a different filter would
-          // start somewhere that means nothing.
-          loadMore={loadApplicants.bind(null, filter)}
+
+        <Filters
+          events={events}
+          chosen={chosen}
+          q={q ?? ""}
+          statuses={filter.status ?? []}
+          counts={counts}
         />
-      )}
+
+        {items.length === 0 ? (
+          <div className={styles.empty}>
+            <EmptyState variant="data" size="page"
+              title={q || asked.length > 0 ? "No applicants found" : "No applicants yet"}
+              description={q || asked.length > 0 ? "Try another search or adjust your filters." : "Applications for this event will appear here as they arrive."} />
+          </div>
+        ) : (
+          <ApplicantsTable
+            key={`${chosen.id}:${q ?? ""}:${[...new Set(asked)].sort().join(",")}`}
+            initialItems={items}
+            initialCursor={nextCursor}
+            total={q ? null : (asked.length ? [...new Set(asked)] as Status[] : STATUSES).reduce((sum, one) => sum + (counts[one] ?? 0), 0)}
+            // Bound to this filter on the server, so the next page is a page of
+            // the same list. A cursor read against a different filter would
+            // start somewhere that means nothing.
+            loadMore={loadApplicants.bind(null, { ...filter, event: chosen.id })}
+          />
+        )}
+      </div>
     </Shell>
   );
 }

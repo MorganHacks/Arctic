@@ -129,6 +129,7 @@ public readonly record struct Permission(string Value)
     public static readonly Permission EmailSendTemplated = new("email.send_templated");
     public static readonly Permission EmailSendBroadcast = new("email.send_broadcast");
     public static readonly Permission EmailManageTemplates = new("email.manage_templates");
+    public static readonly Permission EmailDeleteTemplates = new("email.delete_templates");
     public static readonly Permission EmailViewStats = new("email.view_stats");
 
     // Sponsors
@@ -172,7 +173,7 @@ public readonly record struct Permission(string Value)
         FormsManage,
         EventsManage,
         AnnouncementsPost,
-        EmailSendTemplated, EmailSendBroadcast, EmailManageTemplates, EmailViewStats,
+        EmailSendTemplated, EmailSendBroadcast, EmailManageTemplates, EmailDeleteTemplates, EmailViewStats,
         SponsorsView, SponsorsEdit, SponsorsViewFinancials,
         CheckinScan, SwagScan, CheckinViewStats,
         JudgingScoreAssigned, JudgingViewAll, JudgingAssign,

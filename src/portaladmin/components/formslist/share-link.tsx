@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Copy01Icon } from "@hugeicons/core-free-icons";
+import { Copy01Icon, Link04Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import styles from "./formslist.module.css";
+import pageStyles from "./forms-page.module.css";
 
 /**
  * Where the public forms site lives.
@@ -56,7 +57,7 @@ export function ShareCode({ code }: { code: string }) {
  * to paste into a group chat, and the builder copies the same link while it is
  * still being written.
  */
-function useCopy(code: string) {
+export function useCopy(code: string) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -125,27 +126,44 @@ function CopyState({
  * no way to check what landed on the clipboard before it is pasted somewhere
  * public.
  */
-export function CopyLink({ code }: { code: string }) {
+export function CopyLink({ code, name, appearance = "compact" }: { code: string; name?: string; appearance?: "compact" | "header" }) {
   const { state, copy } = useCopy(code);
+  const address = (
+    <span id={`link-${code}`} className={pageStyles.address} title={publicLink(code)}>
+      <span>{shownHost(code)}</span><strong>{code}</strong>
+    </span>
+  );
 
   return (
-    <span className={styles.copyRow}>
-      <button
-        type="button"
-        onClick={copy}
-        className={styles.copyButton}
-        // The button's own name says what it does; which link it does it to is
-        // the row it sits in, and the address is right there to be read.
-        aria-describedby={`link-${code}`}
-      >
-        Copy link
-      </button>
-
-      <span id={`link-${code}`} className={styles.address}>
-        {shownLink(code)}
+    <span className={pageStyles.copyWrap} data-appearance={appearance} data-copied={state === "copied"}>
+      {appearance === "header" ? (
+        <button type="button" onClick={copy} className={pageStyles.headerCopy}
+          aria-label={name ? `Copy link to ${name}` : "Copy link"}
+          aria-describedby={`link-${code}`} title={state === "copied" ? "Link copied" : publicLink(code)}>
+          <Icon icon={state === "copied" ? Tick02Icon : Link04Icon} size={16} />
+          {address}
+        </button>
+      ) : (
+        <span className={pageStyles.copyRow}>
+          <Icon icon={Link04Icon} size={15} />
+          {address}
+          <button
+            type="button"
+            onClick={copy}
+            className={pageStyles.copyButton}
+            // The button's own name says what it does; which link it does it to is
+            // the row it sits in, and the address is right there to be read.
+            aria-describedby={`link-${code}`}
+            aria-label={name ? `Copy link to ${name}` : "Copy link"}
+            title={state === "copied" ? "Copied" : "Copy link"}
+          >
+            <Icon icon={state === "copied" ? Tick02Icon : Copy01Icon} size={16} />
+          </button>
+        </span>
+      )}
+      <span role="status" className={pageStyles.copyFeedback} data-failed={state === "failed"}>
+        {state === "copied" ? "Link copied." : state === "failed" ? `Could not copy. The link is ${publicLink(code)}` : null}
       </span>
-
-      <CopyState state={state} code={code} />
     </span>
   );
 }

@@ -223,6 +223,7 @@ public static class Events
     /// </para>
     /// </remarks>
     public const string TemplateWritten = "template.written";
+    public const string TemplateRemoved = "template.removed";
 
     /// <summary>
     /// Somebody changed somebody else's access.
@@ -283,6 +284,10 @@ public static class Events
 
     /// <summary>A form was made, and got the code that goes on a flyer.</summary>
     public const string FormCreated = "form.created";
+
+    public const string FormRenamed = "form.renamed";
+
+    public const string FormRemoved = "form.removed";
 
     /// <summary>
     /// A draft's questions were written.

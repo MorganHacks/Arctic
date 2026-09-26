@@ -12,14 +12,6 @@ namespace MorganHacks.Api;
 /// The templates mail is written in, for the people who write them.
 /// </summary>
 /// <remarks>
-/// One permission across the whole surface: <c>email.manage_templates</c>, on
-/// reads as well as writes. Unlike campaigns, there is no useful narrower
-/// reader here — a template is not a record of something that happened, it is
-/// the thing that will be sent, and the only reason to look at one is to write
-/// or check the wording. It is the same permission that drafts a campaign,
-/// which is deliberate: choosing a template and writing one are the same job
-/// done by the same people, and splitting them would mean somebody who can
-/// pick a template cannot read what is in it.
 /// <para>
 /// <b>Authors write Markdown or HTML, and say which.</b> One source either
 /// way: <c>body_html</c> and <c>body_text</c> are both generated from it and
@@ -90,7 +82,10 @@ public static partial class TemplateEndpoints
         var templates = app.MapGroup("/admin/templates");
 
         templates.MapGet("", List)
-                 .RequirePermission(Permission.EmailManageTemplates);
+                 .RequireAnyPermission(Permission.EmailManageTemplates, Permission.EmailDeleteTemplates);
+
+        templates.MapPut("/preferences/visibility", SetVisibility)
+                 .RequireAnyPermission(Permission.EmailManageTemplates, Permission.EmailDeleteTemplates);
 
         // Ahead of the {key} routes it shares a prefix with. It is a POST and
         // they are GET and PUT, so nothing actually collides today — the order
@@ -116,7 +111,10 @@ public static partial class TemplateEndpoints
                  .RequirePermission(Permission.EmailManageTemplates);
 
         templates.MapGet("/{key}", One)
-                 .RequirePermission(Permission.EmailManageTemplates);
+                 .RequireAnyPermission(Permission.EmailManageTemplates, Permission.EmailDeleteTemplates);
+
+        templates.MapDelete("/{key}", Remove)
+                 .RequirePermission(Permission.EmailDeleteTemplates);
 
         templates.MapPost("", Create)
                  .RequirePermission(Permission.EmailManageTemplates);
@@ -192,7 +190,7 @@ public static partial class TemplateEndpoints
     // ------------------------------------------------------------- reading ---
 
     /// <summary>
-    /// Every template, by key. Requires <c>email.manage_templates</c>.
+    /// Every template, by key.
     /// </summary>
     /// <remarks>
     /// Live versions only, and no bodies unless <c>includePreviews</c> is true.
@@ -200,7 +198,7 @@ public static partial class TemplateEndpoints
     /// shipping every body to a caller that only needs names is several hundred
     /// kilobytes to decide which link to click.
     /// </remarks>
-    private static async Task<IResult> List(TemplateCatalog templates, TemplateDraftStore drafts,
+    private static async Task<IResult> List(TemplateCatalog templates, TemplateDraftStore drafts, TemplateVisibilityStore visibility,
         HttpContext http, CancellationToken ct, bool includeDrafts = false, bool includePreviews = false)
     {
         var listed = await templates.ListAsync(ct);
@@ -214,15 +212,15 @@ public static partial class TemplateEndpoints
                 var previewHtml = includePreviews
                     ? string.IsNullOrWhiteSpace(saved.Content.Html) ? current?.Html : saved.Content.Html
                     : null;
-                rows[saved.Content.Key] = DraftSummary(saved, previewHtml);
+                rows[saved.Content.Key] = DraftSummary(saved, previewHtml) with { Version = current?.Version ?? 0 };
             }
         }
-        return Results.Ok(new { templates = rows.Values });
+        var hiddenKeys = (await visibility.ListAsync(http.PersonId(), ct)).Where(rows.ContainsKey);
+        return Results.Ok(new { templates = rows.Values, hiddenKeys });
     }
 
     /// <summary>
-    /// One template, with what it needs filled in. Requires
-    /// <c>email.manage_templates</c>.
+    /// One template, with what it needs filled in.
     /// </summary>
     /// <remarks>
     /// <c>body</c> is the source to edit and <c>format</c> says which language

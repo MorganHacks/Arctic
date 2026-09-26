@@ -6,8 +6,8 @@
   --metric-amber: #987137;
   --metric-teal: #388272;
   --metric-teal-soft: #edf6f3;
-  --empty-state-title-size: 16px;
-  --empty-state-description-size: 14px;
+  --empty-state-title-size: 14px;
+  --empty-state-description-size: 13px;
   display: flex;
   flex-direction: column;
   width: 100%;

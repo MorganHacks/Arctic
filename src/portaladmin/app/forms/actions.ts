@@ -2,9 +2,55 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { apiFetch, type FormField, type FormProblem } from "@/lib/api";
+import { apiFetch, type FormField, type FormProblem, type VersionRow } from "@/lib/api";
+import type { FormTheme } from "../../../../libs/ui/form-theme";
 
 export type NewFormState = { error?: string };
+
+export async function loadVersionHistory(formId: string): Promise<VersionRow[] | null> {
+  try {
+    const response = await apiFetch(`/admin/forms/${formId}/versions`);
+    if (!response.ok) return null;
+    return ((await response.json()) as { versions: VersionRow[] }).versions;
+  } catch {
+    return null;
+  }
+}
+
+export async function renameForm(formId: string, name: string): Promise<SaveResult> {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > 200) {
+    return { ok: false, error: "Use a form name between 1 and 200 characters.", problems: [] };
+  }
+  let response: Response;
+  try {
+    response = await apiFetch(`/admin/forms/${formId}/name`, {
+      method: "PUT", body: JSON.stringify({ name: trimmed }),
+      headers: { "content-type": "application/json" },
+    });
+  } catch {
+    return { ok: false, error: "The API could not be reached.", problems: [] };
+  }
+  if (!response.ok) return readFailure(response);
+  revalidatePath(`/forms/${formId}`);
+  revalidatePath(`/forms/${formId}/responses`);
+  revalidatePath("/forms");
+  return { ok: true, problems: [] };
+}
+
+export async function removeForm(formId: string): Promise<SaveResult> {
+  let response: Response;
+  try {
+    response = await apiFetch(`/admin/forms/${formId}`, { method: "DELETE" });
+  } catch {
+    return { ok: false, error: "The API could not be reached.", problems: [] };
+  }
+  if (!response.ok) return readFailure(response);
+  revalidatePath(`/forms/${formId}`);
+  revalidatePath(`/forms/${formId}/responses`);
+  revalidatePath("/forms");
+  return { ok: true, problems: [] };
+}
 
 /**
  * What a save or a publish came back with.
@@ -19,6 +65,7 @@ export type SaveResult = {
   ok: boolean;
   error?: string;
   problems: FormProblem[];
+  retryable?: boolean;
 };
 
 type ApiFailure = { error?: string; problems?: FormProblem[] };
@@ -54,6 +101,7 @@ async function readFailure(response: Response): Promise<SaveResult> {
     ok: false,
     error: body.error ?? "That did not work.",
     problems: body.problems ?? [],
+    retryable: response.status === 408 || response.status === 429 || response.status >= 500,
   };
 }
 
@@ -69,17 +117,18 @@ async function readFailure(response: Response): Promise<SaveResult> {
 export async function saveDraft(
   formId: string,
   fields: FormField[],
+  theme?: FormTheme,
 ): Promise<SaveResult> {
   let response: Response;
 
   try {
     response = await apiFetch(`/admin/forms/${formId}/draft`, {
       method: "PUT",
-      body: JSON.stringify({ fields }),
+      body: JSON.stringify({ fields, theme }),
       headers: { "content-type": "application/json" },
     });
   } catch {
-    return { ok: false, error: "The API could not be reached.", problems: [] };
+    return { ok: false, error: "Your changes could not be saved. Retrying automatically…", problems: [], retryable: true };
   }
 
   if (!response.ok) {

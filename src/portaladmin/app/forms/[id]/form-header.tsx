@@ -1,5 +1,8 @@
-import Link from "next/link";
-import { PublicLink } from "@/components/formslist/share-link";
+import type { ReactNode } from "react";
+import { NavigationLink as Link } from "@/components/ui/navigation-link";
+import { Undo03Icon, ClipboardIcon, FormIcon } from "@hugeicons/core-free-icons";
+import { CopyLink } from "@/components/formslist/share-link";
+import { Icon } from "@/components/ui/icon";
 import type { FormSummary } from "@/lib/api";
 import styles from "./builder.module.css";
 import { Chart, Questions } from "./icons";
@@ -22,73 +25,95 @@ export function FormHeader({
   published,
   draftVersion,
   tab,
+  actions,
+  responseCount = 0,
+  collapsed = false,
+  backAction,
 }: {
   form: FormSummary;
   published: { version: number; publishedAt: string | null } | null;
   /** Absent on the responses screen, which is not editing anything. */
   draftVersion?: number;
   tab: "questions" | "responses";
+  actions?: ReactNode;
+  responseCount?: number;
+  collapsed?: boolean;
+  backAction?: ReactNode;
 }) {
   return (
     <>
-      <Link href="/forms" className="back">
-        ← Forms
-      </Link>
-
-      <div className={styles.head}>
-        <div className={styles.tags}>
-          <span className={styles.kind}>{form.kind}</span>
-
-          {published ? (
-            <span className="pill active">Live · v{published.version}</span>
-          ) : (
-            <span className="pill lapsed">Never published</span>
-          )}
-
-          {/* Which draft is being edited, beside which version is live. They
-              are usually one apart and occasionally several, and somebody who
-              cannot see both has no way to know whether what is on screen is
-              what applicants are answering. */}
-          {draftVersion === undefined ? null : (
-            <span className={styles.editing}>editing v{draftVersion}</span>
-          )}
-        </div>
-
-        <div className={styles.titleRow}>
-          <h1>{form.name}</h1>
-        </div>
-
-        <PublicLink code={form.code} />
+      <div className={styles.headerNavigation}>
+        {backAction ?? <Link href="/forms" className={styles.back} aria-label="Back to forms">
+          <Icon icon={Undo03Icon} size={17} strokeWidth={2} />
+          <span>Back</span>
+        </Link>}
+        {actions}
       </div>
 
-      {/* The other half of the pair. Without it the two halves of a form are
-          only reachable through the list, which is a detour on every trip
-          between building a form and reading what it collected. */}
-      <nav className={styles.tabs}>
-        {tab === "questions" ? (
-          <span className={styles.tabOn} aria-current="page">
-            <Questions />
-            Questions
-          </span>
-        ) : (
-          <Link href={`/forms/${form.id}`} className={styles.tab}>
-            <Questions />
-            Questions
-          </Link>
-        )}
+      <div className={styles.headerCollapse} data-collapsed={collapsed} data-responses={tab === "responses"}>
+        <div className={styles.headerDetails} inert={collapsed} aria-hidden={collapsed || undefined}>
+          <div className={styles.head}>
+            <div className={styles.identity}>
+              <div className={styles.tags}>
+                <span className={styles.kind} data-kind={form.kind}>
+                  <Icon icon={form.kind === "application" ? FormIcon : ClipboardIcon} size={16} />
+                  {form.kind === "application" ? "Application" : "Survey"}
+                </span>
 
-        {tab === "responses" ? (
-          <span className={styles.tabOn} aria-current="page">
-            <Chart />
-            Responses
-          </span>
-        ) : (
-          <Link href={`/forms/${form.id}/responses`} className={styles.tab}>
-            <Chart />
-            Responses
-          </Link>
-        )}
-      </nav>
+                {/* Which draft is being edited, beside which version is live. They
+                    are usually one apart and occasionally several, and somebody who
+                    cannot see both has no way to know whether what is on screen is
+                    what applicants are answering. */}
+                {draftVersion === undefined ? null : (
+                  <span className={styles.editing}>Draft {draftVersion}</span>
+                )}
+              </div>
+
+              <div className={styles.titleRow}>
+                <h1>{form.name}</h1>
+                <span className={styles.publishStatus} data-live={!!published}>
+                  <span />{published ? "Live" : "Draft"}
+                </span>
+              </div>
+              {published ? <p className={styles.liveVersion}>Version {published.version} is available to applicants</p> : null}
+            </div>
+            <div className={styles.headerLink}><CopyLink code={form.code} name={form.name} appearance="header" /></div>
+          </div>
+
+          {/* The other half of the pair. Without it the two halves of a form are
+              only reachable through the list, which is a detour on every trip
+              between building a form and reading what it collected. */}
+          <div className={styles.sectionNavigation}>
+            <nav className={styles.tabs} aria-label="Form sections">
+              {tab === "questions" ? (
+                <span className={styles.tabOn} aria-current="page">
+                  <Questions />
+                  Questions
+                </span>
+              ) : (
+                <Link href={`/forms/${form.id}`} className={styles.tab}>
+                  <Questions />
+                  Questions
+                </Link>
+              )}
+
+              {tab === "responses" ? (
+                <span className={styles.tabOn} aria-current="page">
+                  <Chart />
+                  Responses
+                  <span className={styles.responseCount}>{responseCount.toLocaleString("en-US")}</span>
+                </span>
+              ) : (
+                <Link href={`/forms/${form.id}/responses`} className={styles.tab}>
+                  <Chart />
+                  Responses
+                  <span className={styles.responseCount}>{responseCount.toLocaleString("en-US")}</span>
+                </Link>
+              )}
+            </nav>
+          </div>
+        </div>
+      </div>
     </>
   );
 }

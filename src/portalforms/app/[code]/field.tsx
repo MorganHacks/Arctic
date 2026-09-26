@@ -380,7 +380,7 @@ function Control({
       const chosen = Array.isArray(answer) ? answer : [];
 
       return (
-        <div className="choices">
+        <div className="choices" data-multiple="true">
           {field.options.map((option, index) => (
             <label className="choice" key={option.value}>
               <input

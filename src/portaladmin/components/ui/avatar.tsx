@@ -4,11 +4,12 @@ import { useState } from "react";
 import { profileColor, profileInitials } from "@/lib/person-profile";
 import styles from "./avatar.module.css";
 
-export function Avatar({ name, email, avatarUrl, className }: {
+export function Avatar({ name, email, avatarUrl, className, appearance = "default" }: {
   name: string;
   email?: string | null;
   avatarUrl?: string | null;
   className?: string;
+  appearance?: "default" | "soft";
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const photoUrl = email?.trim().toLowerCase() === "imarooclinton@gmail.com"
@@ -21,7 +22,10 @@ export function Avatar({ name, email, avatarUrl, className }: {
   return (
     <span
       className={`${styles.avatar} ${className ?? ""}`}
-      style={{ backgroundColor: profileColor(email || name) }}
+      style={appearance === "soft" ? {
+        backgroundColor: `color-mix(in srgb, ${profileColor(email || name)} 12%, var(--raised))`,
+        color: `color-mix(in srgb, ${profileColor(email || name)} 55%, var(--ink))`,
+      } : { backgroundColor: profileColor(email || name) }}
       aria-hidden="true"
     >
       {source ? (

@@ -1,380 +1,708 @@
-/*
- * The events screens.
- *
- * A module rather than more rules in app/globals.css, which everybody edits: a
- * class named `.name` or `.grid` in the shared sheet is a collision waiting for
- * whoever writes the next screen.
- *
- * Every colour is a token from libs/ui/tokens.css and every size is on the
- * --step-* scale. Not one hex, so nothing here can mean a different colour on
- * this screen than it does on the next one. The only coloured thing is whether
- * registration is open, because that is the only thing on these screens that
- * changes what somebody does next.
- *
- * Nothing here restyles a panel, a pill, a table or a field. Those come from
- * the shared classes so that an organizer who has read the forms list can read
- * this one without learning it.
- */
-
-/* Making one ------------------------------------------------------------- */
-
-.newEvent {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--raised);
-  padding: 1rem 1.15rem;
-  margin-bottom: 1.25rem;
-}
-
-.newEventHead {
+:global(main):has(.page) {
   display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.7rem;
+  flex-direction: column;
+  height: 100dvh;
+  padding-bottom: 0;
+  overflow: hidden;
 }
 
-.newEventHead h2 {
-  margin: 0;
+.page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
-.newEventNote {
-  margin: 0;
+.header {
+  flex: 0 0 auto;
+  background: var(--paper);
+}
+
+.headerNavigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: var(--shell-heading-height);
+}
+
+.headerMain {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.backButton,
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: var(--shell-heading-height);
   color: var(--muted);
-  font-size: var(--step-1);
-}
-
-/* The slug is typed once and lives forever, so it is set in the face it will
-   be read in everywhere else rather than in the body font it is typed in. */
-.slugInput {
-  font-family: var(--mono);
-  width: 100%;
-}
-
-.nameInput {
-  width: 100%;
-}
-
-.createActions {
-  margin-top: 0.9rem;
-}
-
-/* Rows ------------------------------------------------------------------- */
-
-.cell {
-  vertical-align: top;
-}
-
-.name {
-  font-weight: 600;
+  font-size: 13px;
   text-decoration: none;
 }
 
-.name:hover {
-  text-decoration: underline;
-}
-
-/* Under the name, quietly. It is how other systems refer to this event and it
-   never changes, which makes it a fact about the row rather than a state of
-   it. */
-.slug {
-  display: inline-block;
-  margin-top: 0.2rem;
-  font-family: var(--mono);
-  font-size: var(--step-2);
-  color: var(--muted);
-}
-
-/*
- * The way into an event, said in a word.
- *
- * The name in the first column goes to the same place, but a link that only
- * announces itself on hover is a link that has to be known about. The console
- * is read by an organizing team that turns over completely every year, so the
- * way to change an event is on the screen rather than in the handover.
- *
- * Not a button. It navigates, and nothing here is decided by pressing it.
- *
- * Muted rather than accented, and that is the design system rather than taste:
- * colour on these screens means something, and the accent means the thing to
- * do next. Editing an event is not what anybody came to this list to do — the
- * list is for checking whether registration is open. A coloured link in every
- * row would put the loudest thing on the page in the column that matters
- * least, five times over.
- */
-.actionCell {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.edit {
-  color: var(--muted);
-  font-size: var(--step-2);
-  text-decoration: none;
+.backButton {
+  flex: none;
+  justify-content: flex-start;
+  gap: 8px;
+  font-family: var(--body);
+  font-size: 14px;
   transition: color var(--dur-fast) var(--ease);
 }
 
-.edit:hover {
+.backButton:hover {
   color: var(--ink);
-  text-decoration: underline;
 }
 
-/* The date under a pill: which instant the pill is talking about. A pill on
-   its own says whether registration is open; it cannot say until when. */
-.when {
-  margin-top: 0.25rem;
+.backButton svg {
+  flex-shrink: 0;
+}
+
+.identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.identity h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.8px;
+  overflow-wrap: anywhere;
+}
+
+.identity p {
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: var(--step-2);
+  font-size: 13px;
+  line-height: 20px;
 }
 
-/*
- * The three dates on a row, labelled.
- *
- * A definition list rather than three more columns. Most of them are empty for
- * most of the year, and three empty columns read as a table that failed to
- * load where three labelled blanks read as three decisions nobody has taken
- * yet.
- */
-.dateList {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.15rem 0.6rem;
-  margin: 0;
+.registrationBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
 }
 
-.dateTerm {
-  color: var(--faint);
-  font-size: var(--step-2);
+.registrationBadge > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
-.dateValue {
-  margin: 0;
-  font-size: var(--step-2);
+.registrationBadge[data-state="open"] {
+  background: var(--ok-soft);
+  color: var(--ok);
 }
 
-/*
- * A date nobody has decided.
- *
- * Muted, and never coloured. It is the ordinary state of most fields here for
- * most of the year, and anything that made it look like a warning would put a
- * screen full of warnings in front of somebody who has done nothing wrong.
- */
-.undecided {
-  color: var(--faint);
-  font-size: var(--step-2);
+.headerActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 40px;
 }
 
-/* Nothing here yet ------------------------------------------------------- */
+.saved,
+.saveHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
 
-/*
- * The first screen in a fresh environment.
- *
- * Wider than the shared .empty because it has something to say rather than a
- * blank to report: this is the one place in the console where the way out of
- * an empty database is on the screen in front of you.
- */
-.emptyTitle {
-  margin: 0 0 0.4rem;
+.headerActions [role="status"]:empty {
+  display: none;
+}
+
+.saved {
+  color: var(--ok);
+}
+
+.saveButton,
+.postButton,
+.discardButton {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.discardButton {
+  border-color: transparent;
+  background: var(--field);
+}
+
+.discardButton:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--surface-hover);
+}
+
+.header .saveButton:disabled,
+.notice .postButton:disabled {
+  border-color: transparent;
+  background: var(--field);
+  color: var(--muted);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 24px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tabs button {
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.tabs button:hover {
+  background: var(--field);
   color: var(--ink);
-  font-family: var(--display);
-  font-size: var(--step1);
+}
+
+.tabs button[aria-selected="true"] {
+  background: var(--field);
+  color: var(--ink);
   font-weight: 600;
 }
 
-.emptyBody {
-  margin: 0 auto;
-  max-width: 34rem;
-  line-height: 1.6;
+.tabs button span {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-selected);
+  font-size: 11px;
 }
 
-/* The dates screen ------------------------------------------------------- */
-
-.head {
-  margin-bottom: 1.25rem;
+.panel {
+  flex: 1;
+  min-height: 0;
+  padding: 32px 0 40px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scroll-padding: 24px;
+  container: event-panel / inline-size;
 }
 
-.headSlug {
-  font-family: var(--mono);
+.panel[hidden] {
+  display: none;
+}
+
+.panel:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.settings {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.section {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  column-gap: 32px;
+  row-gap: 12px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.section:first-child {
+  padding-top: 0;
+}
+
+.section:last-of-type {
+  border-bottom: 0;
+}
+
+.sectionHeading {
+  grid-column: 1;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: -0.2px;
+}
+
+.sectionHeading p {
+  max-width: 26ch;
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: var(--step-2);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
-/*
- * Two columns where there is room for two.
- *
- * The pairs matter: opens sits beside closes, starts beside ends. A date is
- * almost always typed while looking at the one it has to come after.
- */
+.sectionTitle {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.timezone {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.generalFields,
 .grid {
   display: grid;
-  gap: 1rem 1.25rem;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-column: 2;
   align-items: start;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.generalFields {
+  grid-template-columns: minmax(0, 1fr) 180px;
+  row-gap: 14px;
+}
+
+.registrationFields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field {
+  min-width: 0;
+}
+
+.field label,
+.noticeWrite label {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
 }
 
 .fieldHead {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
-/* Sits on the label's line rather than under the input, so that clearing a
-   date is obviously a property of that one field and not of the panel. */
-.clear {
-  border: none;
-  background: none;
-  padding: 0;
+.field input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--field);
+  font-size: 14px;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.field input[type="datetime-local"],
+.field input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+
+.field input:hover:not(:disabled) {
+  background: var(--field-active);
+}
+
+.field input:focus,
+.noticeWrite textarea:focus {
+  border-color: transparent;
+  background: var(--field-active);
+  box-shadow: none;
+  outline: none;
+}
+
+.field input:disabled {
+  background: var(--field);
+}
+
+.capacityField {
+  position: relative;
+}
+
+.capacityField input {
+  padding-right: 60px;
+  appearance: textfield;
+}
+
+.capacityField input::-webkit-inner-spin-button,
+.capacityField input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.capacityField > span {
+  position: absolute;
+  top: 0;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  height: 48px;
   color: var(--muted);
-  text-decoration: underline;
-  font-size: var(--step-2);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.slug {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.slug code {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--ink);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.slug code svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.slug code span {
+  min-width: 0;
+}
+
+.clear {
+  min-height: 0;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 400;
+  line-height: 20px;
+  transition: color var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
 }
 
 .clear:hover:not(:disabled) {
   background: none;
-  border-color: transparent;
   color: var(--ink);
 }
 
 .clear:disabled {
+  border: 0;
   background: none;
-  border-color: transparent;
   color: var(--faint);
 }
 
-/*
- * What the typed value actually means, read back with the zone named.
- *
- * The entire defence against somebody setting a date a day out and not finding
- * out until it fires. A field that only ever shows what was typed into it
- * cannot tell anybody they typed the wrong day.
- */
 .echo {
-  margin: 0.3rem 0 0;
+  min-height: 18px;
+  margin: 8px 0 0;
   color: var(--muted);
-  font-size: var(--step-2);
-  min-height: 1.2rem;
-  transition: color var(--dur) var(--ease);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
-.capacityInput {
-  max-width: 9rem;
+.error {
+  margin: 10px 0;
+  color: var(--stop);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.actions {
+.notice {
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.noticeHeading {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-top: 1.25rem;
+  gap: 9px;
 }
 
-/* Said once, after a save, and gone the moment anything is typed. Faded in
-   because it appears where nothing was, and four pixels of movement would be
-   the only thing on this screen that moves. */
-@keyframes confirm {
-  from {
-    opacity: 0;
-  }
+.noticeHeading h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: -0.3px;
 }
 
-.saved {
-  color: var(--ok);
-  font-size: var(--step-2);
-  animation: confirm var(--dur) var(--ease) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .saved {
-    animation: none;
-  }
-}
-
-/* --------------------------------------------------------- announcements --- */
-
-/*
- * Set apart from the schedule above it with a rule rather than a card, because
- * it is a different kind of thing: the schedule is settings somebody edits
- * once, and this is a log that grows during a weekend.
- */
-.notice {
-  margin-top: 2.4rem;
-  padding-top: 1.8rem;
-  border-top: 1px solid var(--line);
+.noticeDescription {
+  max-width: 580px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .noticeWrite {
-  display: grid;
-  gap: 0.4rem;
-  margin: 1.2rem 0 0.4rem;
-  min-width: 0;
-}
-.noticeWrite textarea {
-  font: inherit;
-  width: 100%;
-  resize: vertical;
-  background: var(--raised);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.5rem 0.65rem;
+  margin-top: 24px;
 }
 
-/*
- * Amber, and above the button rather than below it. Nothing has failed --
- * this is the thing somebody needs to know before they type, not after.
- */
+.noticeWrite textarea {
+  display: block;
+  width: 100%;
+  min-height: 164px;
+  padding: 16px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+  resize: vertical;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
 .noticeWarn {
-  margin: 0.2rem 0 0;
-  font-size: var(--step-1);
-  color: var(--warn, #d9a441);
+  max-width: 660px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .noticeActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 0.5rem;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.noticeCount {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.noticeEmpty {
+  margin-top: 32px;
+  border-top: 1px solid var(--line-soft);
 }
 
 .notices {
-  list-style: none;
-  margin: 1.6rem 0 0;
-  padding: 0;
   display: grid;
-  gap: 1rem;
-  min-width: 0;
+  gap: 24px;
+  margin: 32px 0 0;
+  padding: 28px 0 0;
+  border-top: 1px solid var(--line-soft);
+  list-style: none;
 }
+
 .notices li {
-  padding-bottom: 1rem;
+  min-width: 0;
+  padding-bottom: 24px;
   border-bottom: 1px solid var(--line-soft);
 }
-.notices li:last-child { border-bottom: 0; padding-bottom: 0; }
 
-.noticeBody {
-  margin: 0 0 0.25rem;
-  /* Line breaks survive; nothing else is interpreted, so a stray character
-     cannot become formatting. */
-  white-space: pre-wrap;
+.notices li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
-/* Retracted stays visible and struck through: the console is the only place
-   "we said it and took it back" can be told from "we never said it". */
-.noticeGone .noticeBody {
-  text-decoration: line-through;
+.noticeBody {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.noticeMeta {
+  margin: 0;
   color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.noticeGone .noticeBody {
+  color: var(--muted);
+  text-decoration: line-through;
 }
 
 .noticeRetract {
-  margin-top: 0.45rem;
-  font-size: var(--step-1);
-  color: var(--muted);
-  background: none;
+  margin-top: 8px;
+  padding: 5px 10px;
   border: 0;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 12px;
 }
-.noticeRetract:hover { color: var(--ink); }
+
+.noticeRetract:hover:not(:disabled) {
+  border: 0;
+  background: var(--stop-soft);
+  color: var(--stop);
+}
+
+@media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
+  .clear {
+    opacity: 0;
+  }
+
+  .field:hover .clear,
+  .field:focus-within .clear {
+    opacity: 1;
+  }
+}
+
+@container event-panel (max-width: 880px) {
+  .section {
+    display: block;
+  }
+
+  .sectionHeading {
+    margin-bottom: 18px;
+  }
+
+  .sectionHeading p {
+    max-width: none;
+  }
+
+  .sectionTitle {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+}
+
+@container event-panel (max-width: 700px) {
+  .registrationFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container event-panel (max-width: 520px) {
+  .generalFields,
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .generalFields > .field:nth-child(2) {
+    max-width: 180px;
+  }
+}
+
+@media (max-width: 64rem) {
+  .headerActions > [role="status"] {
+    display: none;
+  }
+}
+
+@media (max-width: 48rem) {
+  :global(main):has(.page) {
+    height: calc(100dvh - 56px);
+    padding-top: 16px;
+  }
+
+  .headerMain {
+    margin-top: 16px;
+  }
+
+  .backButton {
+    height: 36px;
+  }
+
+  .identity h1 {
+    font-size: 22px;
+    line-height: 1.4;
+  }
+
+  .headerActions {
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .saveButton,
+  .discardButton {
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 12px;
+  }
+
+  .tabs {
+    margin-top: 20px;
+  }
+
+  .panel {
+    padding: 24px 0 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs button,
+  .field input,
+  .clear,
+  .noticeWrite textarea {
+    transition: none;
+  }
+}
+
+@media (max-width: 42rem) {
+  .field input,
+  .noticeWrite textarea {
+    font-size: 16px;
+  }
+}

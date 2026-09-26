@@ -19,6 +19,11 @@ public static class RequirePermissionExtensions
     public static TBuilder RequirePermission<TBuilder>(
         this TBuilder builder, Permission permission)
         where TBuilder : IEndpointConventionBuilder
+        => builder.RequireAnyPermission(permission);
+
+    public static TBuilder RequireAnyPermission<TBuilder>(
+        this TBuilder builder, params Permission[] required)
+        where TBuilder : IEndpointConventionBuilder
     {
         builder.AddEndpointFilter(async (context, next) =>
         {
@@ -44,7 +49,7 @@ public static class RequirePermissionExtensions
             var permissions = http.RequestServices.GetRequiredService<PermissionService>();
             var effective = await permissions.ForAsync(session.PersonId, http.RequestAborted);
 
-            if (!effective.Can(permission))
+            if (!required.Any(effective.Can))
             {
                 // A plain 403, not Results.Forbid(). Forbid() delegates to the
                 // authentication stack and throws when no scheme is

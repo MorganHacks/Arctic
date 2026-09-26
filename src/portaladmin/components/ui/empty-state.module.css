@@ -1,29 +1,59 @@
 .empty {
+  --empty-mark: color-mix(in srgb, var(--ink) 4%, transparent);
+  --empty-mark-strong: color-mix(in srgb, var(--ink) 7%, transparent);
+  --empty-surface: color-mix(in srgb, var(--ink) 2%, transparent);
   display: flex;
   min-width: 0;
-  min-height: 272px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 28px 20px;
+  padding: 32px 20px;
   text-align: center;
 }
 
-.document {
-  display: flex;
-  width: min(100%, 240px);
-  flex: none;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  margin-bottom: 28px;
-}
+.panel { min-height: 280px; }
+.page { min-height: clamp(360px, 54dvh, 480px); padding-block: 56px; }
+.compact { min-height: 232px; }
 
-.bar { height: 5px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 4%, transparent); }
-.heading { height: 9px; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.illustration { width: min(100%, 260px); flex: none; margin-bottom: 32px; pointer-events: none; }
+.compact .illustration { width: min(100%, 216px); margin-bottom: 24px; }
+.document { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.bar { height: 5px; border-radius: 999px; background: var(--empty-mark); }
+.heading { height: 9px; background: var(--empty-mark-strong); }
 .subheading { height: 7px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
-.spacer { height: 6px; }
+.spacer { height: 7px; }
 .row { display: flex; width: 100%; align-items: center; gap: 5px; }
-.bullet { width: 3px; height: 3px; flex: none; border-radius: 50%; background: color-mix(in srgb, var(--ink) 4%, transparent); }
-.title { margin: 0; color: var(--muted); font-size: var(--empty-state-title-size, 13px); font-weight: 500; line-height: 1.5; }
-.description { max-width: 280px; margin: 6px 0 0; color: var(--faint); font-size: var(--empty-state-description-size, 12px); line-height: 1.6; text-wrap: pretty; }
+.bullet { width: 3px; height: 3px; flex: none; border-radius: 50%; background: var(--empty-mark); }
+
+.data { display: grid; gap: 10px; padding: 8px 0; }
+.dataRow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; gap: 16px; }
+.dataRow:first-child .bar { height: 6px; background: var(--empty-mark-strong); }
+.dataRow:nth-last-child(-n + 2) { opacity: 0.7; }
+
+.media { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: repeat(2, 48px); gap: 6px; }
+.media > div { border-radius: 7px; background: var(--empty-surface); }
+.media > div:first-child { grid-row: span 2; }
+
+.canvas { overflow: hidden; border: 1px solid var(--empty-surface); border-radius: 9px; }
+.browserBar { display: flex; align-items: center; gap: 4px; padding: 10px 9px; border-bottom: 1px solid var(--empty-surface); }
+.browserBar > span { width: 4px; height: 4px; border-radius: 50%; background: var(--empty-mark); }
+.browserBar .bar { flex: 1; height: 7px; margin-left: 4px; background: var(--empty-surface); }
+.canvasBody { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 18px 20px; }
+.canvasBody > .heading { width: 57%; }
+.canvasBody > .bar:not(.heading) { width: 40%; }
+.canvasButton { width: 46px; height: 13px; margin: 2px 0 8px; border-radius: 999px; background: var(--empty-mark); }
+.canvasCards { display: grid; width: 100%; grid-template-columns: 1fr 1fr; gap: 8px; }
+.canvasCards > div { display: grid; gap: 4px; padding: 7px; border-radius: 4px; background: var(--empty-surface); }
+
+.files { display: grid; gap: 12px; padding: 4px 20px; }
+.fileRow { display: flex; align-items: center; gap: 10px; }
+.fileRow[data-nested="true"] { padding-left: 23px; }
+.file, .folder { position: relative; width: 12px; height: 14px; flex: none; border-radius: 2px; background: var(--empty-mark); }
+.folder { width: 14px; height: 10px; background: var(--empty-mark-strong); }
+.folder::before { position: absolute; top: -3px; left: 0; width: 6px; height: 3px; border-radius: 2px 2px 0 0; background: var(--empty-mark-strong); content: ""; }
+
+.title { margin: 0; color: var(--muted); font-size: var(--empty-state-title-size, 14px); font-weight: 500; line-height: 1.5; }
+.description { max-width: 310px; margin: 8px 0 0; color: var(--faint); font-size: var(--empty-state-description-size, 13px); font-weight: 400; line-height: 1.6; text-wrap: pretty; overflow-wrap: anywhere; }
+.compact .title { font-size: 13px; }
+.compact .description { font-size: 12px; }
+.action { display: flex; max-width: 100%; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 20px; font-size: 12px; }

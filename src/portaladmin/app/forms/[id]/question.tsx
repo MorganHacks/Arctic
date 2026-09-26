@@ -1,5 +1,6 @@
 "use client";
 
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Select } from "@/components/ui/select";
 import type { FieldOption, FormField } from "@/lib/api";
 import styles from "./builder.module.css";
@@ -27,9 +28,16 @@ export function Question({
   field,
   index,
   ordinal,
+  pageNumber,
+  pageCount,
   count,
   problems,
   disabled,
+  active,
+  dragHandle,
+  dragging,
+  dropEdge,
+  onActivate,
   onChange,
   onMove,
   onDuplicate,
@@ -46,10 +54,17 @@ export function Question({
    * as a question having gone missing rather than as a page having started.
    */
   ordinal: number;
+  pageNumber: number;
+  pageCount: number;
 
   count: number;
   problems: string[];
   disabled: boolean;
+  active: boolean;
+  dragHandle: ReactNode;
+  dragging: boolean;
+  dropEdge?: "before" | "after";
+  onActivate: () => void;
 
   onChange: (changes: Partial<FormField>) => void;
   onMove: (delta: number) => void;
@@ -57,6 +72,13 @@ export function Question({
   onRemove: () => void;
 }) {
   const choices = CHOICE_TYPES.has(field.type);
+  const wording = useRef<HTMLTextAreaElement>(null);
+  const wasActive = useRef(active);
+
+  useLayoutEffect(() => {
+    if (active && !wasActive.current) wording.current?.focus({ preventScroll: true });
+    wasActive.current = active;
+  }, [active]);
 
   // A page break is a divider, not something to answer, and the editor has to
   // say so at a glance — an author scanning a form needs to see where the
@@ -70,12 +92,48 @@ export function Question({
         field={field}
         index={index}
         count={count}
+        pageNumber={pageNumber}
+        pageCount={pageCount}
         problems={problems}
         disabled={disabled}
+        dragHandle={dragHandle}
+        dragging={dragging}
+        dropEdge={dropEdge}
         onChange={onChange}
         onMove={onMove}
         onRemove={onRemove}
       />
+    );
+  }
+
+  if (!active && problems.length === 0) {
+    return (
+      <li className={styles.card} data-key={field.key} data-dragging={dragging || undefined} data-drop={dropEdge}>
+        {dragHandle}
+        <button type="button" className={styles.questionSummary} onClick={onActivate}
+          aria-label={`Edit question ${ordinal}: ${field.label || "Untitled question"}`} aria-expanded={false}>
+          <span className={styles.summaryHeading}>
+            <span className={styles.summaryNumber}>{ordinal}</span>
+            <span>{field.label || "Untitled question"}{field.required ? <span className={styles.req}> *</span> : null}</span>
+          </span>
+          {field.help ? <span className={styles.summaryHelp}>{field.help}</span> : null}
+          {choices && field.type !== "select" ? (
+            <span className={styles.summaryOptions}>
+              {field.options.map(option => <span key={option.value}>
+                <span className={field.type === "radio" ? styles.optionMarkRound : styles.optionMark} aria-hidden="true" />
+                {option.label}
+              </span>)}
+            </span>
+          ) : field.type === "consent" ? (
+            <span className={styles.summaryAnswer}><span className={styles.optionMark} aria-hidden="true" />I agree</span>
+          ) : (
+            <span className={styles.answerLine} data-type={field.type}>
+              {field.type === "paragraph" ? "Long answer text" : field.type === "select" ? "Select an option" : field.type === "email" ? "Email address" : field.type === "phone" ? "Phone number" : field.type === "date" ? "Month / Day / Year" : field.type === "number" ? "Number" : field.type === "file" ? "Upload a file" : "Short answer text"}
+            </span>
+          )}
+          <span className={styles.summaryType}>{TYPES.find(type => type.value === field.type)?.label}<span>Edit question</span></span>
+        </button>
+      </li>
     );
   }
 
@@ -86,10 +144,6 @@ export function Question({
       ),
     });
 
-  // Options are ordered on purpose — "Prefer not to say" belongs at the
-  // bottom of a list and not wherever it happened to be typed — so the order
-  // has to be changeable after the fact, and by the same two buttons the
-  // questions use rather than by dragging.
   const moveOption = (at: number, delta: number) => {
     const to = at + delta;
     if (to < 0 || to >= field.options.length) {
@@ -102,18 +156,27 @@ export function Question({
   };
 
   return (
-    <li className={cardClass(styles.card, problems.length > 0)} data-key={field.key}>
+    <li className={cardClass(styles.card, problems.length > 0)} data-key={field.key} data-active="true" data-dragging={dragging || undefined} data-drop={dropEdge}>
+      {dragHandle}
       <div className={styles.cardHead}>
         <span className={styles.ordinal}>{ordinal}</span>
 
         {/* No echo of the wording here. The label field is the line directly
             below this one, so a heading would be the same string printed twice
             a centimetre apart, which reads as a bug rather than as a title. */}
-        {field.required ? (
-          <span className={styles.req} aria-hidden="true">
-            *
-          </span>
-        ) : null}
+        <label className={styles.requiredControl}>
+          <span>Required</span>
+          <input
+            className={styles.requiredSwitch}
+            type="checkbox"
+            role="switch"
+            checked={field.required}
+            disabled={disabled}
+            aria-describedby={`${field.key}-required-help`}
+            onChange={event => onChange({ required: event.target.checked })}
+          />
+        </label>
+        <span id={`${field.key}-required-help`} className={styles.dragInstructions}>People must answer this question before submitting.</span>
 
         <span className={styles.spacer} />
 
@@ -146,10 +209,6 @@ export function Question({
         </Select>
 
         <div className={styles.tools}>
-          {/* Up and down rather than dragging. Dragging needs a library, and
-              these lists are twelve questions long — two buttons are faster to
-              aim at than a drop target and, unlike a drop target, they work
-              from a keyboard on a screen somebody sits at for hours. */}
           <button
             type="button"
             className={styles.iconBtn}
@@ -198,8 +257,9 @@ export function Question({
               words long, and an agreement that cannot be read in the box it
               is edited in is one nobody checks before publishing it. */}
           <textarea
+            ref={wording}
             id={`${field.key}-label`}
-            rows={2}
+            rows={1}
             className={styles.label}
             value={field.label}
             disabled={disabled}
@@ -261,7 +321,7 @@ export function Question({
                   disabled={disabled}
                   onChange={(event) => setOption(at, { label: event.target.value })}
                 />
-                <code className={styles.optionValue}>{option.value}</code>
+                <code className={styles.optionValue} title={option.value}>{option.value}</code>
 
                 <button
                   type="button"
@@ -319,18 +379,6 @@ export function Question({
         </div>
       ) : null}
 
-      <div className={styles.foot}>
-        <label className={styles.check}>
-          <input
-            type="checkbox"
-            checked={field.required}
-            disabled={disabled}
-            onChange={(event) => onChange({ required: event.target.checked })}
-          />
-          Required
-        </label>
-      </div>
-
       <Problems problems={problems} />
     </li>
   );
@@ -353,8 +401,13 @@ function PageBreak({
   field,
   index,
   count,
+  pageNumber,
+  pageCount,
   problems,
   disabled,
+  dragHandle,
+  dragging,
+  dropEdge,
   onChange,
   onMove,
   onRemove,
@@ -362,85 +415,85 @@ function PageBreak({
   field: FormField;
   index: number;
   count: number;
+  pageNumber: number;
+  pageCount: number;
   problems: string[];
   disabled: boolean;
+  dragHandle: ReactNode;
+  dragging: boolean;
+  dropEdge?: "before" | "after";
   onChange: (changes: Partial<FormField>) => void;
   onMove: (delta: number) => void;
   onRemove: () => void;
 }) {
   return (
-    <li className={cardClass(styles.break, problems.length > 0)} data-key={field.key}>
-      <div className={styles.cardHead}>
-        <span className={styles.breakIcon}>
+    <li className={cardClass(styles.break, problems.length > 0)} data-key={field.key} data-dragging={dragging || undefined} data-drop={dropEdge}>
+      <div className={styles.breakHead}>
+        <span className={styles.breakBadge}>
           <PageBreakIcon />
+          Page {pageNumber} <span>of {pageCount}</span>
         </span>
-        <span className="pill lapsed">Page break</span>
-
-        <span className={styles.spacer} />
-
-        <div className={styles.tools}>
-          <button
-            type="button"
-            className={styles.iconBtn}
-            aria-label="Move up"
-            disabled={disabled || index === 0}
-            onClick={() => onMove(-1)}
-          >
-            <ArrowUp />
-          </button>
-          <button
-            type="button"
-            className={styles.iconBtn}
-            aria-label="Move down"
-            disabled={disabled || index === count - 1}
-            onClick={() => onMove(1)}
-          >
-            <ArrowDown />
-          </button>
-
-          {/* No duplicate. A copy of a page break is an empty page immediately
-              after this one, which is never what somebody meant to press. */}
-          <button
-            type="button"
-            className={`${styles.iconBtn} ${styles.iconDanger}`}
-            aria-label="Delete page break"
-            disabled={disabled}
-            onClick={onRemove}
-          >
-            <Trash />
-          </button>
-        </div>
+        {dragHandle}
       </div>
-
-      <div className={styles.fields}>
-        <div className={styles.field}>
-          <label htmlFor={`${field.key}-label`}>Page heading</label>
-          <input
+      <div className={styles.breakBody}>
+        <div className={styles.breakTitleRow}>
+          <label className={styles.dragInstructions} htmlFor={`${field.key}-label`}>Page heading</label>
+          <textarea
+            className={styles.breakTitle}
             id={`${field.key}-label`}
+            rows={1}
             value={field.label}
             disabled={disabled}
-            placeholder="What this page covers"
+            placeholder="Untitled page"
             onChange={(event) => onChange({ label: event.target.value })}
           />
-        </div>
+          <div className={styles.tools}>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              aria-label="Move up"
+              disabled={disabled || index === 0}
+              onClick={() => onMove(-1)}
+            >
+              <ArrowUp />
+            </button>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              aria-label="Move down"
+              disabled={disabled || index === count - 1}
+              onClick={() => onMove(1)}
+            >
+              <ArrowDown />
+            </button>
 
-        <div className={styles.field}>
-          <label htmlFor={`${field.key}-help`}>Description</label>
-          <input
-            id={`${field.key}-help`}
-            value={field.help ?? ""}
-            disabled={disabled}
-            placeholder="Optional. Shown under the heading."
-            onChange={(event) =>
-              onChange({ help: event.target.value === "" ? null : event.target.value })
-            }
-          />
+            {/* No duplicate. A copy of a page break is an empty page immediately
+                after this one, which is never what somebody meant to press. */}
+            <button
+              type="button"
+              className={`${styles.iconBtn} ${styles.iconDanger}`}
+              aria-label="Delete page break"
+              disabled={disabled}
+              onClick={onRemove}
+            >
+              <Trash />
+            </button>
+          </div>
         </div>
+        <label className={styles.dragInstructions} htmlFor={`${field.key}-help`}>Description</label>
+        <textarea
+          className={styles.breakDescription}
+          id={`${field.key}-help`}
+          rows={1}
+          value={field.help ?? ""}
+          disabled={disabled}
+          placeholder="Add a description (optional)"
+          onChange={(event) =>
+            onChange({ help: event.target.value === "" ? null : event.target.value })
+          }
+        />
+        <Problems problems={problems} />
       </div>
-
-      <p className={styles.breakNote}>Everything below this is on a new page.</p>
-
-      <Problems problems={problems} />
     </li>
   );
 }

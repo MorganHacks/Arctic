@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import styles from "./applicants.module.css";
-import { StatusPill, stamp } from "./status";
+import { Attachment01Icon } from "@hugeicons/core-free-icons";
+import { Avatar } from "@/components/ui/avatar";
+import { Icon } from "@/components/ui/icon";
+import styles from "./applicants-list.module.css";
+import { StatusPill } from "./status";
 import type { ApplicantRow, PageResult } from "./types";
 
 /** How many placeholder rows stand in for a page on its way. */
@@ -27,9 +30,11 @@ export function ApplicantsTable({
   initialItems,
   initialCursor,
   loadMore,
+  total,
 }: {
   initialItems: ApplicantRow[];
   initialCursor: string | null;
+  total: number | null;
 
   /** Bound to the current filter on the server. Returns the next page. */
   loadMore: (cursor: string) => Promise<PageResult>;
@@ -47,7 +52,14 @@ export function ApplicantsTable({
     setLoading(true);
     setFailed(null);
 
-    const result = await loadMore(cursor);
+    let result: PageResult;
+    try {
+      result = await loadMore(cursor);
+    } catch {
+      setFailed("Could not load more applicants. Please try again.");
+      setLoading(false);
+      return;
+    }
 
     if (!result.ok) {
       // The cursor is kept. A failed page is a page to try again, not the end
@@ -70,21 +82,24 @@ export function ApplicantsTable({
   }
 
   return (
-    <>
-      <div className={styles.scroll}>
-        <table className={styles.table}>
+    <div className={styles.tableFrame}>
+      <div className={styles.scroll} role="region" aria-label="Applicants table" tabIndex={0}>
+        <table className={styles.table} aria-label="Applicants">
+          <colgroup>
+            <col className={styles.personColumn} />
+            <col className={styles.schoolColumn} />
+            <col className={styles.statusColumn} />
+            <col className={styles.dateColumn} />
+            <col className={styles.resumeColumn} />
+          </colgroup>
           <thead>
             <tr>
               <th className={styles.who} scope="col">
-                Name
+                Applicant
               </th>
-              <th scope="col">Email</th>
               <th scope="col">School</th>
               <th scope="col">Status</th>
-              {/* Said in the heading rather than converted per row. An
-                  organizer comparing two applications needs them on one clock
-                  more than they need their own. */}
-              <th scope="col">Submitted (UTC)</th>
+              <th scope="col">Submitted</th>
               <th scope="col">Resume</th>
             </tr>
           </thead>
@@ -97,31 +112,29 @@ export function ApplicantsTable({
                       applicant is what this table is for, and a row only a
                       mouse can open is a table half the organizers cannot
                       use. */}
-                  <Link href={`/applicants/${item.id}`} className={styles.open}>
-                    {name(item)}
+                  <Link href={`/applicants/${item.id}`} className={styles.open} aria-label={`View application from ${name(item)}`}>
+                    <Avatar name={name(item)} email={item.email} appearance="soft" className={styles.avatar} />
+                    <span className={styles.personText}>
+                      <span className={styles.personName} title={name(item)}>{name(item)}</span>
+                      <span className={styles.email} title={item.email}>{item.email}</span>
+                    </span>
                   </Link>
                 </td>
 
-                <td className={styles.email} title={item.email}>
-                  {item.email}
-                </td>
-
-                <td className={styles.school} title={item.school ?? undefined}>
+                <td className={styles.school}>
                   {item.school ?? <span className={styles.blank}>—</span>}
                 </td>
 
                 <td>
-                  <StatusPill status={item.status} />
+                  <StatusPill status={item.status} className={styles.status} />
                 </td>
 
                 <td className={styles.stamp}>
-                  {stamp(item.submittedAt) ?? (
-                    <span className={styles.blank}>not submitted</span>
-                  )}
+                  <SubmissionDate value={item.submittedAt} />
                 </td>
 
                 <td>
-                  {item.hasResume ? "Yes" : <span className={styles.blank}>—</span>}
+                  {item.hasResume ? <span className={styles.attachment}><Icon icon={Attachment01Icon} size={14} />Attached</span> : <span className={styles.blank}>—</span>}
                 </td>
               </tr>
             ))}
@@ -152,9 +165,6 @@ export function ApplicantsTable({
                     <td>
                       <span />
                     </td>
-                    <td>
-                      <span />
-                    </td>
                   </tr>
                 ))
               : null}
@@ -164,18 +174,27 @@ export function ApplicantsTable({
 
       <div className={styles.foot}>
         <div className={styles.loaded}>
-          <span className={styles.note}>{items.length} loaded</span>
-          {failed ? <span className={styles.failed}>{failed}</span> : null}
+          <span className={styles.note} role="status">Showing <strong>{items.length.toLocaleString("en-US")}</strong>{total !== null ? ` of ${Math.max(total, items.length).toLocaleString("en-US")}` : ""} applicants</span>
+          {failed ? <span className={styles.failed} role="alert">{failed}</span> : null}
         </div>
 
         {cursor !== null ? (
-          <button type="button" onClick={more} disabled={loading}>
+          <button type="button" className={styles.more} onClick={more} disabled={loading}>
             {loading ? "Loading…" : "Load more"}
           </button>
-        ) : null}
+        ) : <span className={styles.note}>All results shown</span>}
       </div>
-    </>
+    </div>
   );
+}
+
+const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const timeFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC", timeZoneName: "short" });
+
+function SubmissionDate({ value }: { value: string | null }) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return <span className={styles.blank}>Not submitted</span>;
+  return <time dateTime={value!}><span>{dateFormat.format(date)}</span><span>{timeFormat.format(date)}</span></time>;
 }
 
 /**

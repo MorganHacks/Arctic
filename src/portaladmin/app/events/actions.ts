@@ -1,5 +1,6 @@
 "use server";
 
+import type { AnnouncementContent } from "../../../../libs/ui/announcements";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eventsFetch } from "./api";
@@ -185,9 +186,11 @@ function idOf(body: unknown): string | null {
 export async function postNotice(
   eventId: string,
   body: string,
+  content: AnnouncementContent | null = null,
+  publishAt: string | null = null,
 ): Promise<WriteResult> {
   const { postAnnouncement } = await import("./announcements");
-  const result = await postAnnouncement(eventId, body);
+  const result = await postAnnouncement(eventId, body, content, publishAt);
 
   if (result.ok) {
     revalidatePath(`/events/${eventId}`);

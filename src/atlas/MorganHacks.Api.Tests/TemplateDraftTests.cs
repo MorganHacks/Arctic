@@ -170,6 +170,55 @@ public class TemplateDraftTests(ApplicationsDatabase db) : IClassFixture<Applica
         (await client.GetFromJsonAsync<JsonElement>($"/admin/templates?includeDrafts={includeDrafts.ToString().ToLowerInvariant()}&includePreviews={includePreviews.ToString().ToLowerInvariant()}"))
             .GetProperty("templates").EnumerateArray().ToArray();
 
+    [Fact]
+    public async Task Only_the_author_can_remove_an_unpublished_draft()
+    {
+        using var editor = await Editor();
+        using var another = await Editor();
+        var key = $"draft-{Guid.NewGuid():N}";
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsJsonAsync("/admin/templates/settings", Draft(key))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await another.DeleteAsync($"/admin/templates/{key}?version=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await editor.GetAsync($"/admin/templates/{key}?draft=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await editor.DeleteAsync($"/admin/templates/{key}?version=0")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await editor.GetAsync($"/admin/templates/{key}?draft=true")).StatusCode);
+        Assert.DoesNotContain(await Listed(editor, true), row => row.GetProperty("key").GetString() == key);
+    }
+
+    [Fact]
+    public async Task Removing_a_published_template_clears_all_authors_drafts_and_rejects_autosaves()
+    {
+        using var editor = await Editor();
+        using var another = await Editor();
+        var key = $"draft-{Guid.NewGuid():N}";
+        Assert.Equal(HttpStatusCode.Created, (await editor.PostAsJsonAsync("/admin/templates", Draft(key, "Original body"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsJsonAsync("/admin/templates/settings", Draft(key))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await another.PostAsJsonAsync("/admin/templates/settings", Draft(key))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await editor.DeleteAsync($"/admin/templates/{key}?version=1")).StatusCode);
+        foreach (var client in new[] { editor, another })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/admin/templates/{key}?draft=true")).StatusCode);
+            Assert.DoesNotContain(await Listed(client, true), row => row.GetProperty("key").GetString() == key);
+            Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/admin/templates/settings", Draft(key))).StatusCode);
+        }
+        await using var count = db.DataSource.CreateCommand("SELECT count(*) FROM notify.template_working_drafts WHERE key = @key");
+        count.Parameters.AddWithValue("key", key);
+        Assert.Equal(0L, await count.ExecuteScalarAsync());
+    }
+
+    [Fact]
+    public async Task Gallery_uses_the_live_version_for_removal_even_with_an_older_working_draft()
+    {
+        using var editor = await Editor();
+        using var another = await Editor();
+        var key = $"draft-{Guid.NewGuid():N}";
+        Assert.Equal(HttpStatusCode.Created, (await editor.PostAsJsonAsync("/admin/templates", Draft(key, "Original body"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await editor.PostAsJsonAsync("/admin/templates/settings", Draft(key))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await another.PutAsJsonAsync($"/admin/templates/{key}", Draft(key, "Newer body"))).StatusCode);
+        var listed = Assert.Single(await Listed(editor, true), row => row.GetProperty("key").GetString() == key);
+        Assert.Equal(2, listed.GetProperty("version").GetInt32());
+        Assert.Equal(HttpStatusCode.NoContent, (await editor.DeleteAsync($"/admin/templates/{key}?version=2")).StatusCode);
+    }
+
     private async Task<HttpClient> Editor(bool grant = true)
     {
         var id = await db.AddPersonAsync($"editor-{Guid.NewGuid():N}@example.invalid");

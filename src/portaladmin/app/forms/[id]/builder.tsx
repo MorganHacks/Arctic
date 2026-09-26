@@ -6,38 +6,42 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from "react";
-import type { FieldType, FormField, FormProblem, VersionRow } from "@/lib/api";
-import { publishForm, saveDraft } from "../actions";
+import type { DraftView, FieldType, FormField, FormProblem, FormSummary, VersionRow } from "@/lib/api";
+import { Cancel01Icon, CheckmarkCircle02Icon, CollapseIcon, DragDropVerticalIcon, FullScreenIcon, Redo03Icon, Undo03Icon, ViewIcon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
+import { publishForm } from "../actions";
 import { Audience } from "./audience";
 import styles from "./builder.module.css";
-import { TYPES, blankField, blankSection, copyOf } from "./fields";
-import { PageBreakIcon, Publish, Save, TypeIcon, Warning } from "./icons";
-import { Preview } from "./preview";
+import { blankField, blankSection, copyOf } from "./fields";
+import { FormHeader } from "./form-header";
+import { Save, Warning } from "./icons";
+import { Preview, PreviewActions } from "./preview";
 import { Question } from "./question";
 import { Schedule } from "./schedule";
 import { Unpublish } from "./unpublish";
-
-/** How long to wait after the last keystroke before writing. */
-const DEBOUNCE_MS = 700;
-
-
-/**
- * What the bar says about the work.
- *
- * `dirty` exists because of the debounce. Without it the bar reads "Saved" for
- * the seven hundred milliseconds between a keystroke and the write, which is
- * exactly the window in which somebody closing the tab would lose what they
- * typed — and the screen would have told them it was safe.
- */
-type SaveStatus = "clean" | "dirty" | "saving" | "saved" | "failed";
+import { ThemePicker } from "./theme-picker";
+import { QuestionToolbar } from "./question-toolbar";
+import { VersionHistory } from "./version-history";
+import { PublishControl } from "./publish-control";
+import { MlhSettings } from "./mlh-settings";
+import { useQuestionDrag } from "./use-question-drag";
+import { reorderFields } from "./reorder-fields";
+import { createEditorHistory, editorHistory, type EditorDraft } from "./editor-history";
+import { useFormAutosave } from "./use-form-autosave";
+import type { SaveStatus } from "./draft-autosave";
+import { formThemeStyle, resolveFormTheme, type FormTheme } from "../../../../../libs/ui/form-theme";
 
 export function Builder({
-  formName,
-  formId,
-  formKind,
+  ownerId,
+  form,
+  draftVersion,
+  responseCount,
+  mlhSeason,
+  initialTheme,
   initialFields,
   statuses,
   requiresSignIn,
@@ -47,11 +51,12 @@ export function Builder({
   versions,
   canManage,
 }: {
-  formName: string;
-  formId: string;
-
-  /** Which kind of form this is, which decides whether it can have an audience. */
-  formKind: string;
+  ownerId: string;
+  form: FormSummary;
+  draftVersion: number;
+  responseCount: number;
+  mlhSeason: number | null;
+  initialTheme?: FormTheme;
   initialFields: FormField[];
 
   /** Every application status, for the audience panel to offer. */
@@ -62,21 +67,43 @@ export function Builder({
   /** When it stops accepting answers, as an instant, or null for no deadline. */
   closesAt: string | null;
 
-  /** Whether there is a live version at all, which is what unpublishing needs. */
-  published: boolean;
+  published: DraftView["published"];
   versions: VersionRow[];
   canManage: boolean;
 }) {
   const router = useRouter();
+  const { id: formId, name: formName, kind: formKind } = form;
 
-  const [fields, setFields] = useState<FormField[]>(initialFields);
-  const [status, setStatus] = useState<SaveStatus>("clean");
+  const [history, dispatch] = useReducer(editorHistory, { fields: initialFields, theme: resolveFormTheme(initialTheme) }, createEditorHistory);
+  const { fields, theme } = history.present;
   const [problems, setProblems] = useState<FormProblem[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ title: string; detail: string } | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+  const [previewOnly, setPreviewOnly] = useState(false);
+  const [editorExpanded, setEditorExpanded] = useState(false);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const canvas = useRef<HTMLDivElement>(null);
+  const editorScroll = useRef(0);
+  const addedField = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    if (canvas.current) canvas.current.scrollTop = previewOnly ? 0 : editorScroll.current;
+  }, [previewOnly]);
 
   /** The list of question cards, for measuring one against its next position. */
   const list = useRef<HTMLOListElement>(null);
+
+  useLayoutEffect(() => {
+    const key = addedField.current;
+    if (!key) return;
+    const card = Array.from(list.current?.children ?? []).find(element => element instanceof HTMLElement && element.dataset.key === key);
+    if (!(card instanceof HTMLElement)) return;
+    addedField.current = null;
+    card.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    card.querySelector<HTMLElement>('textarea, input:not([type="checkbox"])')?.focus({ preventScroll: true });
+  }, [fields]);
 
   /**
    * Where each card was before the reorder that is about to be rendered.
@@ -100,73 +127,22 @@ export function Builder({
    */
   const pressed = useRef<HTMLElement | null>(null);
 
-  /**
-   * Counts edits rather than tracking a boolean.
-   *
-   * The effect below has to fire on every change and not on the first render —
-   * mounting is not an edit, and saving on mount would write the draft back
-   * unchanged every time anybody opened the page.
-   */
-  const [edits, setEdits] = useState(0);
+  const restoreDraft = useCallback((draft: EditorDraft) => dispatch({ type: "restore", draft }), []);
+  const autosave = useFormAutosave({
+    ownerId, formId, version: draftVersion, draft: history.present, revision: history.revision,
+    enabled: canManage, onRestore: restoreDraft,
+  });
+  const { status } = autosave;
+  const canEdit = canManage && !autosave.conflict;
 
-  /**
-   * The save this component is waiting on.
-   *
-   * Debouncing makes overlapping saves rare rather than impossible: a slow
-   * write and a fast one started after it can land out of order, and the older
-   * answer would then overwrite the newer one's problems on screen. Only the
-   * newest attempt is allowed to speak.
-   */
-  const attempt = useRef(0);
-
-  /**
-   * The edit number already on disk.
-   *
-   * Saving by hand and publishing both write immediately, which leaves a
-   * debounce timer already running with nothing left to say. Without this it
-   * fires anyway and writes the same questions a second time.
-   */
-  const written = useRef(0);
-
-  const write = useCallback(
-    async (next: FormField[]) => {
-      const mine = (attempt.current += 1);
-      written.current = edits;
-      setStatus("saving");
-
-      const result = await saveDraft(formId, next);
-
-      // A reply from a save that has already been superseded says nothing
-      // useful about what is on screen now.
-      if (mine !== attempt.current) {
-        return result;
-      }
-
-      setStatus(result.ok ? "saved" : "failed");
-      setProblems(result.problems);
-      setNotice(result.error ?? null);
-      return result;
-    },
-    [formId, edits],
-  );
+  useEffect(() => { setNotice(null); }, [history.revision]);
 
   useEffect(() => {
-    if (edits === 0 || !canManage) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      // Read at the moment it fires rather than when it was set, because
-      // what has been written may have changed in between.
-      if (written.current === edits) {
-        return;
-      }
-
-      void write(fields);
-    }, DEBOUNCE_MS);
-
-    return () => clearTimeout(timer);
-  }, [edits, fields, canManage, write]);
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+  useEffect(() => { setProblems(autosave.result.problems); }, [autosave.result]);
 
   /*
    * The card travels to its new place instead of appearing in it.
@@ -237,20 +213,44 @@ export function Builder({
 
   /** Every mutation goes through here, so nothing can change without saving. */
   const change = useCallback((next: (current: FormField[]) => FormField[]) => {
-    setFields(next);
-    setEdits((n) => n + 1);
-    setStatus("dirty");
-    setNotice(null);
+    dispatch({ type: "fields", update: next });
   }, []);
+
+  const changeTheme = (next: FormTheme) => {
+    if (JSON.stringify(next) === JSON.stringify(theme)) return;
+    dispatch({ type: "theme", theme: next });
+  };
+
+  const restore = useCallback((type: "undo" | "redo") => {
+    dispatch({ type });
+    setProblems([]);
+  }, []);
+
+  useEffect(() => {
+    if (!canEdit || publishing || previewOnly) return;
+    function keyboard(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const key = event.key.toLowerCase();
+      const redo = key === "y" || key === "z" && event.shiftKey;
+      if (key !== "z" && key !== "y") return;
+      if (redo ? !history.future.length : !history.past.length) return;
+      event.preventDefault();
+      restore(redo ? "redo" : "undo");
+    }
+    window.addEventListener("keydown", keyboard);
+    return () => window.removeEventListener("keydown", keyboard);
+  }, [canEdit, publishing, previewOnly, history.future.length, history.past.length, restore]);
 
   const patch = (index: number, changes: Partial<FormField>) =>
     change((current) =>
       current.map((field, i) => (i === index ? { ...field, ...changes } : field)),
     );
 
-  const move = (index: number, delta: number) => {
-    const to = index + delta;
-    if (to < 0 || to >= fields.length) {
+  const reorder = (key: string, to: number) => {
+    const from = fields.findIndex(field => field.key === key);
+    if (from < 0 || from === to || to < 0 || to >= fields.length) {
       return;
     }
 
@@ -268,43 +268,56 @@ export function Builder({
     pressed.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
-    change((current) => {
-      const next = [...current];
-      [next[index], next[to]] = [next[to], next[index]];
-      return next;
-    });
+    change(current => reorderFields(current, key, to));
   };
+
+  const move = (index: number, delta: number) => reorder(fields[index].key, index + delta);
+  const { drag, announcement, instructionId, handleProps } = useQuestionDrag({
+    fields, list, canvas, disabled: !canEdit || publishing || previewOnly, onReorder: reorder,
+  });
 
   const remove = (index: number) =>
     change((current) => current.filter((_, i) => i !== index));
 
   // Straight after the one it came from, which is where somebody making a
   // third variant of the same question is already looking.
-  const duplicate = (index: number) =>
+  const duplicate = (index: number) => {
+    const copy = copyOf(fields[index]);
+    setActiveKey(copy.key);
     change((current) => [
       ...current.slice(0, index + 1),
-      copyOf(current[index]),
+      copy,
       ...current.slice(index + 1),
     ]);
+  };
 
-  const add = (type: FieldType) =>
-    change((current) => [...current, blankField(type)]);
+  const add = (type: FieldType) => {
+    const field = blankField(type);
+    addedField.current = field.key;
+    setActiveKey(field.key);
+    change((current) => [...current, field]);
+  };
 
   // Appended like a question, because it is a field in the same array and
   // moves with the same two buttons. Everything after it is the next page, so
   // adding one at the bottom and moving it up is how a form gets split.
-  const addSection = () => change((current) => [...current, blankSection()]);
+  const addSection = () => {
+    const field = blankSection();
+    addedField.current = field.key;
+    change(current => [...current, field]);
+  };
 
   async function publish() {
     setPublishing(true);
     setNotice(null);
+    setToast(null);
 
     try {
       // The debounce means what is on screen may not be what is on disk, and
       // publishing what is on disk would silently drop the last few seconds of
       // typing into a version several hundred people then answer. Written
       // first, deliberately, even though it usually changes nothing.
-      const saved = await write(fields);
+      const saved = await autosave.save();
       if (!saved.ok) {
         return;
       }
@@ -317,8 +330,7 @@ export function Builder({
         return;
       }
 
-      setNotice("Published. Applicants following the link see this now.");
-      setStatus("clean");
+      setToast({ title: "Form published", detail: "Your latest changes are live." });
 
       // Pulls the new version numbers and the new history down. The questions
       // do not change — the next draft is seeded from what was just published
@@ -356,81 +368,67 @@ export function Builder({
   // breaks live in the same array, so numbering by position would leave gaps
   // that read as a question having gone missing.
   const ordinals: number[] = [];
+  const pageNumbers: number[] = [];
   let asked = 0;
-  for (const field of fields) {
+  let pageCount = 1;
+  for (const [index, field] of fields.entries()) {
     if (field.type !== "section") {
       asked += 1;
+    } else if (index > 0) {
+      pageCount += 1;
     }
 
     ordinals.push(asked);
+    pageNumbers.push(pageCount);
   }
 
-  return (
-    <>
-      <div className={styles.toolbar}>
-        <span className={status === "failed" ? styles.saveFailed : styles.save}>
-          <span className={`${styles.dot} ${DOT_CLASS(status)}`} />
-          {SAVE_LABELS[status]}
-        </span>
-        <span className={styles.spacer} />
-
-        {canManage ? (
-          <>
-            {/* The debounce covers the ordinary case; this covers the one it
-                cannot. A save that failed leaves nothing to press, and
-                "Not saved" with no way to try again is worse than no bar at
-                all. */}
-            <button
-              type="button"
-              className={styles.toolbarButton}
-              disabled={status === "saving" || publishing}
-              onClick={() => void write(fields)}
-            >
-              <Save />
-              Save now
-            </button>
-            <button
-              type="button"
-              className={`button primary ${styles.toolbarButton}`}
-              disabled={publishing}
-              onClick={publish}
-            >
-              <Publish />
-              {publishing ? "Publishing…" : "Publish"}
-            </button>
-          </>
-        ) : (
-          <span className="meta">
-            You do not have <code>forms.manage</code>, so this is read-only.
-          </span>
-        )}
+  const actions = (
+    <div className={styles.headerActions}>
+      <span className={status === "failed" ? styles.saveFailed : styles.save} role="status" title="Your draft saves automatically as you edit.">
+        <span className={`${styles.dot} ${DOT_CLASS(status)}`} />
+        {SAVE_LABELS[status]}
+      </span>
+      <div className={styles.quickActions}>
+        <ThemePicker theme={theme} onChange={changeTheme} disabled={!canEdit || publishing} />
+        <button type="button" className={styles.headerIcon} aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)"
+          disabled={!canEdit || !history.past.length || publishing} onClick={() => restore("undo")}><Icon icon={Undo03Icon} size={20} /></button>
+        <button type="button" className={styles.headerIcon} aria-label="Redo" title="Redo (⌘⇧Z / Ctrl+Shift+Z)"
+          disabled={!canEdit || !history.future.length || publishing} onClick={() => restore("redo")}><Icon icon={Redo03Icon} size={20} /></button>
       </div>
+      <button type="button" className={styles.toolbarButton} aria-pressed={previewOnly}
+        onClick={() => {
+          if (!previewOnly) editorScroll.current = canvas.current?.scrollTop ?? 0;
+          setPreviewOnly(current => !current);
+        }}>
+        {previewOnly ? <svg width="16" height="16" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false">
+          <g transform="translate(12 0) scale(-1 1)" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 4.50098H5.5C3.61438 4.50098 2.67157 4.50098 2.08578 5.08675C1.5 5.67255 1.5 6.61535 1.5 8.501V10.001" />
+            <path d="M6.5 2.00098L9 4.50098L6.5 7.00098" />
+          </g>
+        </svg> : <Icon icon={ViewIcon} size={16} />}
+        {previewOnly ? "Back to editor" : "Preview"}
+      </button>
 
-      {notice ? <p className="error">{notice}</p> : null}
+      {canManage ? (
+        <>
+          <button
+            type="button"
+            className={styles.toolbarButton}
+            disabled={!canEdit || status === "saving" || publishing}
+            onClick={() => void autosave.save()}
+          >
+            <Save />
+            Save now
+          </button>
 
-      {loose.length > 0 ? (
-        <div className={`panel ${styles.problemsPanel}`}>
-          <h2>Not ready to publish</h2>
-          <ul className={styles.problems}>
-            {loose.map((problem) => (
-              <li key={problem.message}>
-                <Warning />
-                {problem.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {/*
-       * Who the form is for, before the questions rather than beside them.
-       *
-       * This band is the settings a form has that are not questions, and it is
-       * above the editor because that is the order the decisions happen in.
-       * A grid rather than a row so it collapses to one column on a narrow
-       * screen without anything being told how many neighbours it has.
-       */}
-      <div className={styles.settings}>
+        </>
+      ) : (
+        <span className="meta">
+          You do not have <code>forms.manage</code>, so this is read-only.
+        </span>
+      )}
+      <PublishControl published={!!published} publishing={publishing} canManage={canEdit} onPublish={publish}
+        onUnpublish={() => setConfirmUnpublish(true)}>
         <Audience
           formId={formId}
           kind={formKind}
@@ -439,146 +437,144 @@ export function Builder({
           initialStatuses={eligibleStatuses}
           canManage={canManage}
         />
-
         <Schedule
           formId={formId}
           closesAt={closesAt}
           canManage={canManage}
           onSaved={() => router.refresh()}
         />
-      </div>
+        <MlhSettings enabled={theme.showMlhBadge} season={mlhSeason} eventId={form.eventId}
+          disabled={!canEdit || publishing} onChange={showMlhBadge => changeTheme({ ...theme, showMlhBadge })} />
+      </PublishControl>
+    </div>
+  );
 
-      <div className={styles.pane}>
-        <div>
-          {/* On an application form only, because a survey starts empty and
-              there is nothing on it this describes. The questions on a new one
-              look official enough that somebody would otherwise leave a
-              question they do not want, so the point of the line is that they
-              do not have to. */}
-          {formKind === "application" ? (
-            <p className={styles.startingNote}>
-              An application form starts with a standard set of questions. Edit
-              or remove any of them.
-            </p>
-          ) : null}
-
-          <ol className={styles.list} ref={list}>
-            {fields.map((field, index) => (
-              <Question
-                key={field.key}
-                field={field}
-                index={index}
-                ordinal={ordinals[index]}
-                count={fields.length}
-                problems={byKey.get(field.key) ?? []}
-                disabled={!canManage}
-                onChange={(changes) => patch(index, changes)}
-                onMove={(delta) => move(index, delta)}
-                onDuplicate={() => duplicate(index)}
-                onRemove={() => remove(index)}
-              />
-            ))}
-          </ol>
-
-          {canManage ? (
-            <div className={styles.picker}>
-              {/*
-               * Every type on the screen at once rather than behind a menu.
-               *
-               * The eleven are the vocabulary of this editor and they fit, so a
-               * list that has to be opened to be read is a list nobody reads —
-               * somebody reaches for Short text forty times and never finds out
-               * Date is in there. It is also one press instead of two, which is
-               * the smaller of the two wins.
-               */}
-              <span className={styles.pickerHead} id="add-question">
-                Add a question
-              </span>
-
-              <div className={styles.pickerGrid} role="group" aria-labelledby="add-question">
-                {TYPES.map((type) => (
-                  <button
-                    key={type.value}
-                    type="button"
-                    className={styles.pickerBtn}
-                    onClick={() => add(type.value)}
-                  >
-                    <TypeIcon type={type.value} />
-                    {type.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Outside that grid rather than a twelfth button in it. A page
-                  break is not a kind of question, and putting it in that list
-                  is how somebody turns question nine into a divider by aiming
-                  badly — with the answers already given to it still filed
-                  under its key. */}
-              <button
-                type="button"
-                className={styles.pickerBreak}
-                onClick={addSection}
-              >
-                <PageBreakIcon size={16} />
-                Add page break
-              </button>
+  return (
+    <div className={styles.builder} data-preview={previewOnly} data-expanded={previewOnly || editorExpanded} data-editable={canManage}>
+      <FormHeader form={form} published={published} draftVersion={draftVersion} responseCount={responseCount} tab="questions"
+        actions={previewOnly ? <PreviewActions code={form.code} published={!!published} /> : actions}
+        collapsed={previewOnly || editorExpanded}
+        backAction={previewOnly ? <div className={styles.previewNavigation}>
+          <button type="button" className={styles.previewBack} aria-label="Back to editor" title="Back to editor" onClick={() => setPreviewOnly(false)}>
+            <Icon icon={Undo03Icon} size={19} strokeWidth={2} />
+          </button>
+          <span>Preview mode</span>
+        </div> : undefined} />
+      {drag ? <div className={styles.dragPreview} aria-hidden="true" style={{ left: drag.x, top: drag.y }}><Icon icon={DragDropVerticalIcon} size={18} /><span>{drag.label}</span></div> : null}
+      <div className={styles.canvas} ref={canvas} style={formThemeStyle(theme)}>
+        {!previewOnly ? <div className={styles.canvasHistory}>
+          <VersionHistory formId={formId} versions={versions} saveStatus={status} />
+          <button type="button" className={styles.headerIcon} aria-pressed={editorExpanded}
+            aria-label={editorExpanded ? "Collapse editor" : "Expand editor"} title={editorExpanded ? "Collapse editor" : "Expand editor"}
+            onClick={() => setEditorExpanded(current => !current)}>
+            <Icon icon={editorExpanded ? CollapseIcon : FullScreenIcon} size={18} />
+          </button>
+        </div> : null}
+        <div className={styles.canvasInner}>
+          {autosave.result.error || notice ? <p className="error" role="status">{autosave.result.error ?? notice}</p> : null}
+          {autosave.storageFailed && status !== "saved" ? <p className="error">Keep this page open until your changes are saved. Browser recovery is unavailable.</p> : null}
+          {autosave.conflict ? <div className={styles.recovery} role="status">
+            <p>A draft was recovered, but the saved form has changed. Choose which version to continue editing.</p>
+            <div>
+              <button type="button" className={styles.toolbarButton} onClick={() => autosave.resolveRecovery(true)}>Restore my changes</button>
+              <button type="button" className={styles.toolbarButton} onClick={() => autosave.resolveRecovery(false)}>Keep saved version</button>
             </div>
-          ) : null}
-        </div>
+          </div> : null}
 
-        <aside className={styles.side}>
-          <Preview fields={fields} formName={formName} />
-
-          {versions.length > 0 ? (
-            <section className={styles.history}>
-              <h2>History</h2>
-              <ul>
-                {versions.map((version) => (
-                  <li key={version.version}>
-                    <span>
-                      v{version.version}{" "}
-                      <span className="meta">{version.questions} questions</span>
-                    </span>
-                    <span className="meta">
-                      {version.status}
-                      {version.publishedAt
-                        ? ` ${version.publishedAt.slice(0, 10)}`
-                        : ""}
-                    </span>
+          {loose.length > 0 ? (
+            <div className={`panel ${styles.problemsPanel}`}>
+              <h2>Not ready to publish</h2>
+              <ul className={styles.problems}>
+                {loose.map((problem) => (
+                  <li key={problem.message}>
+                    <Warning />
+                    {problem.message}
                   </li>
                 ))}
               </ul>
-            </section>
+            </div>
           ) : null}
-        </aside>
-      </div>
 
-      {/*
-       * The one control here that cannot be taken back, at the bottom.
-       *
-       * Deliberately not in the band at the top with the other settings, and
-       * not in the toolbar beside Publish. A destructive button placed where
-       * the eye lands first is one that gets pressed by a hand aiming for
-       * something else, and Publish is pressed dozens of times an afternoon
-       * while this is pressed roughly never. The console puts its other
-       * irreversible control at the foot of its page for the same reason.
-       *
-       * Only when there is something to take down. On a form that has never
-       * been published it would be a red panel offering to undo nothing.
-       */}
-      {canManage && published ? (
-        <Unpublish
-          formId={formId}
-          formName={formName}
-          onDone={() => router.refresh()}
-        />
-      ) : null}
-    </>
+
+          <div className={styles.editorColumn} hidden={previewOnly}>
+            <div className={styles.editorHeading}>
+              <h2>Questions <span>{asked}</span></h2>
+            </div>
+            {/* On an application form only, because a survey starts empty and
+                there is nothing on it this describes. The questions on a new one
+                look official enough that somebody would otherwise leave a
+                question they do not want, so the point of the line is that they
+                do not have to. */}
+            {formKind === "application" ? (
+              <p className={styles.startingNote}>
+                An application form starts with a standard set of questions. Edit
+                or remove any of them.
+              </p>
+            ) : null}
+
+            <p id={instructionId} className={styles.dragInstructions}>Drag the handle to move a card. Use the up and down arrow keys to move it with the keyboard, or Home and End to move it to the start or end.</p>
+            <div className={styles.dragInstructions} role="status" aria-live="polite">{announcement}</div>
+            {theme.headerImage ? <img className={styles.editorHeaderImage} src={theme.headerImage} alt="Form header" /> : null}
+            <ol className={styles.list} ref={list} data-dragging={drag ? "true" : undefined}>
+              {fields.map((field, index) => (
+                <Question
+                  key={field.key}
+                  field={field}
+                  index={index}
+                  ordinal={ordinals[index]}
+                  pageNumber={pageNumbers[index]}
+                  pageCount={pageCount}
+                  count={fields.length}
+                  problems={byKey.get(field.key) ?? []}
+                  disabled={!canEdit || publishing}
+                  active={activeKey === field.key}
+                  dragging={drag?.key === field.key}
+                  dropEdge={drag?.overKey === field.key ? drag.edge : undefined}
+                  dragHandle={<button type="button" className={styles.dragHandle} {...handleProps(field, index)}><Icon icon={DragDropVerticalIcon} size={18} /></button>}
+                  onActivate={() => setActiveKey(field.key)}
+                  onChange={(changes) => patch(index, changes)}
+                  onMove={(delta) => move(index, delta)}
+                  onDuplicate={() => duplicate(index)}
+                  onRemove={() => remove(index)}
+                />
+              ))}
+            </ol>
+
+
+          </div>
+
+          {previewOnly ? <Preview fields={fields} formName={formName} headerImage={theme.headerImage} /> : null}
+
+
+          {!previewOnly && canManage && published ? (
+            <p className={styles.publishNote}>
+              Your form is live. Edits save to your draft until you publish changes from the menu above.
+              Unpublishing stops new responses and keeps existing answers.
+            </p>
+          ) : null}
+        </div>
+      </div>
+      {!previewOnly && canManage ? <QuestionToolbar onAdd={add} onAddSection={addSection} disabled={!canEdit || publishing} /> : null}
+      {confirmUnpublish && canManage && published ? <Unpublish formId={formId} formName={formName}
+        onClose={() => setConfirmUnpublish(false)} onDone={() => {
+          setConfirmUnpublish(false);
+          setToast({ title: "Form unpublished", detail: "Your existing responses are kept." });
+          router.refresh();
+        }} /> : null}
+      <div className={styles.toastRegion} role="status" aria-live="polite" aria-atomic="true">
+        {toast ? <div className={styles.publishToast}>
+          <Icon icon={CheckmarkCircle02Icon} size={21} className={styles.toastIcon} />
+          <div><strong>{toast.title}</strong><p>{toast.detail}</p></div>
+          <button type="button" aria-label="Dismiss notification" onClick={() => setToast(null)}>
+            <Icon icon={Cancel01Icon} size={15} />
+          </button>
+        </div> : null}
+      </div>
+    </div>
   );
 }
 
 const SAVE_LABELS: Record<SaveStatus, string> = {
-  clean: "Saved",
   dirty: "Unsaved changes",
   saving: "Saving…",
   saved: "Saved",
@@ -594,7 +590,6 @@ const SAVE_LABELS: Record<SaveStatus, string> = {
  */
 const DOT_CLASS = (status: SaveStatus): string =>
   ({
-    clean: styles.dotClean,
     dirty: styles.dotDirty,
     saving: styles.dotSaving,
     saved: styles.dotSaved,

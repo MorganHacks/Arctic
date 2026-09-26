@@ -17,7 +17,7 @@ import type {
  */
 
 export type ListRead =
-  | { ok: true; items: TemplateRow[]; mocked: boolean }
+  | { ok: true; items: TemplateRow[]; hiddenKeys: string[]; mocked: boolean }
   | { ok: false; status: number; error: string };
 
 export type OneRead =
@@ -113,7 +113,7 @@ export async function readTemplates(includeDrafts = false, includePreviews = fal
   }
 
   if (response.status === 404 && EXAMPLES) {
-    return { ok: true, items: exampleList(), mocked: true };
+    return { ok: true, items: exampleList(), hiddenKeys: [], mocked: true };
   }
 
   if (!response.ok) {
@@ -124,8 +124,8 @@ export async function readTemplates(includeDrafts = false, includePreviews = fal
     };
   }
 
-  const { templates } = (await response.json()) as { templates: TemplateRow[] };
-  return { ok: true, items: templates, mocked: false };
+  const { templates, hiddenKeys = [] } = (await response.json()) as { templates: TemplateRow[]; hiddenKeys?: string[] };
+  return { ok: true, items: templates, hiddenKeys, mocked: false };
 }
 
 /** One template, with its body and everything rendered from it. */
@@ -197,6 +197,40 @@ export async function discardSettingsDraft(key: string): Promise<{ ok: true } | 
     return response.ok ? { ok: true } : { ok: false, error: await said(response, why(response.status, "The draft could not be discarded.")) };
   } catch {
     return { ok: false, error: "The API could not be reached." };
+  }
+}
+
+export async function removeTemplate(key: string, version: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const response = await apiFetch(`/admin/templates/${encodeURIComponent(key)}?version=${version}`, { method: "DELETE" });
+    const fallback = response.status === 403
+      ? "You do not have permission to delete templates. Ask an admin."
+      : why(response.status, "The template could not be deleted. Try again.");
+    return response.ok ? { ok: true } : { ok: false, error: await said(response, fallback) };
+  } catch {
+    return { ok: false, error: "The API could not be reached. Try again." };
+  }
+}
+
+export async function saveTemplateVisibility(keys: string[], hidden: boolean): Promise<
+  { ok: true; hiddenKeys: string[] } | { ok: false; error: string }
+> {
+  try {
+    const response = await apiFetch("/admin/templates/preferences/visibility", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys, hidden }),
+    });
+    if (!response.ok) {
+      const fallback = response.status === 403
+        ? "You do not have permission to view templates. Ask an admin."
+        : why(response.status, "Your hidden templates could not be saved. Try again.");
+      return { ok: false, error: await said(response, fallback) };
+    }
+    const { hiddenKeys } = await response.json() as { hiddenKeys: string[] };
+    return { ok: true, hiddenKeys };
+  } catch {
+    return { ok: false, error: "The API could not be reached. Try again." };
   }
 }
 

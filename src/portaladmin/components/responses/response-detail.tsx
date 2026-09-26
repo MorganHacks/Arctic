@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
 import type { FormField } from "@/lib/api";
-import { AnswerBlock, fileSize, when } from "./answers";
+import { AnswerBlock, fileSize } from "./answers";
 import { askedAndRetired } from "./columns";
+import { ResponsePerson } from "./response-person";
+import { submittedAt } from "./respondent";
 import styles from "./responses.module.css";
 import type { ResponseItem } from "./types";
 
@@ -33,25 +37,20 @@ export function ResponseDetail({
   error: string | null;
   onClose: () => void;
 }) {
-  const panel = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDialogElement>(null);
 
-  // Escape closes it, and opening moves focus into it. Without the second one
-  // a keyboard reader who pressed the date button is still back in the table,
-  // tabbing through rows behind a panel they cannot see.
   useEffect(() => {
-    panel.current?.focus();
-
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
+    const dialog = panel.current;
+    const previous = document.activeElement;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
-
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
-  }, [onClose]);
+  }, []);
 
   const parts = item ? askedAndRetired(fields, item) : null;
+  const submitted = item ? submittedAt(item.submittedAt) : null;
 
   // A resume with no file question left to hang it under. The question was
   // deleted after somebody uploaded; the file is still theirs and still there.
@@ -59,36 +58,37 @@ export function ResponseDetail({
     item?.resume != null && !fields.some((field) => field.type === "file");
 
   return (
-    <>
-      <div className={styles.backdrop} onClick={onClose} />
-
-      <div
+      <dialog
         className={styles.panel}
-        role="dialog"
-        aria-modal="true"
         aria-label="Response"
-        tabIndex={-1}
         ref={panel}
+        onCancel={onClose}
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose();
+        }}
       >
         <div className={styles.panelHead}>
-          <div>
-            <h2>Response</h2>
-            {item ? (
-              <p className={styles.stamp}>
-                {when(item.submittedAt)} · v{item.formVersion}
-              </p>
-            ) : null}
-          </div>
-          <button type="button" onClick={onClose}>
-            Close
+          <h2>Response details</h2>
+          <button type="button" className={styles.iconButton} onClick={onClose} aria-label="Close response">
+            <Icon icon={Cancel01Icon} size={18} />
           </button>
         </div>
 
-        {loading ? <p className={styles.unanswered}>Loading…</p> : null}
+        <div className={styles.panelBody}>
+        {loading ? <div className={styles.loadingDetail} role="status" aria-label="Loading response"><span /><span /><span /></div> : null}
         {error ? <p className={styles.failed}>{error}</p> : null}
 
         {item && parts ? (
           <>
+            <div className={styles.detailPerson}>
+              <ResponsePerson item={item} fields={fields} />
+              <div className={styles.detailMeta}>
+                <time dateTime={item.submittedAt}>{submitted?.date} at {submitted?.time}</time>
+                <span aria-hidden="true">·</span><span>Version {item.formVersion}</span>
+              </div>
+            </div>
             {parts.asked.map((field) => (
               <div className={styles.qa} key={field.key}>
                 <p className={styles.question}>
@@ -134,8 +134,8 @@ export function ResponseDetail({
             ) : null}
           </>
         ) : null}
-      </div>
-    </>
+        </div>
+      </dialog>
   );
 }
 

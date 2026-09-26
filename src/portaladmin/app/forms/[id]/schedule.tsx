@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowDown01Icon, Calendar03Icon } from "@hugeicons/core-free-icons";
+import { Icon } from "@/components/ui/icon";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
+import { compact } from "@/components/events/zone";
 import { scheduleForm } from "../actions";
 import styles from "./builder.module.css";
-import { fromLocalInput, readable, toLocalInput } from "./when";
+import { fromLocalInput, toLocalInput } from "./when";
 
 /**
  * When the form stops accepting answers.
@@ -50,11 +54,6 @@ export function Schedule({
   const [notice, setNotice] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // What the typed value actually means, resolved through the event's zone.
-  // Echoed back below the field, which is the entire defence against somebody
-  // setting a deadline a day out and not finding out until it fires.
-  const resolved = readable(fromLocalInput(value));
-
   async function write(next: string | null) {
     setSaving(true);
     setNotice(null);
@@ -73,72 +72,69 @@ export function Schedule({
   }
 
   return (
-    <section className={`panel ${styles.settingsPanel}`}>
-      <h2>Deadline</h2>
+    <details className={styles.settingsPanel} data-setting="deadline">
+      <summary className={styles.settingsSummary}>
+        <span className={styles.settingsIcon}><Icon icon={Calendar03Icon} size={19} /></span>
+        <span className={styles.settingsCopy}><span>Deadline</span><strong>{compact(fromLocalInput(value)) || "No deadline"}</strong></span>
+        <Icon icon={ArrowDown01Icon} size={16} />
+      </summary>
+      <div className={styles.settingsBody}>
 
-      <div className="field">
-        <label htmlFor="closesAt">Closes</label>
-        <input
-          id="closesAt"
-          type="datetime-local"
-          value={value}
-          disabled={!canManage || saving}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setSaved(false);
-          }}
-        />
-        <p className="hint">Eastern time, the same zone applicants see.</p>
-      </div>
-
-      {/* The typed time read back as an instant, zone named. A field that only
-          ever shows what was typed into it cannot tell somebody they typed the
-          wrong day, and this is the field where that mistake is expensive. */}
-      {resolved ? (
-        <p className="meta">Closes {resolved}.</p>
-      ) : (
-        <p className="meta">
-          No deadline. The form stays open until somebody unpublishes it.
+        <div className={styles.deadlineField}>
+          <div className={styles.deadlineLabel}>
+            <label htmlFor="closesAt">Closing date & time</label>
+            <span id="deadline-zone">Eastern time</span>
+          </div>
+          <DateTimePicker
+            id="closesAt"
+            label="Closing date and time"
+            describedBy="deadline-zone"
+            value={value}
+            disabled={!canManage || saving}
+            onChange={(next) => {
+              setValue(next);
+              setSaved(false);
+            }}
+          />
+        </div>
+        <p className={styles.settingsHint}>
+          {value ? "New responses stop at the deadline. Existing answers are kept."
+            : "Accept responses until you unpublish or set a deadline."}
         </p>
-      )}
 
-      <p className="meta">
-        After it closes the link still opens and says the deadline has passed.
-        Answers already given are kept.
-      </p>
-
-      {canManage ? (
-        <div className={styles.settingsActions}>
-          <button
-            type="button"
-            className="button"
-            disabled={saving || value === ""}
-            onClick={() => void write(fromLocalInput(value))}
-          >
-            {saving ? "Saving…" : saved ? "Saved" : "Save"}
-          </button>
-
-          {/* Only when there is one to remove. A form with no deadline showing
-              a button that removes its deadline is a button that does nothing,
-              and a button that does nothing is one somebody presses to find
-              out. */}
-          {closesAt === null && value === "" ? null : (
+        {canManage ? (
+          <div className={styles.settingsActions}>
             <button
               type="button"
               className="button"
-              disabled={saving}
-              onClick={() => {
-                setValue("");
-                void write(null);
-              }}
+              disabled={saving || value === ""}
+              onClick={() => void write(fromLocalInput(value))}
             >
-              Remove deadline
+              {saving ? "Saving…" : saved ? "Saved" : "Save deadline"}
             </button>
-          )}
-        </div>
-      ) : null}
 
-      {notice ? <p className="error">{notice}</p> : null}
-    </section>
+            {/* Only when there is one to remove. A form with no deadline showing
+                a button that removes its deadline is a button that does nothing,
+                and a button that does nothing is one somebody presses to find
+                out. */}
+            {closesAt === null && value === "" ? null : (
+              <button
+                type="button"
+                className="button"
+                disabled={saving}
+                onClick={() => {
+                  setValue("");
+                  void write(null);
+                }}
+              >
+                Remove deadline
+              </button>
+            )}
+          </div>
+        ) : null}
+
+        {notice ? <p className="error">{notice}</p> : null}
+      </div>
+    </details>
   );
 }

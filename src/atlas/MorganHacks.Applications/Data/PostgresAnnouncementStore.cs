@@ -1,5 +1,7 @@
 using MorganHacks.Applications.Services;
 using Npgsql;
+using NpgsqlTypes;
+using System.Text.Json;
 
 namespace MorganHacks.Applications.Data;
 
@@ -28,7 +30,7 @@ public sealed class PostgresAnnouncementStore(NpgsqlDataSource dataSource) : IAn
     /// screen and not the other.
     /// </remarks>
     private const string Columns =
-        "id, event_id, body, posted_at, posted_by, retracted_at, retracted_by";
+        "id, event_id, body, posted_at, posted_by, retracted_at, retracted_by, content, publish_at";
 
     /// <summary>
     /// Newest first, with a tiebreak that never changes.
@@ -44,7 +46,8 @@ public sealed class PostgresAnnouncementStore(NpgsqlDataSource dataSource) : IAn
     private const string NewestFirst = "ORDER BY posted_at DESC, id DESC";
 
     public async Task<Announcement> PostAsync(
-        Guid eventId, string body, Guid postedBy, CancellationToken ct = default)
+        Guid eventId, string body, Guid postedBy, CancellationToken ct = default,
+        AnnouncementContent? content = null, DateTimeOffset? publishAt = null)
     {
         // posted_at is the column default rather than a value from here, so
         // the timestamp on the row is the database's clock. The API's would be
@@ -52,13 +55,18 @@ public sealed class PostgresAnnouncementStore(NpgsqlDataSource dataSource) : IAn
         // weekend this is used the order things were said in is the whole
         // meaning of the screen.
         await using var cmd = dataSource.CreateCommand($"""
-            INSERT INTO applications.announcements (event_id, body, posted_by)
-            VALUES (@eventId, @body, @postedBy)
+            INSERT INTO applications.announcements (event_id, body, posted_by, content, publish_at)
+            VALUES (@eventId, @body, @postedBy, @content, COALESCE(@publishAt, now()))
             RETURNING {Columns}
             """);
         cmd.Parameters.AddWithValue("eventId", eventId);
         cmd.Parameters.AddWithValue("body", body);
         cmd.Parameters.AddWithValue("postedBy", postedBy);
+        cmd.Parameters.AddWithValue("content", NpgsqlDbType.Jsonb,
+            content is null ? DBNull.Value : JsonSerializer.Serialize(content, AnnouncementContent.Json));
+
+        cmd.Parameters.AddWithValue("publishAt", NpgsqlDbType.TimestampTz,
+            publishAt is null ? DBNull.Value : publishAt.Value.ToUniversalTime());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         await reader.ReadAsync(ct);
@@ -136,5 +144,7 @@ public sealed class PostgresAnnouncementStore(NpgsqlDataSource dataSource) : IAn
         reader.GetFieldValue<DateTimeOffset>(3),
         reader.GetGuid(4),
         reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5),
-        reader.IsDBNull(6) ? null : reader.GetGuid(6));
+        reader.IsDBNull(6) ? null : reader.GetGuid(6),
+        reader.IsDBNull(7) ? null : JsonSerializer.Deserialize<AnnouncementContent>(reader.GetString(7), AnnouncementContent.Json),
+        reader.GetFieldValue<DateTimeOffset>(8));
 }

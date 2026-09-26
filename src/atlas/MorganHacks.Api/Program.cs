@@ -92,6 +92,7 @@ builder.Services.AddSingleton<UnsubscribeStore>();
 // rows every queued message points at.
 builder.Services.AddSingleton<TemplateCatalog>();
 builder.Services.AddSingleton<TemplateDraftStore>();
+builder.Services.AddSingleton<TemplateVisibilityStore>();
 builder.Services.AddSingleton<TemplateTestQueue>();
 
 // The broadcast side of the same schema. Separate from MessageQueue on
@@ -155,6 +156,8 @@ builder.Services.AddSingleton<ICheckInStore, PostgresCheckInStore>();
 // an event id the caller names, and everything on that one is scoped by the
 // session's person id and cannot be pointed anywhere.
 builder.Services.AddSingleton<IAnnouncementStore, PostgresAnnouncementStore>();
+builder.Services.AddSingleton<PostgresAnnouncementResponseStore>();
+builder.Services.AddSingleton<PostgresAnnouncementReactionStore>();
 
 // And the registration team's read side of the same table, plus notes.
 // Separate from the store above because that one owns the lifecycle: there is

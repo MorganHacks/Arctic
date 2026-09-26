@@ -1,68 +1,43 @@
+"use client";
+
 import Link from "next/link";
-import type { FormField } from "@/lib/api";
+import { ArrowRight01Icon, Link04Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { useCopy } from "@/components/formslist/share-link";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Icon } from "@/components/ui/icon";
 import styles from "./responses.module.css";
 
-/**
- * The state this screen is in for most of its life.
- *
- * Registration opens once. Every week before that, and every time somebody
- * opens a form they have just built, this is what they get — so it answers the
- * two questions a blank table leaves hanging: is this working, and what is it
- * going to show me.
- *
- * The publish state is the first, because "nothing has been submitted" and
- * "nobody can submit" look identical from here and only one of them is a
- * problem. The questions are the second: they are the columns this table will
- * have, which is both a preview of the screen and the last chance to notice a
- * question is missing while it is still possible to add one.
- */
-export function NoResponses({
-  formId,
-  publishedVersion,
-  fields,
-}: {
+export function NoResponses({ formId, code, published, closed }: {
   formId: string;
-  publishedVersion: number | null;
-  fields: FormField[];
+  code: string;
+  published: boolean;
+  closed: boolean;
 }) {
-  // Page breaks left out. This list is a preview of the columns this table will
-  // have, and a page heading is neither a column nor a question somebody can
-  // notice is missing.
-  const questions = fields.filter((field) => field.type !== "section");
+  const { state, copy } = useCopy(code);
+  const canShare = published && !closed;
 
   return (
-    <div className={styles.nothing}>
-      <h2>No responses yet</h2>
-
-      <p>
-        Nothing has been submitted to this form.{" "}
-        {publishedVersion === null
-          ? "It has not been published, so nobody can fill it in yet."
-          : `It is live as v${publishedVersion}. Answers appear here as they arrive, newest first.`}
-      </p>
-
-      <p>
-        <Link href={`/forms/${formId}`}>Edit the questions</Link>
-      </p>
-
-      {questions.length === 0 ? (
-        <p className={styles.note}>This form has no questions yet.</p>
-      ) : (
-        <>
-          <p className={styles.note}>Questions on this form</p>
-          <ul className={styles.waiting}>
-            {questions.map((field) => (
-              <li key={field.key}>
-                {field.label.trim() === "" ? (
-                  <code>{field.key}</code>
-                ) : (
-                  field.label
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
+    <section className={styles.nothing} aria-label="Form responses">
+      <EmptyState variant="data" size="page" title="No responses yet"
+        description={canShare
+          ? "Share your form to get things started. Responses will appear here as they come in."
+          : closed
+            ? "This form closed without any responses. Update the deadline to start accepting answers again."
+            : "Publish your form and share the link to start collecting responses."}
+        action={canShare ? (
+          <div className={styles.emptyActions}>
+            <button type="button" className={styles.secondaryButton} onClick={copy}>
+              <Icon icon={state === "copied" ? Tick02Icon : Link04Icon} size={17} />Copy form link
+            </button>
+            <span role="status" className={state === "failed" ? styles.failed : styles.note}>
+              {state === "copied" ? "Link copied" : state === "failed" ? "Could not copy the link. Try the link above." : null}
+            </span>
+          </div>
+        ) : (
+          <Link href={`/forms/${formId}`} className={styles.secondaryButton}>
+            {closed ? "Manage form" : "Go to editor"}<Icon icon={ArrowRight01Icon} size={16} />
+          </Link>
+        )} />
+    </section>
   );
 }

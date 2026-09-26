@@ -7,7 +7,6 @@ import {
 } from "@/lib/api";
 import { Shell } from "../../shell";
 import { Builder } from "./builder";
-import { FormHeader } from "./form-header";
 
 /**
  * The builder.
@@ -62,7 +61,7 @@ export default async function FormBuilder({
     );
   }
 
-  const { form, draft, published, statuses } =
+  const { form, draft, published, statuses, responseCount, mlhSeason } =
     (await draftResponse.json()) as DraftView;
 
   // History is nice to have rather than load-bearing: the builder works
@@ -75,23 +74,20 @@ export default async function FormBuilder({
 
   return (
     <Shell personId={person.personId}>
-      <FormHeader
-        form={form}
-        published={published}
-        draftVersion={draft.version}
-        tab="questions"
-      />
-
       <Builder
-        formName={form.name}
-        formId={form.id}
-        formKind={form.kind}
+        key={`${person.personId}:${form.id}`}
+        ownerId={person.personId}
+        form={form}
+        draftVersion={draft.version}
+        responseCount={responseCount}
+        mlhSeason={mlhSeason}
+        initialTheme={draft.theme}
         initialFields={draft.fields}
         statuses={statuses}
         requiresSignIn={form.requiresSignIn}
         eligibleStatuses={form.eligibleStatuses}
         closesAt={form.closesAt ?? null}
-        published={published !== null}
+        published={published}
         versions={versions}
         canManage={mine.has("forms.manage")}
       />

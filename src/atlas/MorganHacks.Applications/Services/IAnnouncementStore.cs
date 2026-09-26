@@ -24,7 +24,9 @@ public sealed record Announcement(
     DateTimeOffset PostedAt,
     Guid PostedBy,
     DateTimeOffset? RetractedAt,
-    Guid? RetractedBy);
+    Guid? RetractedBy,
+    AnnouncementContent? Content = null,
+    DateTimeOffset? PublishAt = null);
 
 /// <summary>
 /// Posting a notice, listing them, and taking one back down.
@@ -69,7 +71,8 @@ public interface IAnnouncementStore
     /// because the answer is a sentence about that event rather than a fault.
     /// </exception>
     Task<Announcement> PostAsync(
-        Guid eventId, string body, Guid postedBy, CancellationToken ct = default);
+        Guid eventId, string body, Guid postedBy, CancellationToken ct = default,
+        AnnouncementContent? content = null, DateTimeOffset? publishAt = null);
 
     /// <summary>
     /// Every announcement for an event, retracted ones included, newest first.

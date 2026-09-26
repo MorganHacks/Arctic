@@ -4,6 +4,7 @@ import { NavigationLink as Link } from "@/components/ui/navigation-link";
 import { useMemo, useRef, useState } from "react";
 import { ArrowLeft01Icon, ArrowRight01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Avatar } from "@/components/ui/avatar";
 import { displayName } from "@/lib/person-profile";
 import type { Listed } from "@/lib/api";
@@ -79,7 +80,9 @@ export function PeopleTable({ people }: { people: Listed[] }) {
         </div>
       </div>
 
-      <div className={styles.tableFrame}>
+      {shown.length === 0 ? <EmptyState variant="data" size="page"
+        title={people.length === 0 ? "No people yet" : "No members found"}
+        description={people.length === 0 ? "Organizers and hackers will appear here when they join." : "Try another name, email or team, or choose a different member type."} /> : <div className={styles.tableFrame}>
         <div ref={tableScroll} className={styles.tableScroll} role="region" aria-label="Members table" tabIndex={0}>
           <table id="people-table" className={styles.table} aria-label="People">
             <colgroup>
@@ -133,13 +136,6 @@ export function PeopleTable({ people }: { people: Listed[] }) {
                   </tr>
                 );
               })}
-              {shown.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className={styles.empty}>
-                    {people.length === 0 ? "No people yet." : "No members found."}
-                  </td>
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>
@@ -161,7 +157,7 @@ export function PeopleTable({ people }: { people: Listed[] }) {
             </div>
           </nav>
         ) : null}
-      </div>
+      </div>}
     </section>
   );
 }

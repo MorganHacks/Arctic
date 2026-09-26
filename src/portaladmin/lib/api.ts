@@ -213,6 +213,13 @@ export type FormRow = {
   published: boolean;
   publishedVersion: number | null;
   questions: number | null;
+  preview?: {
+    questions: number;
+    theme?: import("../../../libs/ui/form-theme").FormTheme;
+    fields: (Pick<FormField, "type" | "label" | "help" | "required"> & {
+      options: Pick<FieldOption, "label">[];
+    })[];
+  } | null;
 };
 
 export type FormsView = {
@@ -224,7 +231,9 @@ export type FormsView = {
 /** Everything the builder needs to draw itself, in one response. */
 export type DraftView = {
   form: FormSummary;
-  draft: { id: string; version: number; fields: FormField[] };
+  mlhSeason: number | null;
+  draft: { id: string; version: number; fields: FormField[]; theme?: import("../../../libs/ui/form-theme").FormTheme };
+  responseCount: number;
   published: { version: number; publishedAt: string | null } | null;
 
   /**
@@ -244,6 +253,8 @@ export type VersionRow = {
   questions: number;
   createdAt: string;
   publishedAt: string | null;
+  updatedAt?: string | null;
+  actor?: { id: string; fullName: string | null; email: string; avatarUrl: string | null } | null;
 };
 
 /**

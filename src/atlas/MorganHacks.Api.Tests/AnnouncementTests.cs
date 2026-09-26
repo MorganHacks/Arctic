@@ -67,6 +67,9 @@ public class AnnouncementTests(ApplicationsDatabase db)
             (HttpMethod.Post, $"/admin/events/{id}/announcements"),
             (HttpMethod.Post, $"/admin/announcements/{id}/retract"),
             (HttpMethod.Get, "/portal/announcements"),
+            (HttpMethod.Post, $"/portal/announcements/{id}/vote"),
+            (HttpMethod.Put, $"/portal/announcements/{id}/reaction"),
+            (HttpMethod.Delete, $"/portal/announcements/{id}/reaction"),
         ];
 
         foreach (var (method, path) in routes)
@@ -386,6 +389,388 @@ public class AnnouncementTests(ApplicationsDatabase db)
         Assert.Equal(
             (await ReadAsync(once))["retractedAt"]!.GetValue<DateTimeOffset>(),
             body["retractedAt"]!.GetValue<DateTimeOffset>());
+    }
+
+    [Theory]
+    [InlineData("image")]
+    [InlineData("video")]
+    [InlineData("poll")]
+    [InlineData("imagePoll")]
+    [InlineData("quiz")]
+    public async Task Rich_content_is_saved_and_returned_to_the_event(string kind)
+    {
+        var eventId = await db.AddEventAsync();
+        var applicant = await ApplicantAsync(eventId);
+        var content = RichContent(kind);
+        var posted = await Send(HttpMethod.Post, $"/admin/events/{eventId}/announcements",
+            await ManagerAsync(), new { body = "Announcement fixture", content });
+        Assert.Equal(HttpStatusCode.Created, posted.StatusCode);
+        var id = (await ReadAsync(posted))["id"]!.GetValue<Guid>();
+        var admin = Find(await ListAsync(eventId), id)!;
+        var portal = Find(await FeedAsync(applicant), id)!;
+        Assert.Equal(kind, admin["content"]!["kind"]!.GetValue<string>());
+        Assert.Equal(kind, portal["content"]!["kind"]!.GetValue<string>());
+        if (kind is "image" or "video")
+            Assert.Equal("https://example.com/media", portal["content"]!["media"]![0]!["url"]!.GetValue<string>());
+        if (kind == "imagePoll")
+            Assert.Equal("https://example.com/one.jpg", portal["content"]!["options"]![0]!["imageUrl"]!.GetValue<string>());
+        if (kind == "quiz")
+        {
+            Assert.Equal(1, admin["content"]!["correctOption"]!.GetValue<int>());
+            Assert.Null(portal["content"]!["correctOption"]);
+            Assert.Null(portal["content"]!["explanation"]);
+        }
+        Assert.Null(portal["content"]!["isQuestion"]);
+    }
+
+    [Theory]
+    [InlineData("{\"kind\":\"image\",\"media\":[{\"url\":\"javascript:alert(1)\"}]}")]
+    [InlineData("{\"kind\":\"video\",\"media\":[{\"url\":\"http://example.com/video.mp4\"}]}")]
+    [InlineData("{\"kind\":\"poll\",\"options\":[{\"text\":\"Only choice\"}]}")]
+    [InlineData("{\"kind\":\"poll\",\"options\":[{\"text\":\"Same\"},{\"text\":\" same \"}]}")]
+    [InlineData("{\"kind\":\"imagePoll\",\"options\":[{\"text\":\"One\"},{\"text\":\"Two\"}]}")]
+    [InlineData("{\"kind\":\"quiz\",\"options\":[{\"text\":\"One\"},{\"text\":\"Two\"}],\"correctOption\":2}")]
+    [InlineData("{\"kind\":\"quiz\",\"options\":[{\"text\":\"One\"},{\"text\":\"Two\"}]}")]
+    [InlineData("{\"kind\":\"poll\",\"options\":[null,{\"text\":\"Two\"}]}")]
+    [InlineData("{\"kind\":\"image\",\"media\":[null]}")]
+    [InlineData("{\"kind\":\"html\"}")]
+    public async Task Invalid_content_does_not_create_an_announcement(string json)
+    {
+        var eventId = await db.AddEventAsync();
+        var manager = await ManagerAsync();
+        var response = await Send(HttpMethod.Post, $"/admin/events/{eventId}/announcements",
+            manager, new { body = "Invalid attachment fixture", content = JsonNode.Parse(json) });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await ListAsync(eventId, manager));
+    }
+
+    [Fact]
+    public async Task A_poll_counts_people_once_and_allows_changing_a_vote()
+    {
+        var eventId = await db.AddEventAsync();
+        var one = await ApplicantAsync(eventId);
+        var two = await ApplicantAsync(eventId);
+        var id = await PostRichAsync(eventId, "poll");
+        var first = await SignInAsync(one);
+        var second = await SignInAsync(two);
+        var path = $"/portal/announcements/{id}/vote";
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, path, first, new { choice = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, path, second, new { choice = 1 })).StatusCode);
+        var changed = await ReadAsync(await Send(HttpMethod.Post, path, first, new { choice = 1 }));
+        Assert.Equal(2, changed["results"]!["total"]!.GetValue<int>());
+        Assert.Equal(0, changed["results"]!["counts"]![0]!.GetValue<int>());
+        Assert.Equal(2, changed["results"]!["counts"]![1]!.GetValue<int>());
+        Assert.Equal(1, changed["results"]!["choice"]!.GetValue<int>());
+        var persisted = Find(await FeedAsync(one), id)!;
+        Assert.Equal(1, persisted["results"]!["choice"]!.GetValue<int>());
+        var unvoted = Find(await FeedAsync(await ApplicantAsync(eventId)), id)!;
+        Assert.Null(unvoted["results"]!["counts"]);
+        Assert.Null(unvoted["results"]!["choice"]);
+        Assert.Equal(2, unvoted["results"]!["total"]!.GetValue<int>());
+        var admin = Find(await ListAsync(eventId), id)!;
+        Assert.Equal(2, admin["results"]!["counts"]![1]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task A_quiz_reveals_its_answer_only_after_submission_and_keeps_the_first_attempt()
+    {
+        var eventId = await db.AddEventAsync();
+        var applicant = await ApplicantAsync(eventId);
+        var id = await PostRichAsync(eventId, "quiz");
+        var cookie = await SignInAsync(applicant);
+        var path = $"/portal/announcements/{id}/vote";
+        var first = await Send(HttpMethod.Post, path, cookie, new { choice = 0 });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var answer = await ReadAsync(first);
+        Assert.Equal(1, answer["content"]!["correctOption"]!.GetValue<int>());
+        Assert.Equal("Answer fixture", answer["content"]!["explanation"]!.GetValue<string>());
+        var again = await ReadAsync(await Send(HttpMethod.Post, path, cookie, new { choice = 1 }));
+        Assert.Equal(0, again["results"]!["choice"]!.GetValue<int>());
+        Assert.Equal(1, again["results"]!["total"]!.GetValue<int>());
+        Assert.Equal(0, again["results"]!["counts"]![1]!.GetValue<int>());
+        Assert.Equal(1, Find(await FeedAsync(applicant), id)!["content"]!["correctOption"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Votes_are_scoped_to_the_current_event_and_retraction_stops_new_responses()
+    {
+        var eventId = await db.AddEventAsync();
+        var applicant = await ApplicantAsync(eventId);
+        var id = await PostRichAsync(eventId, "imagePoll");
+        var cookie = await SignInAsync(applicant);
+        var path = $"/portal/announcements/{id}/vote";
+        var outsider = await SignInAsync(await ApplicantAsync(await db.AddEventAsync()));
+        var noApplication = await SignInAsync(await db.AddPersonAsync(Unique("no-application")));
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Post, path, outsider, new { choice = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Post, path, noApplication, new { choice = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, path, cookie, new { choice = 4 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, path, cookie, new { choice = -1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, path, cookie, new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post, path, cookie, new { choice = 0 })).StatusCode);
+        await Send(HttpMethod.Post, $"/admin/announcements/{id}/retract", await ManagerAsync());
+        Assert.Equal(HttpStatusCode.Gone, (await Send(HttpMethod.Post, path, cookie, new { choice = 1 })).StatusCode);
+        Assert.Empty(await FeedAsync(applicant));
+        Assert.Equal(1, Find(await ListAsync(eventId), id)!["results"]!["total"]!.GetValue<int>());
+        var plain = await PostAsync(eventId, "Plain fixture");
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Post, $"/portal/announcements/{plain}/vote", cookie, new { choice = 0 })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Scheduled_posts_stay_private_until_due_and_then_accept_votes()
+    {
+        var eventId = await db.AddEventAsync();
+        var person = await ApplicantAsync(eventId);
+        var manager = await ManagerAsync();
+        var publishAt = DateTimeOffset.UtcNow.AddDays(1);
+        var response = await Send(HttpMethod.Post, $"/admin/events/{eventId}/announcements", manager,
+            new { body = "Scheduled fixture", content = RichContent("poll"), publishAt });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await ReadAsync(response);
+        var id = created["id"]!.GetValue<Guid>();
+        Assert.True(created["scheduled"]!.GetValue<bool>());
+        Assert.Equal(publishAt.ToUnixTimeSeconds(), created["publishAt"]!.GetValue<DateTimeOffset>().ToUnixTimeSeconds());
+        Assert.Single(await ListAsync(eventId, manager));
+        Assert.Empty(await FeedAsync(person));
+        var cookie = await SignInAsync(person);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Post,
+            $"/portal/announcements/{id}/vote", cookie, new { choice = 0 })).StatusCode);
+        await using var due = db.DataSource.CreateCommand(
+            "UPDATE applications.announcements SET publish_at = now() - interval '1 second' WHERE id = @id");
+        due.Parameters.AddWithValue("id", id);
+        await due.ExecuteNonQueryAsync();
+        Assert.Single(await FeedAsync(person));
+        Assert.False(Find(await ListAsync(eventId, manager), id)!["scheduled"]!.GetValue<bool>());
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Post,
+            $"/portal/announcements/{id}/vote", cookie, new { choice = 0 })).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_canceled_scheduled_post_never_appears_and_past_schedules_are_rejected()
+    {
+        var eventId = await db.AddEventAsync();
+        var person = await ApplicantAsync(eventId);
+        var manager = await ManagerAsync();
+        var past = await Send(HttpMethod.Post, $"/admin/events/{eventId}/announcements", manager,
+            new { body = "Past schedule fixture", publishAt = DateTimeOffset.UtcNow.AddMinutes(-1) });
+        Assert.Equal(HttpStatusCode.BadRequest, past.StatusCode);
+        Assert.Empty(await ListAsync(eventId, manager));
+        var response = await Send(HttpMethod.Post, $"/admin/events/{eventId}/announcements", manager,
+            new { body = "Canceled schedule fixture", publishAt = DateTimeOffset.UtcNow.AddDays(1) });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var id = (await ReadAsync(response))["id"]!.GetValue<Guid>();
+        var canceled = await Send(HttpMethod.Post, $"/admin/announcements/{id}/retract", manager);
+        Assert.Equal(HttpStatusCode.OK, canceled.StatusCode);
+        await using var due = db.DataSource.CreateCommand(
+            "UPDATE applications.announcements SET publish_at = now() - interval '1 second' WHERE id = @id");
+        due.Parameters.AddWithValue("id", id);
+        await due.ExecuteNonQueryAsync();
+        Assert.Empty(await FeedAsync(person));
+        Assert.True(Find(await ListAsync(eventId, manager), id)!["retracted"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Simultaneous_quiz_submissions_still_count_one_attempt()
+    {
+        var eventId = await db.AddEventAsync();
+        var applicant = await ApplicantAsync(eventId);
+        var cookie = await SignInAsync(applicant);
+        var id = await PostRichAsync(eventId, "quiz");
+        var responses = await Task.WhenAll(
+            Send(HttpMethod.Post, $"/portal/announcements/{id}/vote", cookie, new { choice = 0 }),
+            Send(HttpMethod.Post, $"/portal/announcements/{id}/vote", cookie, new { choice = 1 }));
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        var first = await ReadAsync(responses[0]);
+        var second = await ReadAsync(responses[1]);
+        Assert.Equal(first["results"]!["choice"]!.GetValue<int>(), second["results"]!["choice"]!.GetValue<int>());
+        Assert.Equal(1, Find(await FeedAsync(applicant), id)!["results"]!["total"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Reactions_count_people_once_and_can_be_changed_or_removed()
+    {
+        var eventId = await db.AddEventAsync();
+        var one = await ApplicantAsync(eventId);
+        var two = await ApplicantAsync(eventId);
+        var first = await SignInAsync(one);
+        var second = await SignInAsync(two);
+        var id = await PostAsync(eventId, "Reaction fixture");
+        var path = $"/portal/announcements/{id}/reaction";
+        var empty = Find(await FeedAsync(one), id)!["reactions"]!;
+        Assert.Equal(0, empty["total"]!.GetValue<int>());
+        Assert.Null(empty["choice"]);
+
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Put, path, first, new { reaction = "love" })).StatusCode);
+        await Send(HttpMethod.Put, path, first, new { reaction = "love" });
+        await Send(HttpMethod.Put, path, second, new { reaction = "happy" });
+        var changed = await ReadAsync(await Send(HttpMethod.Put, path, first, new { reaction = "happy" }));
+        Assert.Equal(2, changed["reactions"]!["total"]!.GetValue<int>());
+        Assert.Equal(0, changed["reactions"]!["counts"]!["love"]!.GetValue<int>());
+        Assert.Equal(2, changed["reactions"]!["counts"]!["happy"]!.GetValue<int>());
+        Assert.Equal("happy", changed["reactions"]!["choice"]!.GetValue<string>());
+        Assert.Equal("happy", Find(await FeedAsync(one), id)!["reactions"]!["choice"]!.GetValue<string>());
+
+        var organizer = Find(await ListAsync(eventId), id)!["reactions"]!;
+        Assert.Equal(2, organizer["total"]!.GetValue<int>());
+        Assert.Null(organizer["choice"]);
+        var otherViewer = Find(await FeedAsync(await ApplicantAsync(eventId)), id)!;
+        Assert.Null(otherViewer["reactions"]!["choice"]);
+        Assert.DoesNotContain(one.ToString(), otherViewer.ToJsonString());
+        Assert.DoesNotContain(two.ToString(), otherViewer.ToJsonString());
+
+        var removed = await ReadAsync(await Send(HttpMethod.Delete, path, first));
+        Assert.Equal(1, removed["reactions"]!["total"]!.GetValue<int>());
+        Assert.Null(removed["reactions"]!["choice"]);
+        var repeated = await ReadAsync(await Send(HttpMethod.Delete, path, first));
+        Assert.Equal(1, repeated["reactions"]!["total"]!.GetValue<int>());
+        Assert.Equal("happy", Find(await FeedAsync(two), id)!["reactions"]!["choice"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("love")]
+    [InlineData("wow")]
+    [InlineData("confused")]
+    [InlineData("support")]
+    [InlineData("happy")]
+    public async Task Every_picker_reaction_is_saved(string reaction)
+    {
+        var eventId = await db.AddEventAsync();
+        var person = await ApplicantAsync(eventId);
+        var id = await PostAsync(eventId, "Reaction choice fixture");
+        var response = await Send(HttpMethod.Put, $"/portal/announcements/{id}/reaction", await SignInAsync(person), new { reaction });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var saved = Find(await FeedAsync(person), id)!["reactions"]!;
+        Assert.Equal(reaction, saved["choice"]!.GetValue<string>());
+        Assert.Equal(1, saved["counts"]![reaction]!.GetValue<int>());
+    }
+
+    [Theory]
+    [InlineData("image")]
+    [InlineData("video")]
+    [InlineData("poll")]
+    [InlineData("imagePoll")]
+    [InlineData("quiz")]
+    public async Task Reactions_work_on_rich_posts_without_answering_the_question(string kind)
+    {
+        var eventId = await db.AddEventAsync();
+        var person = await ApplicantAsync(eventId);
+        var id = await PostRichAsync(eventId, kind);
+        var response = await Send(HttpMethod.Put, $"/portal/announcements/{id}/reaction", await SignInAsync(person), new { reaction = "wow" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var notice = Find(await FeedAsync(person), id)!;
+        Assert.Equal(1, notice["reactions"]!["total"]!.GetValue<int>());
+        if (kind is "poll" or "imagePoll" or "quiz")
+        {
+            Assert.Equal(0, notice["results"]!["total"]!.GetValue<int>());
+            Assert.Null(notice["results"]!["choice"]);
+        }
+        if (kind == "quiz") Assert.Null(notice["content"]!["correctOption"]);
+    }
+
+    [Fact]
+    public async Task Reactions_require_the_current_events_application_and_cannot_be_forged_for_someone_else()
+    {
+        var eventId = await db.AddEventAsync();
+        var person = await ApplicantAsync(eventId);
+        var cookie = await SignInAsync(person);
+        var id = await PostAsync(eventId, "Scoped reaction fixture");
+        var path = $"/portal/announcements/{id}/reaction";
+        var other = await ApplicantAsync(await db.AddEventAsync());
+        foreach (var caller in new[] { await SignInAsync(other), await SignInAsync(await db.AddPersonAsync(Unique("outsider"))) })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Put, path, caller, new { reaction = "love" })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Delete, path, caller)).StatusCode);
+        }
+        await Send(HttpMethod.Put, path, cookie, new { reaction = "love", personId = other });
+        Assert.Equal("love", Find(await FeedAsync(person), id)!["reactions"]!["choice"]!.GetValue<string>());
+        Assert.Equal(1, Find(await ListAsync(eventId), id)!["reactions"]!["total"]!.GetValue<int>());
+        var newerEvent = await db.AddEventAsync();
+        await using var application = db.DataSource.CreateCommand("""
+            INSERT INTO applications.applications (event_id, person_id, email)
+            VALUES (@eventId, @personId, @email)
+            """);
+        application.Parameters.AddWithValue("eventId", newerEvent);
+        application.Parameters.AddWithValue("personId", person);
+        application.Parameters.AddWithValue("email", Unique("newer"));
+        await application.ExecuteNonQueryAsync();
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Put, path, cookie, new { reaction = "happy" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Delete, path, cookie)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Scheduled_and_retracted_notices_do_not_accept_reactions()
+    {
+        var eventId = await db.AddEventAsync();
+        var person = await ApplicantAsync(eventId);
+        var cookie = await SignInAsync(person);
+        var manager = await ManagerAsync();
+        var scheduled = await ReadAsync(await Send(HttpMethod.Post, $"/admin/events/{eventId}/announcements", manager,
+            new { body = "Scheduled reaction fixture", publishAt = DateTimeOffset.UtcNow.AddDays(1) }));
+        var id = scheduled["id"]!.GetValue<Guid>();
+        var path = $"/portal/announcements/{id}/reaction";
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Put, path, cookie, new { reaction = "happy" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(HttpMethod.Delete, path, cookie)).StatusCode);
+        await using var due = db.DataSource.CreateCommand("UPDATE applications.announcements SET publish_at = now() - interval '1 second' WHERE id = @id");
+        due.Parameters.AddWithValue("id", id);
+        await due.ExecuteNonQueryAsync();
+        Assert.Equal(HttpStatusCode.OK, (await Send(HttpMethod.Put, path, cookie, new { reaction = "happy" })).StatusCode);
+        await Send(HttpMethod.Post, $"/admin/announcements/{id}/retract", manager);
+        Assert.Equal(HttpStatusCode.Gone, (await Send(HttpMethod.Put, path, cookie, new { reaction = "love" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Gone, (await Send(HttpMethod.Delete, path, cookie)).StatusCode);
+        Assert.Empty(await FeedAsync(person));
+        Assert.Equal(1, Find(await ListAsync(eventId), id)!["reactions"]!["total"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Invalid_reactions_leave_the_saved_choice_unchanged()
+    {
+        var eventId = await db.AddEventAsync();
+        var person = await ApplicantAsync(eventId);
+        var cookie = await SignInAsync(person);
+        var id = await PostAsync(eventId, "Invalid reaction fixture");
+        var path = $"/portal/announcements/{id}/reaction";
+        await Send(HttpMethod.Put, path, cookie, new { reaction = "love" });
+        foreach (var reaction in new string?[] { "", "arbitrary", "LOVE", "🥰", null })
+            Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Put, path, cookie, new { reaction })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(HttpMethod.Put, path, cookie, new { })).StatusCode);
+        Assert.Equal("love", Find(await FeedAsync(person), id)!["reactions"]!["choice"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Simultaneous_reactions_count_a_person_once()
+    {
+        var eventId = await db.AddEventAsync();
+        var person = await ApplicantAsync(eventId);
+        var cookie = await SignInAsync(person);
+        var id = await PostAsync(eventId, "Concurrent reaction fixture");
+        var path = $"/portal/announcements/{id}/reaction";
+        var responses = await Task.WhenAll(
+            Send(HttpMethod.Put, path, cookie, new { reaction = "love" }),
+            Send(HttpMethod.Put, path, cookie, new { reaction = "happy" }),
+            Send(HttpMethod.Put, path, cookie, new { reaction = "wow" }));
+        Assert.All(responses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+        var saved = Find(await FeedAsync(person), id)!["reactions"]!;
+        Assert.Equal(1, saved["total"]!.GetValue<int>());
+        Assert.Equal(1, saved["counts"]!.AsObject().Sum(entry => entry.Value!.GetValue<int>()));
+    }
+
+    private static object RichContent(string kind) => kind is "image" or "video"
+        ? new { kind, media = new[] { new { url = "https://example.com/media", alt = "Media fixture" } } }
+        : new
+        {
+            kind,
+            options = new[] {
+            new { text = "One", imageUrl = kind == "imagePoll" ? "https://example.com/one.jpg" : null },
+            new { text = "Two", imageUrl = kind == "imagePoll" ? "https://example.com/two.jpg" : null } },
+            correctOption = kind == "quiz" ? (int?)1 : null,
+            explanation = kind == "quiz" ? "Answer fixture" : null
+        };
+
+    private async Task<Guid> PostRichAsync(Guid eventId, string kind)
+    {
+        var response = await Send(HttpMethod.Post, $"/admin/events/{eventId}/announcements",
+            await ManagerAsync(), new { body = "Rich announcement fixture", content = RichContent(kind) });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return (await ReadAsync(response))["id"]!.GetValue<Guid>();
     }
 
     // --------------------------------------------------------------- helpers ---

@@ -5,8 +5,9 @@ import type {
   Rendered,
   TemplateDraft,
   TemplateFormat,
+  TemplateRow,
 } from "@/components/templates/types";
-import { createTemplate, discardSettingsDraft, fetchTemplateHtml, queueTemplateTest, renderPreview, saveSettingsDraft, updateTemplate } from "./api";
+import { createTemplate, discardSettingsDraft, fetchTemplateHtml, queueTemplateTest, removeTemplate, renderPreview, saveSettingsDraft, saveTemplateVisibility, updateTemplate } from "./api";
 import { validateDesign, validateSettings, type TemplateFieldErrors } from "@/components/templates/validation";
 
 /**
@@ -94,6 +95,41 @@ export async function discardTemplateDraft(key: string) {
     revalidatePath("/templates");
     revalidatePath(`/templates/${key}`);
   }
+  return result;
+}
+
+export async function deleteTemplates(templates: Pick<TemplateRow, "key" | "version">[]) {
+  if (!Array.isArray(templates) || templates.length === 0 || templates.length > 200
+    || templates.some((template) => !template || typeof template.key !== "string"
+      || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(template.key)
+      || !Number.isSafeInteger(template.version) || template.version < 0)) {
+    return { deleted: [], failed: [], error: "Select between 1 and 200 templates to delete." };
+  }
+  const deleted: string[] = [];
+  const failed: { key: string; error: string }[] = [];
+  for (const template of new Map(templates.map((item) => [item.key, item])).values()) {
+    const result = await removeTemplate(template.key, template.version);
+    if (result.ok) {
+      deleted.push(template.key);
+      revalidatePath(`/templates/${template.key}`);
+    } else {
+      failed.push({ key: template.key, error: result.error });
+    }
+  }
+  if (deleted.length > 0) {
+    revalidatePath("/templates");
+    revalidatePath("/mail", "layout");
+  }
+  return { deleted, failed, error: null };
+}
+
+export async function setTemplateVisibility(keys: string[], hidden: boolean) {
+  if (!Array.isArray(keys) || keys.length === 0 || keys.length > 200 || typeof hidden !== "boolean"
+    || keys.some((key) => typeof key !== "string" || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(key))) {
+    return { ok: false as const, error: "Select between 1 and 200 templates." };
+  }
+  const result = await saveTemplateVisibility([...new Set(keys)], hidden);
+  if (result.ok) revalidatePath("/templates");
   return result;
 }
 

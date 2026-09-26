@@ -505,12 +505,8 @@ public class TemplateTests(ApplicationsDatabase db)
     // ----------------------------------------------------------- permissions ---
 
     [Fact]
-    public async Task Everything_here_needs_email_manage_templates()
+    public async Task Email_statistics_permission_does_not_allow_template_access()
     {
-        // Reads as well as writes. A template is not a record of something that
-        // happened — it is the thing that will be sent — so there is no useful
-        // narrower reader, and email.view_stats is the permission for "did that
-        // go out".
         var reader = await db.AddPersonAsync(Unique("stats"));
         await db.GrantAsync(reader, "email.view_stats");
         var cookie = await SignIn(reader);
@@ -918,6 +914,102 @@ public class TemplateTests(ApplicationsDatabase db)
     }
 
     // --------------------------------------------------------------- fixtures ---
+
+    [Theory]
+    [InlineData("registration")]
+    [InlineData("comms")]
+    [InlineData("super-admin")]
+    public async Task Requested_teams_can_read_and_remove_templates(string team)
+    {
+        var key = await Existing();
+        var person = await db.AddPersonAsync(Unique(team));
+        await db.AddToTeamAsync(person, team);
+        var cookie = await SignIn(person);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Request(HttpMethod.Get, "/admin/templates", cookie))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Request(HttpMethod.Get, $"/admin/templates/{key}", cookie))).StatusCode);
+        if (team == "registration")
+            Assert.Equal(HttpStatusCode.Forbidden, (await Post(cookie, Draft(Key()))).StatusCode);
+
+        var removed = await Client().SendAsync(Request(HttpMethod.Delete, $"/admin/templates/{key}?version=1", cookie));
+        Assert.Equal(HttpStatusCode.NoContent, removed.StatusCode);
+        Assert.Equal(1, await RowsFor(key));
+        Assert.Equal(0, await LiveRowsFor(key));
+        Assert.Equal(HttpStatusCode.NotFound, (await Client().SendAsync(Request(HttpMethod.Get, $"/admin/templates/{key}", cookie))).StatusCode);
+        var listed = await Body(await Client().SendAsync(Request(HttpMethod.Get, "/admin/templates", cookie)));
+        Assert.DoesNotContain(listed.GetProperty("templates").EnumerateArray(), t => t.GetProperty("key").GetString() == key);
+    }
+
+    [Fact]
+    public async Task Removal_requires_its_own_permission_and_a_live_session()
+    {
+        var key = await Existing();
+        var path = $"/admin/templates/{key}?version=1";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Client().DeleteAsync(path)).StatusCode);
+        var person = await db.AddPersonAsync(Unique("editor"));
+        await db.GrantAsync(person, "email.manage_templates");
+        var cookie = await SignIn(person);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client().SendAsync(Request(HttpMethod.Delete, path, cookie))).StatusCode);
+        Assert.Equal(1, await LiveRowsFor(key));
+        await db.GrantAsync(person, "email.delete_templates");
+        Assert.Equal(HttpStatusCode.NoContent, (await Client().SendAsync(Request(HttpMethod.Delete, path, cookie))).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("magic_link")]
+    [InlineData("organizer_welcome")]
+    public async Task Account_access_templates_cannot_be_removed(string key)
+    {
+        var (_, cookie) = await Comms();
+        var removed = await Client().SendAsync(Request(HttpMethod.Delete, $"/admin/templates/{key}?version=1", cookie));
+        Assert.Equal(HttpStatusCode.Conflict, removed.StatusCode);
+        Assert.Equal(1, await LiveRowsFor(key));
+    }
+
+    [Fact]
+    public async Task Removal_preserves_campaigns_and_messages_but_blocks_future_sends()
+    {
+        var (_, drafting) = await Comms();
+        var (_, sending) = await Comms();
+        var key = await Existing();
+        var eventId = await db.AddEventAsync();
+        await Applicant(eventId, Unique("recipient"), "accepted");
+        var queued = await Campaign(drafting, key, eventId);
+        var draft = await Campaign(drafting, key, eventId);
+        Assert.Equal(HttpStatusCode.OK, (await Send(queued, sending)).StatusCode);
+        var before = await TemplateBehind(queued);
+        await using var messages = db.DataSource.CreateCommand("SELECT row_to_json(m)::text FROM notify.messages m WHERE campaign_id = @id ORDER BY id");
+        messages.Parameters.AddWithValue("id", queued);
+        var messageBefore = await messages.ExecuteScalarAsync();
+        Assert.NotNull(messageBefore);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Client().SendAsync(Request(HttpMethod.Delete, $"/admin/templates/{key}?version=1", drafting))).StatusCode);
+        Assert.Equal(before, await TemplateBehind(queued));
+        Assert.Equal(before, await TemplateBehind(draft));
+        Assert.Equal(messageBefore, await messages.ExecuteScalarAsync());
+        Assert.Equal(1, await MessageCount(queued));
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Request(HttpMethod.Get, $"/admin/campaigns/{queued}", drafting))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Send(draft, sending)).StatusCode);
+        Assert.Equal(0, await MessageCount(draft));
+        var newCampaign = await Client().SendAsync(Request(HttpMethod.Post, "/admin/campaigns", drafting,
+            new { name = "Placeholder", templateKey = key, segment = new { type = "applicationStatus", eventId, statuses = new[] { "accepted" } } }));
+        Assert.Equal(HttpStatusCode.BadRequest, newCampaign.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(drafting, Draft(key))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Request(HttpMethod.Put, $"/admin/templates/{key}", drafting, Draft(key)))).StatusCode);
+        Assert.Equal(0, await LiveRowsFor(key));
+    }
+
+    [Fact]
+    public async Task A_stale_gallery_cannot_remove_a_newer_version()
+    {
+        var (_, cookie) = await Comms();
+        var key = await Existing();
+        Assert.Equal(HttpStatusCode.OK, (await Client().SendAsync(Request(HttpMethod.Put, $"/admin/templates/{key}", cookie, Draft(key)))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client().SendAsync(Request(HttpMethod.Delete, $"/admin/templates/{key}?version=1", cookie))).StatusCode);
+        Assert.Equal(1, await LiveRowsFor(key));
+        Assert.Equal(HttpStatusCode.NoContent, (await Client().SendAsync(Request(HttpMethod.Delete, $"/admin/templates/{key}?version=2", cookie))).StatusCode);
+        Assert.Equal(2, await RowsFor(key));
+        Assert.Equal(0, await LiveRowsFor(key));
+    }
 
     private HttpClient Client() => _app.CreateClient();
 

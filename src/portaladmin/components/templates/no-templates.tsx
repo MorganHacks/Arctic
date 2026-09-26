@@ -1,5 +1,4 @@
 import { EmptyState } from "@/components/ui/empty-state";
-import styles from "./templates.module.css";
 
 /**
  * There are no templates.
@@ -11,9 +10,7 @@ import styles from "./templates.module.css";
  */
 export function NoTemplates() {
   return (
-    <div className={styles.noTemplates}>
-      <EmptyState title="No templates yet"
-        description="Create a reusable email for campaigns and automated messages." />
-    </div>
+    <EmptyState variant="canvas" size="page" title="No templates yet"
+      description="Create a reusable email for campaigns and automated messages." />
   );
 }

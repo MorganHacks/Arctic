@@ -1,6 +1,7 @@
 using MorganHacks.Applications.Domain;
 using MorganHacks.Applications.Services;
 using Npgsql;
+using System.Text.Json;
 
 namespace MorganHacks.Applications.Data;
 
@@ -368,11 +369,11 @@ public sealed class PostgresApplicantPortalStore(NpgsqlDataSource dataSource)
         // so the count is tens rather than the several hundred thousand a
         // clamp exists to protect against.
         const string sql = $"""
-            SELECT id, body, posted_at
+            SELECT id, body, publish_at, content
               FROM applications.announcements
              WHERE event_id = ({MyEvent})
-               AND retracted_at IS NULL
-             ORDER BY posted_at DESC, id DESC
+               AND retracted_at IS NULL AND publish_at <= now()
+             ORDER BY publish_at DESC, id DESC
             """;
 
         await using var cmd = dataSource.CreateCommand(sql);
@@ -385,7 +386,8 @@ public sealed class PostgresApplicantPortalStore(NpgsqlDataSource dataSource)
             announcements.Add(new PortalAnnouncement(
                 reader.GetGuid(0),
                 reader.GetString(1),
-                reader.GetFieldValue<DateTimeOffset>(2)));
+                reader.GetFieldValue<DateTimeOffset>(2),
+                reader.IsDBNull(3) ? null : JsonSerializer.Deserialize<AnnouncementContent>(reader.GetString(3), AnnouncementContent.Json)));
         }
 
         return announcements;
