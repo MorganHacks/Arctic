@@ -2,6 +2,7 @@
 
 import { summarizeErrors } from "../../../../../libs/ui/error-notifications";
 import { ErrorToast } from "@/components/ui/error-toast";
+import { FormLinkCard } from "@/components/ui/form-link-card";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -459,7 +460,7 @@ export function Builder({
           <span>Preview mode</span>
         </div> : undefined} />
       {drag ? <div className={styles.dragPreview} aria-hidden="true" style={{ left: drag.x, top: drag.y }}><Icon icon={DragDropVerticalIcon} size={18} /><span>{drag.label}</span></div> : null}
-      <div className={styles.canvas} ref={canvas} style={formThemeStyle(theme)}>
+      <div className={styles.canvas} ref={canvas} style={formThemeStyle({ ...theme, background: "neutral" })}>
         {!previewOnly ? <div className={styles.canvasHistory}>
           <VersionHistory formId={formId} versions={versions} saveStatus={status} />
           <button type="button" className={styles.headerIcon} aria-pressed={editorExpanded}
@@ -526,7 +527,7 @@ export function Builder({
 
           </div>
 
-          {previewOnly ? <Preview fields={fields} formName={formName} headerImage={theme.headerImage} linkCard={theme.linkCard} /> : null}
+          {previewOnly ? <Preview fields={fields} formName={formName} headerImage={theme.headerImage} hasLinkCard={!!theme.linkCard} /> : null}
 
 
           {!previewOnly && canManage && published ? (
@@ -537,6 +538,7 @@ export function Builder({
           ) : null}
         </div>
       </div>
+      {previewOnly && theme.linkCard ? <aside className={styles.previewLinkCard} aria-label="Featured link"><FormLinkCard card={theme.linkCard} /></aside> : null}
       {!previewOnly && canManage ? <QuestionToolbar onAdd={add} onAddSection={addSection} disabled={!canEdit || publishing} /> : null}
       {confirmUnpublish && canManage && published ? <Unpublish formId={formId} formName={formName}
         onClose={() => setConfirmUnpublish(false)} onDone={() => {

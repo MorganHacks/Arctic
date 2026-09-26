@@ -6,11 +6,11 @@ import styles from "../../../../libs/ui/form-link-card.module.css";
 
 export function FormLinkMedia({ image, url }: { image: string | null; url: string }) {
   const [resolved, setResolved] = useState<{ url: string; media: Media | null } | null>(null);
-  const [failed, setFailed] = useState<{ key: string; video?: boolean; image?: boolean } | null>(null);
+  const [failedImage, setFailedImage] = useState<string | null>(null);
   const key = image ?? url;
   const media = image ? { image, video: null } : videoLinkMedia(url) ?? (resolved?.url === url ? resolved.media : null);
-  const videoSource = failed?.key === key && failed.video ? null : media?.video;
-  const imageSource = failed?.key === key && failed.image ? null : media?.image;
+  const videoSource = media?.video;
+  const imageSource = failedImage === key ? null : media?.image;
 
   useLayoutEffect(() => {
     if (image || videoLinkMedia(url) || !publicMediaUrl(url)) return;
@@ -28,28 +28,42 @@ export function FormLinkMedia({ image, url }: { image: string | null; url: strin
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [image, url]);
 
-  function fail(kind: "video" | "image") {
+  function failImage() {
     forgetFormLinkMedia(url);
-    setFailed(current => ({ ...(current?.key === key ? current : {}), key, [kind]: true }));
+    setFailedImage(key);
   }
 
-  if (videoSource) return <VideoPreview key={videoSource} src={videoSource} poster={imageSource ?? undefined} onError={() => fail("video")} />;
-  return imageSource ? <img className={styles.image} src={imageSource} alt="" width={92} height={46} referrerPolicy="no-referrer" onError={() => fail("image")} /> : null;
+  if (videoSource) return <VideoPreview key={videoSource} src={videoSource} poster={imageSource ?? undefined} onError={() => forgetFormLinkMedia(url)} />;
+  return imageSource ? <img className={styles.image} src={imageSource} alt="" width={92} height={46} referrerPolicy="no-referrer" onError={failImage} /> : null;
 }
 
 function VideoPreview({ src, poster, onError }: { src: string; poster?: string; onError: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
+  const manuallyPaused = useRef(false);
   const [paused, setPaused] = useState(true);
 
   useEffect(() => {
     const preview = video.current;
     if (!preview) return;
+    preview.defaultMuted = true;
+    preview.muted = true;
+    preview.playsInline = true;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (!motion.matches) void preview.play().catch(() => {});
-    const respectMotion = () => { if (motion.matches) preview.pause(); };
+    const autoplay = () => {
+      if (!motion.matches && !manuallyPaused.current) void preview.play().catch(() => setPaused(true));
+    };
+    const respectMotion = () => {
+      preview.autoplay = !motion.matches && !manuallyPaused.current;
+      if (motion.matches) preview.pause();
+      else autoplay();
+    };
+    respectMotion();
+    preview.addEventListener("canplay", autoplay);
     motion.addEventListener("change", respectMotion);
     return () => {
+      preview.removeEventListener("canplay", autoplay);
       motion.removeEventListener("change", respectMotion);
+      preview.autoplay = false;
       preview.pause();
     };
   }, []);
@@ -59,15 +73,20 @@ function VideoPreview({ src, poster, onError }: { src: string; poster?: string; 
     onClick={() => {
       const preview = video.current;
       if (!preview) return;
-      if (preview.paused) void preview.play().catch(() => {});
-      else preview.pause();
+      if (preview.paused) {
+        manuallyPaused.current = false;
+        preview.muted = true;
+        if (preview.error) preview.load();
+        void preview.play().catch(() => setPaused(true));
+      } else {
+        manuallyPaused.current = true;
+        preview.autoplay = false;
+        preview.pause();
+      }
     }}>
     <video ref={video} src={src} poster={poster} muted loop playsInline preload="metadata" aria-hidden="true"
-      width={92} height={46} onError={onError} onPlay={() => setPaused(false)} onPause={() => setPaused(true)}
-      onLoadedMetadata={event => {
-        const preview = event.currentTarget;
-        if (preview.paused && preview.currentTime === 0 && preview.duration > .1) preview.currentTime = .1;
-      }} />
+      width={92} height={46} onError={() => { setPaused(true); onError(); }}
+      onPlaying={() => setPaused(false)} onPause={() => setPaused(true)} />
     <span className={styles.playback} aria-hidden="true">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" focusable="false">
         {paused ? <path d="M18.8906 12.846C18.5371 14.189 16.8667 15.138 13.5257 17.0361C10.296 18.8709 8.6812 19.7884 7.37983 19.4196C6.8418 19.2671 6.35159 18.9776 5.95624 18.5787C5 17.6139 5 15.7426 5 12C5 8.2574 5 6.3861 5.95624 5.42132C6.35159 5.02245 6.8418 4.73288 7.37983 4.58042C8.6812 4.21165 10.296 5.12907 13.5257 6.96393C16.8667 8.86197 18.5371 9.811 18.8906 11.154C19.0365 11.7084 19.0365 12.2916 18.8906 12.846Z" /> : <>

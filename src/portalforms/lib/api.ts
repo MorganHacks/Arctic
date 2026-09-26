@@ -187,7 +187,7 @@ async function sessionHeader(): Promise<Record<string, string>> {
  * purpose — telling them apart would be a way to find out which
  * seven-character codes are real — and so does this page.
  */
-export async function loadForm(code: string): Promise<PublicForm | null> {
+export async function loadForm(code: string, { anonymous = false }: { anonymous?: boolean } = {}): Promise<PublicForm | null> {
   /* ---- Scaffolding. Delete this block and the import with lib/preview.ts. --
    *
    * A made-up form with sections in it, so the multi-step page can be looked at
@@ -207,7 +207,7 @@ export async function loadForm(code: string): Promise<PublicForm | null> {
     response = await fetch(
       `${apiOrigin}/api/forms/${encodeURIComponent(code)}`,
       {
-        headers: { ...proxyHeader, ...(await sessionHeader()) },
+        headers: { ...proxyHeader, ...(anonymous ? {} : await sessionHeader()) },
         /*
          * Never cached.
          *

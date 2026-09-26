@@ -30,15 +30,14 @@ param consoleBaseUrl = readEnvironmentVariable('CONSOLE_BASE_URL', '')
 // session cookie is set on the host the form is actually served from.
 param formsBaseUrl = readEnvironmentVariable('FORMS_BASE_URL', '')
 
-// Web-facing replicas kept warm. Zero lets them sleep, which is most of the
-// reason this environment is cheap; set WARM_REPLICAS=1 on the GitHub
-// environment for the weeks registration is open, and unset it afterwards.
+// Keep one web-facing replica warm. Set WARM_REPLICAS=0 explicitly to allow
+// idle services to sleep and accept cold starts.
 // Unset and empty have to mean the same thing here: a GitHub variable that
 // does not exist arrives as an empty string, and int('') fails the whole
 // deployment rather than the parameter.
-param warmReplicas = int(empty(readEnvironmentVariable('WARM_REPLICAS', '0'))
-  ? '0'
-  : readEnvironmentVariable('WARM_REPLICAS', '0'))
+param warmReplicas = int(empty(readEnvironmentVariable('WARM_REPLICAS', '1'))
+  ? '1'
+  : readEnvironmentVariable('WARM_REPLICAS', '1'))
 
 // Shared secret proving a request reached harbor through one of our front
 // ends. Empty means forwarded addresses are never believed, which is a coarser

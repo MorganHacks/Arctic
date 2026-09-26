@@ -13,7 +13,7 @@ export function FormsCards({ forms, now, canManage }: { forms: FormRow[]; now: n
     {forms.map(form => {
       const questions = form.preview?.questions ?? form.questions;
       return <li className={styles.card} key={form.id}>
-        <Link href={`/forms/${form.id}`} className={styles.cardPreview} style={formThemeStyle(form.preview?.theme)} aria-label={`Open ${form.name}`}>
+        <Link href={`/forms/${form.id}`} className={styles.cardPreview} style={formThemeStyle({ ...form.preview?.theme, background: "neutral" })} aria-label={`Open ${form.name}`}>
           <FormThumbnail form={form} />
         </Link>
         <div className={styles.cardDetails}>

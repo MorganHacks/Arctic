@@ -125,7 +125,8 @@
 }
 .surface :global(.prompt-text) { flex: 1; min-width: 0; }
 .surface :global(.ordinal) { width: 22px; flex: none; margin: 0; font-size: 11px; font-weight: 400; color: var(--faint); }
-.surface :global(.needed), .surface :global(.optional) { margin: 0; flex: none; font-size: 11px; font-weight: 400; color: var(--muted); }
+.surface :global(.needed) { display: inline; margin: 0 0 0 4px; color: var(--stop); font-size: inherit; font-weight: 500; }
+.surface :global(.optional) { margin: 0; flex: none; font-size: 11px; font-weight: 400; color: var(--muted); }
 .surface :global(.answer) { margin-left: 32px; }
 .surface :global(.help) { font-size: 13px; line-height: 1.65; margin-bottom: 12px; }
 .surface :global(input:not([type="checkbox"]):not([type="radio"])), .surface select, .surface textarea {
@@ -216,19 +217,34 @@
 .surface :global(.choice:has(input:disabled)) { cursor: not-allowed; opacity: 0.6; }
 .surface :global(.counter) { margin-top: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .surface :global(.wrong-note) { margin-top: 8px; font-size: 13px; font-weight: 500; line-height: 1.5; }
-.surface :global(.upload input[type="file"]) { padding: 8px; color: var(--muted); font-size: 14px; cursor: pointer; }
+.surface :global(.upload input[type="file"]) {
+  max-width: 100%;
+  min-height: 58px;
+  padding: 6px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
 .surface :global(input[type="file"]::file-selector-button) {
-  min-height: 36px;
+  min-height: 44px;
   margin: 0 12px 0 0;
-  padding: 8px 14px;
-  font-size: 13px;
+  padding: 10px 16px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 1.5;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line-soft);
-  border-radius: 8px;
+  border-radius: 999px;
+  vertical-align: middle;
 }
-.surface :global(input[type="file"]::file-selector-button:hover) { border-color: var(--focus); background: var(--accent-soft); }
+@media (hover: hover) {
+  .surface :global(input[type="file"]::file-selector-button:hover) { border-color: var(--focus); background: var(--accent-soft); }
+}
 .surface :global(.upload .help) { margin-top: 8px; font-size: 12px; }
 .surface :global(.upload-done) { align-items: center; gap: 8px 16px; padding: 10px 14px; border-color: var(--control-border); border-radius: var(--control-radius); background: var(--control-fill); font-size: 13px; }
 .surface :global(.upload-done button) { flex: none; border: 0; text-decoration: underline; text-underline-offset: 3px; }

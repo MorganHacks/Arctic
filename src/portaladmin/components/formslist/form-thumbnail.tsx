@@ -25,7 +25,7 @@ export function FormThumbnail({ form }: { form: FormRow }) {
   }, []);
 
   return <div className={styles.previewCanvas} ref={canvas} aria-hidden="true">
-    <div className={styles.previewPaper} style={{ ...formThemeStyle(theme), transform: `scale(${scale})` }}>
+    <div className={styles.previewPaper} style={{ ...formThemeStyle({ ...theme, background: "neutral" }), transform: `scale(${scale})` }}>
       {theme.headerImage ? <img className={styles.previewHeaderImage} src={theme.headerImage} alt="" /> : null}
       <div className={styles.previewHeader}>
         <p className={styles.previewTitle}>{form.name}</p>

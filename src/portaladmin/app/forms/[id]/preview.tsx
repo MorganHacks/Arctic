@@ -2,8 +2,6 @@
 
 import { summarizeErrors } from "../../../../../libs/ui/error-notifications";
 import { ErrorDescription, ErrorToast } from "@/components/ui/error-toast";
-import { FormLinkCard } from "@/components/ui/form-link-card";
-import type { FormLinkCard as Card } from "../../../../../libs/ui/form-theme";
 import { useId, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { Select } from "@/components/ui/select";
 import { CheckmarkCircle02Icon, Link04Icon, Tick02Icon } from "@hugeicons/core-free-icons";
@@ -32,11 +30,11 @@ export function PreviewActions({ code, published }: { code: string; published: b
   );
 }
 
-export function Preview({ fields, formName, headerImage, linkCard }: {
+export function Preview({ fields, formName, headerImage, hasLinkCard = false }: {
   fields: FormField[];
   formName: string;
   headerImage?: string | null;
-  linkCard?: Card | null;
+  hasLinkCard?: boolean;
 }) {
   const formId = useId();
   const panel = useRef<HTMLElement>(null);
@@ -96,7 +94,7 @@ export function Preview({ fields, formName, headerImage, linkCard }: {
   }
 
   return (
-    <section ref={panel} className={`${styles.previewPanel} ${styles.preview}`} aria-label="Form preview" data-link-card={!!linkCard}>
+    <section ref={panel} className={`${styles.previewPanel} ${styles.preview}`} aria-label="Form preview" data-link-card={hasLinkCard}>
       {headerImage ? <img className={styles.previewHeaderImage} src={headerImage} alt="Form header" /> : null}
       <div className={styles.previewIntro}>
         <div className={styles.previewRule} />
@@ -154,7 +152,6 @@ export function Preview({ fields, formName, headerImage, linkCard }: {
           </>
         )}
       </form>
-      {linkCard ? <FormLinkCard card={linkCard} floating /> : null}
     </section>
   );
 }

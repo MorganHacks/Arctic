@@ -39,10 +39,10 @@
 .results[aria-busy="true"] { opacity: 0.6; }
 .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; margin: 0; padding: 24px 0 0; list-style: none; }
 .card { display: flex; flex-direction: column; min-width: 0; border-radius: 18px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line-soft); }
-.cardPreview { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; isolation: isolate; border-radius: 18px 18px 0 0; background: var(--form-background, var(--field)); text-decoration: none; }
-.cardPreview::after { position: absolute; inset: auto 0 0; height: 24px; content: ""; background: linear-gradient(transparent, var(--form-background, var(--field))); pointer-events: none; }
+.cardPreview { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; isolation: isolate; border-radius: 18px 18px 0 0; background: var(--field); text-decoration: none; }
+.cardPreview::after { position: absolute; inset: auto 0 0; height: 24px; content: ""; background: linear-gradient(transparent, var(--field)); pointer-events: none; }
 .previewCanvas { position: absolute; top: 24px; left: 24px; right: 24px; pointer-events: none; }
-.previewPaper { width: 620px; min-height: 800px; overflow: hidden; background: var(--form-background); color: var(--ink); font-family: var(--form-font); transform-origin: top left; }
+.previewPaper { width: 620px; min-height: 800px; overflow: hidden; background: var(--field); color: var(--ink); font-family: var(--form-font); transform-origin: top left; }
 .previewHeaderImage { display: block; width: 100%; aspect-ratio: 4 / 1; object-fit: cover; background: #ffffff; margin-bottom: 16px; border-radius: 12px; }
 .previewHeader { padding: 28px 30px; border-top: 5px solid var(--form-accent); border-radius: 12px; background: var(--raised); }
 .previewIntro { margin-top: 20px; }

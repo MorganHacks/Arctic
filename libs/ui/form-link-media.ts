@@ -1,8 +1,11 @@
 export type FormLinkMedia = { image: string | null; video: string | null };
 
+const recapAsset = "v1790236201/reference-02b08846cc82817c0074d6612e6b3e70cf4ce12a2afa7016b603c8e68dbfa4ac_xdbiqx";
+
 export const MORGAN_HACKS_RECAP = {
   url: "https://www.instagram.com/p/DXE7YimkZVk/",
-  video: "https://res.cloudinary.com/kardusers/video/upload/v1790236201/reference-02b08846cc82817c0074d6612e6b3e70cf4ce12a2afa7016b603c8e68dbfa4ac_xdbiqx.mp4",
+  video: `https://res.cloudinary.com/kardusers/video/upload/c_limit,w_480,vc_h264,q_auto/${recapAsset}.mp4`,
+  image: `https://res.cloudinary.com/kardusers/video/upload/so_0,c_limit,w_480/${recapAsset}.jpg`,
 };
 
 const cacheKey = "arctic:form-link-media:v1";
@@ -39,8 +42,11 @@ export function publicMediaUrl(value: unknown): value is string {
 export function videoLinkMedia(value: string): FormLinkMedia | null {
   if (!publicMediaUrl(value)) return null;
   const url = new URL(value);
-  if (["instagram.com", "www.instagram.com"].includes(url.hostname)
-    && /^\/(?:p|reel)\/DXE7YimkZVk\/?$/.test(url.pathname)) return { image: null, video: MORGAN_HACKS_RECAP.video };
+  if ((["instagram.com", "www.instagram.com"].includes(url.hostname)
+    && /^\/(?:p|reel)\/DXE7YimkZVk\/?$/.test(url.pathname))
+    || (url.hostname === "res.cloudinary.com" && url.pathname === `/kardusers/video/upload/${recapAsset}.mp4`)) {
+    return { image: MORGAN_HACKS_RECAP.image, video: MORGAN_HACKS_RECAP.video };
+  }
   if (/\.(mp4|webm|ogv|mov)$/i.test(url.pathname)) return { image: null, video: url.href };
   if (["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com", "youtu.be"].includes(url.hostname)) {
     const id = url.hostname === "youtu.be" ? url.pathname.slice(1)
