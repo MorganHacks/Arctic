@@ -92,14 +92,12 @@ param proxySecret string = ''
 @description('''
 Replicas of the web-facing services kept warm rather than asleep.
 
-Zero costs almost nothing and answers the first request after an idle spell a
-few seconds late. One removes that delay and costs roughly thirty dollars a
-month more. Set it to one while registration is open and for the event
-weekend; leave it at zero the rest of the year.
+One keeps the API and gateway ready between requests. Set zero explicitly
+when lower idle hosting usage is more important than cold-start latency.
 ''')
 @minValue(0)
 @maxValue(3)
-param warmReplicas int = 0
+param warmReplicas int = 1
 
 @description('Whether the applicant portal is served. Empty leaves features.json to decide.')
 param enableHackerPortalFeature string = ''

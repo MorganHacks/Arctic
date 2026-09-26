@@ -97,21 +97,16 @@ param pullIdentityClientId string
 @description('''
 How many replicas of the web-facing services to keep warm.
 
-Zero is the normal setting and the reason this environment is affordable: a
-request wakes a sleeping replica, and outside registration nobody is waiting
-on the few seconds that takes. The first request after an idle spell is slow,
-every one after it is not.
-
-Raise it to 1 for the weeks registration is open and for the event weekend,
-when a cold start lands on an applicant rather than on an organizer. That is a
-parameter change and a redeploy, not a code change.
+One keeps the API and gateway ready between requests. Zero permits both
+services to sleep and makes the first request wait for them to start.
+Choose zero explicitly when accepting that delay to reduce idle hosting usage.
 
 This does not apply to lark, which polls a queue on a timer and therefore has
 nothing to wake it. It stays at one replica and is most of the idle cost.
 ''')
 @minValue(0)
 @maxValue(3)
-param warmReplicas int = 0
+param warmReplicas int = 1
 
 @description('''
 Shared secret proving a request reached harbor through one of our front ends.
