@@ -22,6 +22,22 @@ param environmentName string
 // also offers Postgres 18, which is what docker-compose and the tests run.
 param location string = 'centralus'
 
+@description('''
+Where the shared resources live, which is not the same question as where an
+environment lives.
+
+The registry and its resource group are shared by every environment, so they
+cannot follow a per-environment location. Production moved to East US 2 and
+this parameter did not, because a resource cannot change region: pointing the
+shared registry at a new one fails with InvalidResourceLocation and takes the
+whole deployment with it, at stage 1, before anything environment-specific has
+been looked at.
+
+Changing this means creating a second registry under a different name and
+repointing every environment at it. It is not a knob to turn casually.
+''')
+param sharedLocation string = 'centralus'
+
 @description('Commit sha. Never "latest" — a rollback has to be a tag that already exists.')
 param imageTag string
 
@@ -155,7 +171,7 @@ var sharedTags = {
 
 resource sharedGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: sharedGroupName
-  location: location
+  location: sharedLocation
   tags: sharedTags
 }
 
@@ -170,7 +186,7 @@ module registry 'modules/registry.bicep' = {
   scope: sharedGroup
   params: {
     registryName: registryName
-    location: location
+    location: sharedLocation
     tags: sharedTags
   }
 }

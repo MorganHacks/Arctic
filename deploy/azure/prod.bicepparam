@@ -32,6 +32,10 @@ param location = 'eastus2'
 // REGISTRY_NAME on that environment.
 param registryName = readEnvironmentVariable('REGISTRY_NAME', 'crmharctic')
 
+// Where that registry lives. Deliberately not `location`: the registry is
+// shared across environments, so it cannot move when one environment does.
+param sharedLocation = readEnvironmentVariable('SHARED_LOCATION', 'centralus')
+
 param imageTag = readEnvironmentVariable('IMAGE_TAG')
 param dbPassword = readEnvironmentVariable('DB_PASSWORD')
 param superAdminEmail = readEnvironmentVariable('SUPER_ADMIN_EMAIL')
