@@ -58,8 +58,14 @@ export function AddOrganizer() {
             <span>{pending ? "Adding…" : "Add"}</span>
           </button>
         </div>
+        {/* COPY: needs sign-off. Drops "Use their Google account email." — the
+            field is an email input with a label and an email placeholder, so
+            that sentence was describing the control beside it rather than
+            telling the admin anything. What is left is the half that changes
+            what somebody does: the list grants nothing by itself, and a team is
+            the next step, on the page this form lands them on. */}
         <p id="organizer-help" className={styles.help}>
-          Use their Google account email. You’ll choose their teams next.
+          Adds nothing on its own — their teams come next.
         </p>
         <ErrorToast message={state.error} revision={state} />
         {state.error && state.personId ? <Link href={`/people/${state.personId}`}>Open their page</Link> : null}
