@@ -52,7 +52,6 @@ export function AddOrganizer() {
             aria-describedby="organizer-help"
             disabled={pending}
           />
-          <span className={styles.accountType}>Organizer</span>
           <button type="submit" className={styles.inviteButton} disabled={pending || !email.trim()}>
             <Icon icon={Add01Icon} size={16} />
             <span>{pending ? "Adding…" : "Add"}</span>

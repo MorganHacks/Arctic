@@ -283,8 +283,8 @@
   max-width: 640px;
 }
 
-.emailInput,
-.accountType {
+.emailInput {
+  flex: 1;
   min-width: 0;
   height: 44px;
   padding: 0 14px;
@@ -293,17 +293,6 @@
   background: var(--members-field);
   color: var(--members-ink);
   font-size: 14px;
-}
-
-.emailInput {
-  flex: 1;
-}
-
-.accountType {
-  display: flex;
-  align-items: center;
-  flex: 0 0 168px;
-  padding-inline: 12px;
 }
 
 .inviteButton,
@@ -409,10 +398,6 @@
 
   .emailInput {
     flex-basis: 100%;
-  }
-
-  .accountType {
-    flex: 1;
   }
 }
 
