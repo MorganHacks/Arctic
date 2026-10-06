@@ -145,6 +145,10 @@ export function ResponseDetail({
 /**
  * The attached file, and a way to read it.
  *
+ * In a new tab. A reviewer here is reading an application, not collecting
+ * files, and following the link in place cost them the loaded pages and the
+ * open panel — the back button is not a way back to that.
+ *
  * The link is signed and stops working in about five minutes, which is why it
  * is fetched when this panel opens rather than when the table loaded. A panel
  * left open across a lunch break has a dead link in it; closing and reopening
@@ -162,8 +166,8 @@ function Resume({ item }: { item: ResponseItem }) {
       <span className={styles.filename}>{filename}</span>
       <span className={styles.stamp}>{fileSize(sizeBytes)}</span>
       {url ? (
-        <a className="button" href={url} rel="noopener">
-          Download
+        <a className="button" href={url} target="_blank" rel="noopener">
+          View
         </a>
       ) : null}
     </p>
