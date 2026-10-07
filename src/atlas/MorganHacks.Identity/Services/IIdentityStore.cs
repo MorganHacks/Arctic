@@ -155,6 +155,24 @@ public interface IIdentityStore
     /// </remarks>
     Task<PersonDetail?> FindPersonAsync(Guid personId, CancellationToken ct);
 
+    /// <summary>
+    /// One person's own address, and nothing else about them.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="FindPersonAsync"/> for the callers that want this. That
+    /// one loads every team membership, every grant and every team baseline to
+    /// answer a question about one string — sixty-odd rows of a table nobody
+    /// writes to, per request, for a caller that then discards every one of
+    /// them.
+    /// <para>
+    /// The address is the whole of the authorization for the callers that want
+    /// it: a test send may only go to the person who asked for it, so "who is
+    /// asking" and "where may this go" are the same lookup, and there is
+    /// nothing else about the person worth reading.
+    /// </para>
+    /// </remarks>
+    Task<string?> FindOwnEmailAsync(Guid personId, CancellationToken ct);
+
     /// <summary>Every team and the baseline it confers.</summary>
     Task<IReadOnlyList<TeamSummary>> ListTeamsAsync(CancellationToken ct);
 

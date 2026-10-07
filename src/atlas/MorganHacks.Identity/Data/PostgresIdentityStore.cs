@@ -538,6 +538,16 @@ public sealed class PostgresIdentityStore(NpgsqlDataSource dataSource) : IIdenti
             personId, kind, email, revokedAt, memberships, grants, linked, fullName, avatarUrl);
     }
 
+    public async Task<string?> FindOwnEmailAsync(Guid personId, CancellationToken ct)
+    {
+        const string sql = "SELECT email FROM identity.people WHERE id = @id";
+
+        await using var cmd = dataSource.CreateCommand(sql);
+        cmd.Parameters.AddWithValue("id", personId);
+        var email = await cmd.ExecuteScalarAsync(ct);
+        return email as string;
+    }
+
     public async Task<IReadOnlyList<TeamSummary>> ListTeamsAsync(CancellationToken ct)
     {
         // LEFT JOIN so a team with no baseline still appears. One that grants
