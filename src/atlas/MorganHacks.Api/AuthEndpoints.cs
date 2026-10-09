@@ -265,6 +265,40 @@ public static class AuthEndpoints
             return Results.Redirect(landing.Refused);
         }
 
+        // Only a real navigation may spend a token.
+        //
+        // This is a GET that sets a session cookie, so until now anything that
+        // could make a browser fetch a URL could spend somebody else's link --
+        // and the interesting direction is not stealing a session but planting
+        // one. An attacker signs up as an applicant, requests their own link,
+        // and gets a victim's browser to load it; the victim is then quietly
+        // signed in as the attacker and every resume or profile they go on to
+        // save lands in an account the attacker reads.
+        //
+        // Sec-Fetch-Dest says what the browser wanted the bytes for. A top-level
+        // navigation says `document`; an <img>, <iframe>, fetch or prefetch says
+        // image, iframe, empty or something else, and none of those is a person
+        // clicking a link in their mail.
+        //
+        // Deliberately NOT Sec-Fetch-Site. A link clicked in Gmail is a
+        // cross-site navigation, so refusing cross-site would refuse the normal
+        // case -- every applicant, every time.
+        //
+        // Absent means allow. The header is sent by every browser this is used
+        // from, but a missing header is also what a mail client preview fetch or
+        // an old browser looks like, and failing closed there would lock people
+        // out of their own application to close a hole that still needs the
+        // attacker to get a link in front of them.
+        var destination = http.Request.Headers["Sec-Fetch-Dest"].ToString();
+        if (!string.IsNullOrEmpty(destination)
+            && !string.Equals(destination, "document", StringComparison.Ordinal))
+        {
+            log.LogWarning(
+                "Refused to consume a sign-in link fetched as {Destination} rather than a navigation.",
+                destination);
+            return Results.Redirect(landing.Refused);
+        }
+
         var result = await links.ConsumeAsync(token, ct);
         if (!result.Accepted)
         {
