@@ -16,13 +16,20 @@ public static class RequirePermissionExtensions
 {
     public const string SessionCookie = "mh_session";
 
+    /// <summary>Requires every listed permission, resolving the session and permissions once.</summary>
     public static TBuilder RequirePermission<TBuilder>(
-        this TBuilder builder, Permission permission)
+        this TBuilder builder, params Permission[] required)
         where TBuilder : IEndpointConventionBuilder
-        => builder.RequireAnyPermission(permission);
+        => builder.RequirePermissions(required, requireAll: true);
 
+    /// <summary>Requires at least one of the listed permissions.</summary>
     public static TBuilder RequireAnyPermission<TBuilder>(
         this TBuilder builder, params Permission[] required)
+        where TBuilder : IEndpointConventionBuilder
+        => builder.RequirePermissions(required, requireAll: false);
+
+    private static TBuilder RequirePermissions<TBuilder>(
+        this TBuilder builder, Permission[] required, bool requireAll)
         where TBuilder : IEndpointConventionBuilder
     {
         builder.AddEndpointFilter(async (context, next) =>
@@ -49,7 +56,7 @@ public static class RequirePermissionExtensions
             var permissions = http.RequestServices.GetRequiredService<PermissionService>();
             var effective = await permissions.ForAsync(session.PersonId, http.RequestAborted);
 
-            if (!required.Any(effective.Can))
+            if (!(requireAll ? required.All(effective.Can) : required.Any(effective.Can)))
             {
                 // A plain 403, not Results.Forbid(). Forbid() delegates to the
                 // authentication stack and throws when no scheme is
