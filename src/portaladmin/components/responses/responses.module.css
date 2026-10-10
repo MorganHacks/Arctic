@@ -16,7 +16,14 @@
 .tableFrame { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--raised); }
 .scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 40px; }
 .scroll:focus-visible { outline: none; }
-.table { --respondent-width: 300px; width: 100%; min-width: calc(var(--respondent-width) + var(--answer-columns-width)); table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+/*
+ * The width the table asks for is the sticky respondent column plus
+ * --answer-columns-width, which responses-table.tsx builds from the columns
+ * actually on screen. The two together are meant to sit inside a laptop with
+ * the sidebar open: past that the box scrolls sideways rather than the page,
+ * and the sticky first column is what keeps the rows readable when it does.
+ */
+.table { --respondent-width: 264px; width: 100%; min-width: calc(var(--respondent-width) + var(--answer-columns-width)); table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .respondentColumn { width: var(--respondent-width); }
 .table th, .table td { padding: 10px 18px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 75%, transparent); text-align: left; white-space: nowrap; vertical-align: middle; }
 .table thead th { position: sticky; top: 0; z-index: 2; height: 40px; max-width: 280px; padding-block: 9px; overflow: hidden; background: var(--field); color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; text-overflow: ellipsis; }

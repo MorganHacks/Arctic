@@ -24,26 +24,55 @@ export function ResponsesTable({ fields, items, openId, onOpen, showResume, colu
   // A resume column on a form that never asked for one is an empty column on
   // every row forever.
   const resumes = showResume && items.some((item) => item.resume !== null);
+
+  /*
+   * How wide each answer column is allowed to be.
+   *
+   * Ceilings, not measurements: the table lays out at `table-layout: fixed`,
+   * so nothing here grows with what anybody wrote. An answer longer than its
+   * column is clipped with an ellipsis, its whole text stays in the cell for
+   * a screen reader and in the title for anyone who hovers it, and the panel
+   * one click or Enter away holds it in full — which is what makes a ceiling
+   * safe to have at all.
+   *
+   * What the number decides is how much screen the table asks for. The three
+   * columns that are not answers — respondent, submitted, resume — come to
+   * 560px between them, and a 1440px window with the sidebar open has 1080px
+   * of content, so three answer columns have about 520px to share. The old
+   * widths took 604 and put the table 155px past the edge of its own box,
+   * which is how the resume column came to sit half hidden behind a sideways
+   * scroll nobody had asked for. Enough columns to pass the box and it still
+   * scrolls; the sticky first column is there for that.
+   */
   const widths = columns.map((column) => {
     switch (column.field?.type) {
-      case "number": return 80;
-      case "phone": return 156;
-      case "date": return 140;
-      case "email": return 256;
-      case "consent": return 180;
-      default: return 224;
+      case "number": return 76;
+      case "phone": return 140;
+      case "date": return 128;
+      case "email": return 208;
+      case "consent": return 156;
+      default: return 176;
     }
   });
+
+  /*
+   * The two fixed columns that are not answers, named once each. The table's
+   * minimum width is built from them as well as from the colgroup below, and
+   * two copies of a number is a table that scrolls sideways for a reason no
+   * single line explains.
+   */
+  const submittedWidth = 152;
+  const resumeWidth = 144;
 
   return (
     <div className={styles.scroll} role="region" aria-label="Responses table" tabIndex={0}>
       <table className={styles.table} aria-label="Form responses" aria-busy={loading}
-        style={{ "--answer-columns-width": `${184 + widths.reduce((total, width) => total + width, 0) + (resumes ? 144 : 0)}px` } as CSSProperties}>
+        style={{ "--answer-columns-width": `${submittedWidth + widths.reduce((total, width) => total + width, 0) + (resumes ? resumeWidth : 0)}px` } as CSSProperties}>
         <colgroup>
           <col className={styles.respondentColumn} />
-          <col style={{ width: 184 }} />
+          <col style={{ width: submittedWidth }} />
           {columns.map((column, index) => <col key={column.key} style={{ width: widths[index] }} />)}
-          {resumes ? <col style={{ width: 144 }} /> : null}
+          {resumes ? <col style={{ width: resumeWidth }} /> : null}
         </colgroup>
         <thead>
           <tr>
