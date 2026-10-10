@@ -114,3 +114,37 @@ public static class ApplicationStatuses
         _ => throw new ArgumentException($"Unknown application status '{wire}'.", nameof(wire)),
     };
 }
+
+/// <summary>Who the applicant portal is for.</summary>
+/// <remarks>
+/// Accepted, confirmed, checked in. The portal exists to carry somebody from
+/// a decision to a door on the day -- the venue, the schedule, the Discord
+/// invite an organizer posts an hour before doors -- so the people it is for
+/// are the people who are coming.
+/// <para>
+/// This was not enforced anywhere until now. The group required a session and
+/// a feature flag and nothing else, so anybody who had ever applied could sign
+/// in and read every announcement for the event. RSVP and the check-in code
+/// were already gated, which is what made it look right from the organizer
+/// side: the writes were protected and the reading was not.
+/// </para>
+/// <para>
+/// Waitlisted is deliberately out. A waitlisted applicant is not coming yet,
+/// and the announcements they would read are addressed to people who are --
+/// promoting somebody to accepted is what lets them in, which is the decision
+/// an organizer already makes.
+/// </para>
+/// </remarks>
+public static class PortalAccess
+{
+    public static readonly IReadOnlySet<ApplicationStatus> Allowed =
+        new HashSet<ApplicationStatus>
+        {
+            ApplicationStatus.Accepted,
+            ApplicationStatus.Confirmed,
+            ApplicationStatus.CheckedIn,
+        };
+
+    /// <summary>The stored spellings, for a SQL predicate.</summary>
+    public static string[] AllowedWire { get; } = [.. Allowed.Select(s => s.ToWire())];
+}

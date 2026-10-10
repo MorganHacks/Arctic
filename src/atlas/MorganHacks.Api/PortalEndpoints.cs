@@ -67,7 +67,8 @@ public static class PortalEndpoints
         // answer a route that was never built gives.
         var portal = app.MapGroup("/portal")
             .RequireFeature(Flags.HackerPortal)
-            .RequireSession();
+            .RequireSession()
+            .RequirePortalAccess();
 
         portal.MapGet("/me", Me);
         portal.MapPatch("/profile", SaveProfile);
@@ -134,6 +135,59 @@ public static class PortalEndpoints
     /// absence of an application is a state of the page, not a missing
     /// resource.
     /// </remarks>
+    /// <summary>
+    /// Shuts the portal to anybody who is not coming to the event.
+    /// </summary>
+    /// <remarks>
+    /// On the group rather than on each route, next to the session gate, so a
+    /// route added later is behind it by default. The front end has its own
+    /// redirect, but a layout check only decides what is drawn -- /portal/*
+    /// answers on its own, and a gate the API does not hold is a gate.
+    /// <para>
+    /// This closes a real hole rather than tidying one. Until now the group
+    /// asked for a session and a feature flag and nothing else, so anybody who
+    /// had ever applied -- rejected, withdrawn, waitlisted -- could sign in and
+    /// read every announcement for the event, which is where an organizer puts
+    /// the venue, the schedule and the Discord invite. RSVP and the check-in
+    /// code were already gated by status, which is exactly why it looked right
+    /// from the organizer side: the writes were guarded and the reading was not.
+    /// </para>
+    /// <para>
+    /// 404 rather than 403, matching <see cref="FeatureExtensions.RequireFeature"/>
+    /// above it. Somebody who is not coming should find a portal that is not
+    /// there, not one that tells them they are not allowed in -- and the two
+    /// gates on this group should not answer a rejected applicant differently
+    /// depending on which of them stopped them.
+    /// </para>
+    /// <para>
+    /// One extra read per portal request, by the same path
+    /// <see cref="IApplicantPortalStore.FindForPersonAsync"/> already takes --
+    /// scoped to the caller's own person id, never to an id from the request.
+    /// </para>
+    /// </remarks>
+    private static TBuilder RequirePortalAccess<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        builder.AddEndpointFilter(async (context, next) =>
+        {
+            var http = context.HttpContext;
+            var store = http.RequestServices.GetRequiredService<IApplicantPortalStore>();
+            var application = await store.FindForPersonAsync(http.PersonId(), http.RequestAborted);
+
+            // No application is the same answer as the wrong status. An
+            // organizer who signs in here has never applied, and the portal has
+            // nothing to show them either.
+            if (application is null || !PortalAccess.Allowed.Contains(application.Status))
+            {
+                return Results.NotFound();
+            }
+
+            return await next(context);
+        });
+
+        return builder;
+    }
+
     private static async Task<IResult> Me(
         HttpContext http, IApplicantPortalStore store, CancellationToken ct)
     {

@@ -310,6 +310,62 @@ public class PortalTests(IdentityDatabase db)
         }
     }
 
+    [Theory]
+    [InlineData(ApplicationStatus.Accepted)]
+    [InlineData(ApplicationStatus.Confirmed)]
+    [InlineData(ApplicationStatus.CheckedIn)]
+    public async Task The_portal_opens_for_somebody_who_is_coming(ApplicationStatus status)
+    {
+        var person = await db.AddPersonAsync(Unique("coming"));
+        var eventId = await AddEventAsync(decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, status);
+
+        var response = await Client().SendAsync(Get("/portal/me", await SignIn(person)));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The portal is shut to anybody who is not coming.
+    /// </summary>
+    /// <remarks>
+    /// Announcements are the reason this matters rather than the status screen.
+    /// They are filtered by event and nothing else, so before this gate existed
+    /// a rejected applicant could read the venue, the schedule and whatever an
+    /// organizer posted an hour before doors. RSVP and the check-in code were
+    /// already gated, which is what made the gap easy to miss: the writes were
+    /// guarded and the reading was not.
+    /// <para>
+    /// 404 rather than 403, matching the feature gate on the same group. A
+    /// portal somebody is not in should look like a portal that is not there.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(ApplicationStatus.Incomplete)]
+    [InlineData(ApplicationStatus.Submitted)]
+    [InlineData(ApplicationStatus.UnderReview)]
+    [InlineData(ApplicationStatus.Rejected)]
+    [InlineData(ApplicationStatus.Waitlisted)]
+    [InlineData(ApplicationStatus.Declined)]
+    [InlineData(ApplicationStatus.Withdrawn)]
+    public async Task The_portal_is_shut_to_somebody_who_is_not(ApplicationStatus status)
+    {
+        var person = await db.AddPersonAsync(Unique("notcoming"));
+        var eventId = await AddEventAsync(decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        var application = await AddApplicationAsync(eventId, person, ApplicationStatus.Incomplete);
+        await Decide(application, status);
+
+        var cookie = await SignIn(person);
+        var client = Client();
+
+        foreach (var path in new[] { "/portal/me", "/portal/announcements", "/portal/check-in" })
+        {
+            var response = await client.SendAsync(Get(path, cookie));
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+    }
+
     // --------------------------------------------------------------- writes ---
 
     [Fact]
