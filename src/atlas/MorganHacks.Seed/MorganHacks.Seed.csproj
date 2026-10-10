@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MorganHacks.Applications/MorganHacks.Applications.csproj" />
+  </ItemGroup>
+</Project>
