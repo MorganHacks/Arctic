@@ -67,17 +67,29 @@ public static class PortalEndpoints
         // answer a route that was never built gives.
         var portal = app.MapGroup("/portal")
             .RequireFeature(Flags.HackerPortal)
-            .RequireSession()
-            .RequirePortalAccess();
+            .RequireSession();
 
         portal.MapGet("/me", Me);
         portal.MapPatch("/profile", SaveProfile);
         portal.MapPost("/rsvp", AnswerRsvp);
         portal.MapGet("/messages", Messages);
-        portal.MapGet("/announcements", Announcements);
-        portal.MapPost("/announcements/{id:guid}/vote", VoteAnnouncement);
-        portal.MapPut("/announcements/{id:guid}/reaction", ReactToAnnouncement);
-        portal.MapDelete("/announcements/{id:guid}/reaction", RemoveAnnouncementReaction);
+        // The announcement routes, and only these, are gated on status.
+        //
+        // Everything else under /portal is the applicant's own: their decision,
+        // their profile, their resume, the mail we sent them. Somebody who
+        // withdrew should still be able to read why the door is shut, and
+        // PortalResumeEndpoints goes to some trouble to tell them.
+        //
+        // The feed is the exception because it is the one thing here that is
+        // not theirs. It is filtered by event and nothing else -- there is no
+        // audience column to filter on -- so it carries the venue, the
+        // schedule and whatever an organizer posts an hour before doors, to
+        // anybody who ever applied. That is the hole; the status screen never
+        // was one.
+        portal.MapGet("/announcements", Announcements).RequireComing();
+        portal.MapPost("/announcements/{id:guid}/vote", VoteAnnouncement).RequireComing();
+        portal.MapPut("/announcements/{id:guid}/reaction", ReactToAnnouncement).RequireComing();
+        portal.MapDelete("/announcements/{id:guid}/reaction", RemoveAnnouncementReaction).RequireComing();
         portal.MapGet("/check-in", CheckIn);
 
         // POST rather than DELETE, and no id in the path. There is no resource
@@ -136,13 +148,14 @@ public static class PortalEndpoints
     /// resource.
     /// </remarks>
     /// <summary>
-    /// Shuts the portal to anybody who is not coming to the event.
+    /// Shuts the event feed to anybody who is not coming to it.
     /// </summary>
     /// <remarks>
-    /// On the group rather than on each route, next to the session gate, so a
-    /// route added later is behind it by default. The front end has its own
-    /// redirect, but a layout check only decides what is drawn -- /portal/*
-    /// answers on its own, and a gate the API does not hold is a gate.
+    /// On the announcement routes rather than on the group, because the rest of
+    /// the portal is the applicant's own and a withdrawn applicant should still
+    /// be able to read why. The front end has its own redirect, but a layout
+    /// check only decides what is drawn -- these routes answer on their own,
+    /// and a gate the API does not hold is not a gate.
     /// <para>
     /// This closes a real hole rather than tidying one. Until now the group
     /// asked for a session and a feature flag and nothing else, so anybody who
@@ -165,7 +178,7 @@ public static class PortalEndpoints
     /// scoped to the caller's own person id, never to an id from the request.
     /// </para>
     /// </remarks>
-    private static TBuilder RequirePortalAccess<TBuilder>(this TBuilder builder)
+    private static TBuilder RequireComing<TBuilder>(this TBuilder builder)
         where TBuilder : IEndpointConventionBuilder
     {
         builder.AddEndpointFilter(async (context, next) =>

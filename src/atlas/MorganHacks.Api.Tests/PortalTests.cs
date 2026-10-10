@@ -237,7 +237,7 @@ public class PortalTests(IdentityDatabase db)
         // read as the portal being broken.
         var person = await db.AddPersonAsync(Unique("empty"));
 
-        var response = await Client().SendAsync(Get("/portal/me", await SignIn(person)));
+        var response = await Client().SendAsync(Get("/portal/announcements", await SignIn(person)));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -314,7 +314,7 @@ public class PortalTests(IdentityDatabase db)
     [InlineData(ApplicationStatus.Accepted)]
     [InlineData(ApplicationStatus.Confirmed)]
     [InlineData(ApplicationStatus.CheckedIn)]
-    public async Task The_portal_opens_for_somebody_who_is_coming(ApplicationStatus status)
+    public async Task The_feed_opens_for_somebody_who_is_coming(ApplicationStatus status)
     {
         var person = await db.AddPersonAsync(Unique("coming"));
         var eventId = await AddEventAsync(decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
@@ -327,7 +327,7 @@ public class PortalTests(IdentityDatabase db)
     }
 
     /// <summary>
-    /// The portal is shut to anybody who is not coming.
+    /// The event feed is shut to anybody who is not coming.
     /// </summary>
     /// <remarks>
     /// Announcements are the reason this matters rather than the status screen.
@@ -349,7 +349,7 @@ public class PortalTests(IdentityDatabase db)
     [InlineData(ApplicationStatus.Waitlisted)]
     [InlineData(ApplicationStatus.Declined)]
     [InlineData(ApplicationStatus.Withdrawn)]
-    public async Task The_portal_is_shut_to_somebody_who_is_not(ApplicationStatus status)
+    public async Task The_feed_is_shut_to_somebody_who_is_not(ApplicationStatus status)
     {
         var person = await db.AddPersonAsync(Unique("notcoming"));
         var eventId = await AddEventAsync(decisionsAnnouncedAt: DateTimeOffset.UtcNow.AddDays(-1));
@@ -359,11 +359,15 @@ public class PortalTests(IdentityDatabase db)
         var cookie = await SignIn(person);
         var client = Client();
 
-        foreach (var path in new[] { "/portal/me", "/portal/announcements", "/portal/check-in" })
-        {
-            var response = await client.SendAsync(Get(path, cookie));
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        }
+        var feed = await client.SendAsync(Get("/portal/announcements", cookie));
+        Assert.Equal(HttpStatusCode.NotFound, feed.StatusCode);
+
+        // And the rest of the portal is still theirs. Shutting the whole thing
+        // would take away the sentence a withdrawn applicant needs -- their own
+        // decision, their own resume, the mail we sent them. Only the feed is
+        // not theirs.
+        var own = await client.SendAsync(Get("/portal/me", cookie));
+        Assert.Equal(HttpStatusCode.OK, own.StatusCode);
     }
 
     // --------------------------------------------------------------- writes ---
