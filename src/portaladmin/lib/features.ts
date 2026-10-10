@@ -18,6 +18,12 @@ import defaults from "@/features.json";
 /** The applicant portal. Off means /portal sends people to the public site. */
 export const HACKER_PORTAL = "enable_hacker_portal_feature";
 
+/**
+ * The check-in desk. Off hides it from the nav and refuses direct visits.
+ * Overridden with ENABLE_CHECK_IN_DESK=true; still needs checkin.scan to scan.
+ */
+export const CHECK_IN_DESK = "enable_check_in_desk";
+
 export function isOn(flag: string): boolean {
   // Explicitly compared to "true" rather than treated as truthy. An unset
   // variable is undefined, but a variable set to "false" is a non-empty string

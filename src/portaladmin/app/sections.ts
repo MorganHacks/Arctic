@@ -78,6 +78,7 @@ const SECTIONS: readonly GatedSection[] = [
   { href: "/people", label: "People", needs: ["people.view"] },
   { href: "/forms", label: "Forms", needs: ["applications.view"] },
   { href: "/applicants", label: "Applicants", needs: ["applications.view"] },
+  { href: "/check-in", label: "Check-in", needs: ["checkin.scan", "checkin.view_stats"] },
   { href: "/mail", label: "Email Campaign", needs: ["email.view_stats"] },
   { href: "/templates", label: "Templates", needs: ["email.manage_templates", "email.delete_templates"] },
   { href: "/audit", label: "Audit", needs: ["audit.view"] },

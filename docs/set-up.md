@@ -527,7 +527,7 @@ you decided.
 Environment **variables** (set per environment — Staging and Production have
 their own): `SUPER_ADMIN_EMAIL`, `AWS_REGION`, `GOOGLE_CLIENT_ID`,
 `GOOGLE_REDIRECT_URI`, `PUBLIC_BASE_URL`, `FORMS_BASE_URL`, `CONSOLE_BASE_URL`,
-`WARM_REPLICAS`, `ENABLE_HACKER_PORTAL_FEATURE`.
+`WARM_REPLICAS`, `ENABLE_HACKER_PORTAL_FEATURE`, `ENABLE_CHECK_IN_DESK`.
 
 Staging has all of these. **Production has none of the secrets**, which is the
 one reason a production deploy would fail today — there is no production

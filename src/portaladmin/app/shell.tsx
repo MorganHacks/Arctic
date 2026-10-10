@@ -1,4 +1,5 @@
 import { currentPerson } from "@/lib/api";
+import { CHECK_IN_DESK, isOn } from "@/lib/features";
 import { sectionsFor } from "./sections";
 import { SidebarLayout, SidebarPage } from "./sidebar";
 import { displayName } from "@/lib/person-profile";
@@ -16,7 +17,9 @@ async function sidebarProps({ fullName, email, templateCount }: SidebarOptions =
     sections: sectionsFor(
       person?.permissions ?? new Set<string>(),
       templateCount === undefined ? {} : { "/templates": templateCount },
-    ),
+      // A tab that only ever refuses teaches its reader that the console
+      // is broken, so the desk stays out of the nav until its flag is on.
+    ).filter((section) => section.href !== "/check-in" || isOn(CHECK_IN_DESK)),
     identity: {
       label: displayName(person?.fullName ?? fullName, address),
       email: address,
