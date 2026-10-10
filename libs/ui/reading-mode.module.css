@@ -1,0 +1,87 @@
+/*
+ * The reading-mode control.
+ *
+ * Sized to sit in an existing bar rather than to introduce a new shape into
+ * one. Every colour is a token from libs/ui/tokens.css and no hex is written
+ * here — the same rule the rest of the shared components follow.
+ */
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Height pinned rather than derived from the text, so reading mode does not
+     change the height of the bar it sits in. A toolbar that grows every time
+     somebody turns reading mode on reads as a bug. */
+  min-width: 36px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--muted);
+  font: 500 13px/1 var(--body);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.toggle:hover {
+  background: var(--sunken);
+  border-color: var(--muted);
+  color: var(--ink);
+}
+
+/*
+ * The pressed state is a colour change and a border, never colour alone.
+ *
+ * docs/design-brief.md 2.4: colour is never the only signal. A reader who
+ * cannot distinguish the accent from the border still sees that the mode is on,
+ * and the `aria-pressed` carries it to a screen reader regardless.
+ */
+.toggle[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * The visible mark.
+ *
+ * "Aa" rather than an icon: the control's whole meaning is a typeface, and a
+ * pictogram of one is less clear than the thing itself. Set in the reading face
+ * when the mode is on, so the control previews what it does.
+ */
+.mark {
+  font-family: var(--reading-body);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+[data-reading="on"] .mark {
+  font-family: var(--font-opendyslexic, var(--body));
+}
+
+/*
+ * The accessible name.
+ *
+ * Visually hidden, and always present. The label must not change when focused
+ * — the pressed state carries the on/off, so a screen reader announces
+ * "Reading mode, toggle button, pressed" rather than the name swapping under
+ * the reader's finger mid-click.
+ */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

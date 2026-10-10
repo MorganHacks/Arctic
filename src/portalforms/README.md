@@ -162,6 +162,23 @@ cached copy shows an applicant questions that are no longer the ones being
 asked, and their answers then get stored against a version they were never
 given.
 
+## Reading mode
+
+The form can render in OpenDyslexic, with wider letter and word spacing and a
+capped measure. Behind `enable_reading_mode_feature` — off by default, and
+`ENABLE_READING_MODE_FEATURE` on Vercel overrides it per environment.
+
+The toggle sits at the top of the form, above the masthead. The choice lives in
+the `arctic_reading_mode` cookie and is read in the root layout, so the first
+paint is already correct; `prefers-contrast: more` is the fallback for somebody
+who has never touched the toggle.
+
+This is the app the feature earns its place in. The application form is the
+longest stretch of reading an applicant does in this whole system, and it is the
+surface where a dyslexic reader is most likely to abandon the thing they came
+for. Its colours come from the form's own theme rather than the shared palette,
+so a themed form gets a reading control that belongs to it.
+
 ## Running it
 
 ```bash

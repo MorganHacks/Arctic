@@ -7,6 +7,10 @@ import { formShareMetadata, formShareOrigin } from "@/lib/form-sharing";
 import { formMlhBadgeColor, formThemeStyle, resolveFormTheme } from "../../../../libs/ui/form-theme";
 import { NoForm } from "../no-form";
 import { Questions } from "./questions";
+import { READING_MODE, isOn } from "@/lib/features";
+import { READING_MODE_COOKIE, initialReadingMode } from "../../../../libs/ui/reading-mode";
+import { ReadingToggle } from "../../components/reading-toggle";
+import { cookies } from "next/headers";
 import { SignIn } from "./sign-in";
 import { MlhBadge } from "./mlh-badge";
 import { DeadlineCountdown } from "./deadline";
@@ -78,7 +82,7 @@ export default async function FormPage({ params, searchParams }: Props) {
   </div>;
 }
 
-function FormContent({ form, expired }: { form: PublicForm; expired: boolean }) {
+async function FormContent({ form, expired }: { form: PublicForm; expired: boolean }) {
 
   /*
    * Closed and empty are separate answers, and conflating them told somebody
@@ -134,6 +138,28 @@ function FormContent({ form, expired }: { form: PublicForm; expired: boolean }) 
   const cards = resolveFormTheme(form.theme).layout === "cards";
   return (
     <main className="page">
+      {/*
+        Reading mode, behind enable_reading_mode_feature.
+
+        Top of the form rather than in a corner of the viewport: this is the
+        longest stretch of reading an applicant does in this system, so the
+        control belongs where they are already looking. Not rendered at all when
+        the flag is off — see docs/feature-flags.md.
+
+        Below the masthead rather than inside it, because the masthead is either
+        a grid column or an `intro` slot depending on the layout, and a control
+        that moves between two positions is a control nobody finds.
+      */}
+      {isOn(READING_MODE) ? (
+        <div className={styles.readingSlot}>
+          <ReadingToggle
+            initial={initialReadingMode(
+              (await cookies()).get(READING_MODE_COOKIE)?.value,
+            )}
+          />
+        </div>
+      ) : null}
+
       {cards ? <HeaderImage form={form} /> : <FormIntro form={form} />}
 
       <Questions

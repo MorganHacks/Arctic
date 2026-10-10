@@ -14,6 +14,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
+import { ReadingToggle } from "@/components/reading-toggle";
 import logo from "@/public/brands/morganhacks.png";
 import { Nav } from "./nav";
 import { useSidebarState } from "./sidebar-state";
@@ -42,11 +43,14 @@ function SidebarContents({
   mobile = false,
   onToggle,
   onNavigate,
+  reading,
 }: SidebarProps & {
   collapsed?: boolean;
   mobile?: boolean;
   onToggle: () => void;
   onNavigate?: () => void;
+  /** Reading mode, already resolved on the server. Absent means the flag is off. */
+  reading?: { enabled: true; initial?: boolean };
 }) {
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -237,6 +241,24 @@ function SidebarContents({
             />
           </button>
         </div>
+
+        {/*
+          Reading mode, behind enable_reading_mode_feature.
+
+          Bottom of the sidebar so it is present on every screen without
+          competing with the sections. Not rendered at all when the flag is off,
+          so the console is then indistinguishable from one that never had it.
+
+          Suppressed in the collapsed rail, where the account button already
+          takes the whole width and there is no room for a second control. An
+          organizer who has collapsed the sidebar keeps the setting in their
+          cookie either way.
+        */}
+        {!collapsed && reading?.enabled ? (
+          <div className={styles.readingSlot}>
+            <ReadingToggle initial={reading.initial} />
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -246,8 +268,13 @@ function SidebarContents({
 export function SidebarLayout({
   sections,
   identity,
+  reading,
   children,
-}: SidebarProps & { children: React.ReactNode }) {
+}: SidebarProps & {
+  children: React.ReactNode;
+  /** Reading mode, resolved on the server. Absent means the flag is off. */
+  reading?: { enabled: true; initial?: boolean };
+}) {
   const pathname = usePathname();
   const [pageSidebar, setPageSidebar] = useState<SidebarProps | null>(null);
   const sidebar = pageSidebar ?? { sections, identity };
@@ -344,6 +371,7 @@ export function SidebarLayout({
             identity={sidebar.identity}
             collapsed={collapsed}
             onToggle={toggleCollapsed}
+            reading={reading}
           />
         </aside>
         <div className={styles.content}>
@@ -385,6 +413,7 @@ export function SidebarLayout({
               mobile
               onToggle={closeMobile}
               onNavigate={closeMobile}
+              reading={reading}
             />
           </div>
         </dialog>

@@ -321,6 +321,19 @@
   flex: none;
   padding: 12px;
 }
+/*
+ * The reading-mode slot at the foot of the sidebar.
+ *
+ * Sits below the account button rather than beside it, so it is present on
+ * every screen without taking width from the sections above. The `wide` class
+ * is what opts the console's dense surfaces out of the measure; a control this
+ * small is unaffected either way.
+ */
+.readingSlot {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 12px 14px;
+}
 .account {
   position: relative;
 }

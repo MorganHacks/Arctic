@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { HACKER_PORTAL, isOn } from "@/lib/features";
+import { HACKER_PORTAL, READING_MODE, isOn } from "@/lib/features";
+import { READING_MODE_COOKIE, initialReadingMode } from "../../../../libs/ui/reading-mode";
+import { cookies } from "next/headers";
+import { ReadingToggle } from "../../components/reading-toggle";
 import Image from "next/image";
 import logo from "@/public/brands/morganhacks.png";
 import { siteConfig } from "@/site.config";
+import "../../../../libs/ui/reading-mode.css";
 import "./portal.css";
 
 export const metadata: Metadata = {
@@ -23,7 +27,7 @@ export const metadata: Metadata = {
  * somebody who is not signed in only offers them two more ways to be told to
  * sign in.
  */
-export default function PortalLayout({
+export default async function PortalLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   // Every screen under /portal passes through here, including the sign-in page,
@@ -67,6 +71,26 @@ export default function PortalLayout({
           />
           <span>portal</span>
         </a>
+
+        {/*
+          Reading mode, behind enable_reading_mode_feature.
+
+          Rendered only when the flag is on, so with the flag off there is no
+          control anywhere in the portal and nothing on the page mentions it —
+          a feature that is off is meant to be indistinguishable from one that
+          was never built. See docs/feature-flags.md.
+
+          The initial value comes from the cookie the root layout already read,
+          so the button's own state is correct on arrival rather than flipping a
+          moment after hydration.
+        */}
+        {isOn(READING_MODE) && (
+          <ReadingToggle
+            initial={initialReadingMode(
+              (await cookies()).get(READING_MODE_COOKIE)?.value,
+            )}
+          />
+        )}
       </header>
 
       {children}

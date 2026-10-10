@@ -18,6 +18,15 @@ import defaults from "@/features.json";
 /** The applicant portal. Off means /portal sends people to the public site. */
 export const HACKER_PORTAL = "enable_hacker_portal_feature";
 
+/**
+ * Reading mode: OpenDyslexic plus the spacing that makes it work.
+ *
+ * Off means the toggle does not render and nothing carries `data-reading`. See
+ * docs/feature-flags.md for why a feature which is off must be
+ * indistinguishable from one that was never built.
+ */
+export const READING_MODE = "enable_reading_mode_feature";
+
 export function isOn(flag: string): boolean {
   // Explicitly compared to "true" rather than treated as truthy. An unset
   // variable is undefined, but a variable set to "false" is a non-empty string

@@ -19,6 +19,23 @@
   color: var(--ink);
 }
 
+/*
+ * The reading-mode slot at the top of the form.
+ *
+ * Above the masthead rather than inside it, because the masthead is either a
+ * sticky grid column or an `intro` slot depending on the form's layout, and a
+ * control that lands in one of two places is a control nobody finds.
+ *
+ * Colours come from the surface's own tokens rather than the console palette:
+ * a form is themed per author, and a reading control that ignored the theme
+ * would be the one thing on the page not from the form.
+ */
+.readingSlot {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
 .surface:where(:has(:global(#mlh-trust-badge))) {
   padding-top: 128px;
   padding-right: calc(clamp(16px, 3vw, 50px) + clamp(60px, 7vw, 90px) + 24px);

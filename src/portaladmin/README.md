@@ -27,6 +27,24 @@ Every page reads the session and renders somebody's data. A cache that outlives
 a request is one that can show an organizer another organizer's view, so
 `apiFetch` is `no-store` and no page opts into caching.
 
+## Reading mode
+
+The console can render in OpenDyslexic, with wider spacing and a capped measure,
+for organizers who find the default face hard going. Behind
+`enable_reading_mode_feature` — off by default, and
+`ENABLE_READING_MODE_FEATURE` on Vercel overrides it per environment.
+
+The toggle sits at the foot of the sidebar, hidden in the collapsed rail where
+there is no room for a second control. The choice lives in the
+`arctic_reading_mode` cookie and is read in the root layout, so the first paint
+is already correct; `prefers-contrast: more` is the fallback for somebody who
+has never touched the toggle.
+
+The measure is deliberately not applied to the review tables, the response
+grids, or the template preview. Those are dense layouts whose width is the
+information, and capping them would leave an organizer unable to see the
+columns they are comparing.
+
 ## Running it
 
 ```bash

@@ -1,0 +1,142 @@
+/*
+ * Reading mode.
+ *
+ * One stylesheet, imported by all three frontends, so the treatment cannot
+ * drift between them. There is no app-specific override anywhere: an applicant
+ * and an organizer reading the same feature should get the same face at the
+ * same size.
+ *
+ * Everything lives inside `[data-reading="on"]`. That attribute is written on
+ * `<html>` and only when the flag is on, so with the flag off these rules never
+ * match a single element — the feature is absent from the page rather than
+ * present and inert. See docs/feature-flags.md.
+ *
+ * The typeface is OpenDyslexic, licensed under the SIL Open Font License 1.1.
+ * The OFL permits web distribution and requires the notice to travel with the
+ * font; @fontsource/opendyslexic ships that notice inside the woff2's metadata
+ * and alongside it, which is why the font is taken from npm rather than
+ * committed to this repository. The notice is repeated here so the next person
+ * changing the font does not have to go looking for it.
+ *
+ * Upstream: opendyslexic.org. The GitHub mirror is archived.
+ */
+
+/*
+ * No `@import` of tokens.css here on purpose: all three frontends already
+ * import it themselves, and every value below is either a variable this file
+ * defines or one that file defines. A second import would be the same rules
+ * applied twice for no benefit.
+ */
+
+/*
+ * The reading face, as a variable rather than a bare `font-family`.
+ *
+ * Everything that currently reads `var(--body)` picks this up without being
+ * touched, which is the point: a mode that needs every component edited is a
+ * mode that gets half-applied. `--body` keeps its own value underneath, so the
+ * fallback chain still ends somewhere real.
+ */
+:root {
+  --reading-body: var(--body);
+  --reading-letter-spacing: normal;
+  --reading-word-spacing: normal;
+  --reading-line-height: normal;
+}
+
+[data-reading="on"] {
+  --reading-body: var(--font-opendyslexic), var(--body);
+  --reading-letter-spacing: 0.02em;
+  --reading-word-spacing: 0.1em;
+  --reading-line-height: 1.85;
+
+  /*
+   * Applied on `<html>` so it inherits into a component somebody writes next
+   * year that has never heard of this feature.
+   */
+  font-family: var(--reading-body);
+  letter-spacing: var(--reading-letter-spacing);
+  word-spacing: var(--reading-word-spacing);
+  line-height: var(--reading-line-height);
+}
+
+/*
+ * The same four things on `body`, because all three apps declare their own
+ * `font-family` there.
+ *
+ * An explicit declaration on the element beats an inherited one from `<html>`,
+ * however specific the ancestor selector is — so without this the portal would
+ * render in Inter while everything below it rendered in the reading face.
+ * Stated once here rather than as an `!important` fight in three stylesheets.
+ */
+[data-reading="on"] body {
+  font-family: var(--reading-body);
+  letter-spacing: var(--reading-letter-spacing);
+  word-spacing: var(--reading-word-spacing);
+  line-height: var(--reading-line-height);
+}
+
+/*
+ * The measure.
+ *
+ * Roughly 45–75 characters a line is readable; past that the eye loses the line
+ * return and has to hunt for the next one. Everything here sets it in `ch`
+ * against the reading face rather than in pixels, because the point of the
+ * measure is characters and a pixel width would drift as the face changed.
+ *
+ * Deliberately NOT applied to the console's tables, the review queue, or the
+ * template preview. Those are dense grids whose width is the information, and
+ * capping them would leave an organizer unable to see the columns they are
+ * comparing. `wide` opts a container out.
+ */
+[data-reading="on"] :where(p, li, dd, blockquote, figcaption) {
+  max-width: 68ch;
+}
+
+/*
+ * A control that has opted out of the measure.
+ *
+ * Used by the dense surfaces. Not by every `table` — a table inside a paragraph
+ * of prose is still fine — but by the ones whose whole job is horizontal room.
+ */
+[data-reading="on"] .wide {
+  max-width: none;
+}
+
+/*
+ * Inputs and textareas.
+ *
+ * They do not inherit `font-family` from `<html>` in most browsers — a form
+ * control defaults to the platform's own face and ignores the cascade — so this
+ * has to be stated or half of every form on the site renders in one face and
+ * the prose around it in another.
+ */
+[data-reading="on"] :where(input, textarea, select, button) {
+  font-family: var(--reading-body);
+  letter-spacing: var(--reading-letter-spacing);
+}
+
+/*
+ * Monospace stays monospace.
+ *
+ * A resume, a config value, a code sample. OpenDyslexic has no mono variant and
+ * its letterforms are tuned for prose, so forcing it here would make code
+ * harder to read in a mode whose entire purpose is easier reading. The spacing
+ * changes still apply, because that part helps regardless of the alphabet.
+ */
+[data-reading="on"] :where(code, kbd, samp, pre) {
+  font-family: var(--mono);
+  letter-spacing: var(--reading-letter-spacing);
+  word-spacing: var(--reading-word-spacing);
+}
+
+/*
+ * Buttons and pills hold their own line-height.
+ *
+ * A control's height is set by its own box rather than by the text's leading,
+ * so raising the global line-height makes single-line buttons taller without
+ * making any of them easier to read. Pinning it stops reading mode from
+ * reflowing every toolbar in the console.
+ */
+[data-reading="on"] :where(button, [role="button"], .pill) {
+  line-height: 1.2;
+}

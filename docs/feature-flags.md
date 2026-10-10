@@ -12,9 +12,9 @@ One file per service, at the root of that service:
 | atlas | `src/atlas/MorganHacks.Api/features.json` | `enable_hacker_portal_feature` |
 | lark | `src/lark/MorganHacks.Lark/features.json` | nothing yet |
 | harbor | `src/harbor/MorganHacks.Harbor/features.json` | nothing yet |
-| portalweb | `src/portalweb/features.json` | `enable_hacker_portal_feature` |
-| portaladmin | `src/portaladmin/features.json` | nothing yet |
-| portalforms | `src/portalforms/features.json` | nothing yet |
+| portalweb | `src/portalweb/features.json` | `enable_hacker_portal_feature`, `enable_reading_mode_feature` |
+| portaladmin | `src/portaladmin/features.json` | `enable_reading_mode_feature` |
+| portalforms | `src/portalforms/features.json` | `enable_reading_mode_feature` |
 
 A service's file lists only the flags that service reads. A flag named in a
 service that never asks for it is worse than no flag at all: somebody turns it
@@ -78,6 +78,31 @@ something they were not meant to see.
    in a server component.
 4. Test both positions. A test that only checks the off case passes just as
    well when the route is broken.
+
+## A flag on the client
+
+One shape is already here, and it is the awkward one, because `isOn` is
+server-only by design — the comment in `lib/features.ts` explains why, and it is
+worth reading before trying to call it from a `"use client"` file.
+
+The two halves of the flag therefore resolve differently:
+
+- **Whether the control exists** is a server decision. `isOn(READING_MODE) &&`
+  in a server component means the button is not in the page at all.
+- **Whether the styling applies** is unconditional CSS. `libs/ui/reading-mode.css`
+  ships in every build, and every rule sits inside `[data-reading="on"]`, an
+  attribute that is only ever written when the flag is on.
+
+CSS imports are static in Next, so they cannot be made conditional at request
+time. This is the honest trade: a few hundred bytes of inert CSS, rather than a
+flash of unstyled text or a build-time switch the Vercel environment override
+cannot reach. Nothing renders and nothing applies, which is what "off" has to
+mean.
+
+`enable_reading_mode_feature` is the one flag shaped this way. Its treatment
+lives in `libs/ui/reading-mode.*`, and it is not read on `portalweb`'s `/`:
+that route is prerendered, so `cookies()` is never called for it and there is no
+first paint to correct.
 
 ## Deliberately not built
 

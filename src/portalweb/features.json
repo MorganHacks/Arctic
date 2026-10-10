@@ -1,3 +1,4 @@
 {
-  "enable_hacker_portal_feature": false
+  "enable_hacker_portal_feature": false,
+  "enable_reading_mode_feature": false
 }

@@ -60,6 +60,23 @@ Everything the public page asserts — year, form URL, socials — lives in
 
 `API_ORIGIN` points at harbor, and defaults to `http://localhost:5080`.
 
+## Reading mode
+
+`/portal` can render in OpenDyslexic, with wider letter and word spacing and a
+capped measure, for readers who find the default face hard going. Behind
+`enable_reading_mode_feature` — off by default, and `ENABLE_READING_MODE_FEATURE`
+on Vercel overrides it per environment.
+
+The toggle is in the portal bar. The choice lives in the `arctic_reading_mode`
+cookie, read in the root layout so the first paint is already correct; the OS
+preference `prefers-contrast: more` is the fallback for a reader who has never
+touched the toggle.
+
+**Not on `/`.** That route is prerendered, so `cookies()` is never called for it
+and there is no first paint to correct — reading mode there would either arrive
+late or cost the marketing page its prerender. The stylesheet and the font are
+still in the bundle; only the `/portal` layout renders the control.
+
 ## The portal
 
 Four screens: `/portal` (status), `/portal/profile`, `/portal/messages` and
