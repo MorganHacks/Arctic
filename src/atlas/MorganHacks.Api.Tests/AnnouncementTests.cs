@@ -831,9 +831,20 @@ public class AnnouncementTests(ApplicationsDatabase db)
     {
         var person = await db.AddPersonAsync(Unique("applicant"));
 
+        // Every column submitted_applications_are_complete asks for. The
+        // constraint holds for any status but incomplete and withdrawn, so
+        // seeding an accepted row means seeding a finished one -- which is the
+        // constraint doing its job: an accepted application missing an
+        // MLH-required field is not a thing that should exist.
         await using var cmd = db.DataSource.CreateCommand("""
-            INSERT INTO applications.applications (event_id, person_id, email, status)
-            VALUES (@eventId, @personId, @email, 'accepted')
+            INSERT INTO applications.applications (
+                event_id, person_id, email, status,
+                first_name, last_name, age, phone, school, level_of_study,
+                country, mlh_coc_agreed_at, mlh_data_sharing_at)
+            VALUES (
+                @eventId, @personId, @email, 'accepted',
+                'Reader', 'Onthelist', 20, '+1 555 0100', 'Morgan State',
+                'Undergraduate', 'United States', now(), now())
             """);
         cmd.Parameters.AddWithValue("eventId", eventId);
         cmd.Parameters.AddWithValue("personId", person);
