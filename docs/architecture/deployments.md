@@ -141,7 +141,7 @@ push cannot trigger.
 Forcing a rebuild without a code change needs a Vercel token:
 
 ```bash
-gh secret set VERCEL_TOKEN -R MorganHacks/Arctic
+gh secret set VERCEL_TOKEN -R Morgan-Hacks/Arctic
 ```
 
 Without it, moving the branch still works — only the force path fails, and it

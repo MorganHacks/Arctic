@@ -99,7 +99,7 @@ jobs:
 
           if [ -z "${VERCEL_TOKEN:-}" ]; then
             echo "::error::Forcing a rebuild without a code change needs a Vercel token."
-            echo "::error::Add it once:  gh secret set VERCEL_TOKEN -R MorganHacks/Arctic"
+            echo "::error::Add it once:  gh secret set VERCEL_TOKEN -R Morgan-Hacks/Arctic"
             echo "::error::Or push a commit to ${{ inputs.ref }} instead."
             exit 1
           fi

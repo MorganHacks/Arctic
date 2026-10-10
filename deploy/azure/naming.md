@@ -52,7 +52,7 @@ Every resource carries the same four, plus `service` where it means something.
 | `workload` | `mh`, so this is separable from anything else in the subscription |
 | `environment` | `staging` or `prod`; `shared` on the registry's own group, which belongs to neither — the filter you actually want in Cost Analysis |
 | `managedBy` | `bicep`, so it is clear a portal edit will be reverted on the next deploy |
-| `repository` | `MorganHacks/Arctic`, so somebody finding a stray resource can find its source |
+| `repository` | `Morgan-Hacks/Arctic`, so somebody finding a stray resource can find its source |
 | `service` | `atlas`, `harbor`, `lark` — on the apps only |
 
 Tags are not decoration. Cost Analysis groups by them, and next year's team

@@ -70,7 +70,7 @@ no cloud account at all.
 ## 1. Start the whole thing
 
 ```bash
-git clone https://github.com/MorganHacks/Arctic.git
+git clone https://github.com/Morgan-Hacks/Arctic.git
 cd Arctic
 deploy/local/dev.sh you@morgan.edu
 ```

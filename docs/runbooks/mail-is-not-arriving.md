@@ -50,7 +50,7 @@ Checked 2026-10-01: production access on, sending on, 50,000/day, in
 ## 3. Region
 
 ```bash
-gh api repos/MorganHacks/Arctic/environments/Staging/variables \
+gh api repos/Morgan-Hacks/Arctic/environments/Staging/variables \
   --jq '.variables[] | select(.name=="AWS_REGION") | .value'
 ```
 
