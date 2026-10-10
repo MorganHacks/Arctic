@@ -1,0 +1,107 @@
+name: Seed staging applicants
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: Total mock applicants (1–1000; existing applicants are preserved)
+        default: '50'
+        required: true
+        type: string
+      apply:
+        description: Create applicants (unchecked runs a preview with no database writes)
+        default: false
+        type: boolean
+
+# Share the deployment lock so seeding cannot overlap staging migrations.
+concurrency:
+  group: deploy-azure-staging
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: Staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SEED_COUNT: ${{ inputs.count }}
+      SEED_APPLY: ${{ inputs.apply }}
+      REGISTRY_NAME: ${{ vars.REGISTRY_NAME || 'crmharctic' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate inputs
+        run: |
+          python3 - <<'PY'
+          import os
+          count = os.environ['SEED_COUNT']
+          if not count.isascii() or not count.isdecimal() or not 1 <= int(count) <= 1000:
+              raise SystemExit('Count must be an integer from 1 to 1000.')
+          PY
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Build seed image
+        run: |
+          az acr build --registry "$REGISTRY_NAME" --image "hacker-seed:$GITHUB_SHA" \
+            --file src/atlas/Dockerfile.seed --platform linux/amd64 . --no-logs
+      - name: Configure staging job
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          az extension add --name containerapp --upgrade --only-show-errors
+          parameters="$(mktemp)"
+          chmod 600 "$parameters"
+          trap 'rm -f "$parameters"' EXIT
+          python3 - "$parameters" <<'PY'
+          import json, os, sys
+          password = os.environ.get('DB_PASSWORD')
+          if not password:
+              raise SystemExit('The Staging environment needs its existing DB_PASSWORD secret.')
+          connection = ('Host=psql-mh-staging.postgres.database.azure.com;Port=5432;'
+                        'Database=morganhacks;Username=arctic;Password="'
+                        + password.replace('"', '""') + '";SSL Mode=VerifyFull')
+          values = dict(dbConnectionString=connection, imageTag=os.environ['GITHUB_SHA'],
+                        registryName=os.environ['REGISTRY_NAME'],
+                        applicantCount=int(os.environ['SEED_COUNT']),
+                        apply=os.environ['SEED_APPLY'] == 'true')
+          with open(sys.argv[1], 'w') as output:
+              json.dump({'parameters': {k: {'value': v} for k, v in values.items()}}, output)
+          PY
+          az deployment group create --resource-group rg-mh-staging \
+            --name staging-seed-job --template-file deploy/azure/seed-staging.bicep \
+            --parameters "@$parameters" --output none
+      - name: Run seed job
+        run: |
+          set -euo pipefail
+          execution="$(az containerapp job start --resource-group rg-mh-staging \
+            --name caj-seed-staging --query name --output tsv)"
+          test -n "$execution"
+          deadline=$((SECONDS + 660))
+          while (( SECONDS < deadline )); do
+            status="$(timeout 30 az containerapp job execution show \
+              --resource-group rg-mh-staging --name caj-seed-staging \
+              --job-execution-name "$execution" --query properties.status --output tsv)"
+            case "$status" in
+              Succeeded) break ;;
+              Failed|Stopped|Degraded) echo "Seed job ended: $status"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          if [[ "$status" != Succeeded ]]; then
+            echo "Seed job did not complete within the time limit. Check Azure job execution $execution."
+            exit 1
+          fi
+          {
+            echo '### Staging applicant seed completed'
+            echo "Apply: $SEED_APPLY; requested total: $SEED_COUNT"
+            echo "Execution: $execution"
+            echo '[Open mock applicants](https://admin-stg.morganhacks.com/applicants?event=028c6934-b837-44e4-9b40-076083d126ae)'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -84,6 +84,21 @@ public sealed class SeedRunner(NpgsqlDataSource source)
         for (var i = 1; i <= count; i++)
         {
             var email = Email(i);
+            // Install suppression BEFORE an address becomes visible to organizers/campaigns.
+            // Manual suppression blocks transactional and broadcast messages in Lark, including
+            // later decisions in the UI. Repair an unsubscribe-only rule on reruns as well.
+            await using (var suppress = source.CreateCommand("""
+                INSERT INTO notify.suppressions(email, reason) VALUES (@email, 'manual')
+                ON CONFLICT (email) DO UPDATE SET reason='manual'
+                    WHERE notify.suppressions.reason='unsubscribed';
+                UPDATE notify.messages SET status='suppressed', locked_by=NULL, locked_until=NULL
+                WHERE to_email=@email::citext AND status='pending';
+                """))
+            {
+                suppress.Parameters.AddWithValue("email", email);
+                await suppress.ExecuteNonQueryAsync();
+            }
+
             await using var exists = source.CreateCommand(
                 "SELECT EXISTS (SELECT 1 FROM applications.applications WHERE event_id=@event AND lower(email)=@email)");
             exists.Parameters.AddWithValue("event", EventId);

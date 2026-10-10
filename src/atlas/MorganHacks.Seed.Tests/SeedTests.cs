@@ -37,6 +37,31 @@ public sealed class SeedTests
         Assert.Equal(1000, Enumerable.Range(1, 1000).Select(SeedRunner.Email).Distinct().Count());
     }
 
+    private static readonly Dictionary<string, string> StagingSettings = new()
+    {
+        ["ARCTIC_TARGET"] = "staging",
+        ["DOTNET_ENVIRONMENT"] = "Staging",
+        ["ARCTIC_DB"] = "Host=psql-mh-staging.postgres.database.azure.com;Database=morganhacks;Username=arctic;Password=test-only;SSL Mode=VerifyFull",
+    };
+
+    [Fact]
+    public void Accepts_only_explicit_staging_configuration() =>
+        Assert.Contains("psql-mh-staging", SeedSafety.StagingConnection(k => StagingSettings.GetValueOrDefault(k)));
+
+    [Theory]
+    [InlineData("ARCTIC_TARGET", "production")]
+    [InlineData("ARCTIC_TARGET", "local")]
+    [InlineData("DOTNET_ENVIRONMENT", "Production")]
+    [InlineData("DOTNET_ENVIRONMENT", "")]
+    [InlineData("ASPNETCORE_ENVIRONMENT", "Production")]
+    [InlineData("ARCTIC_DB", "Host=psql-mh-prod.postgres.database.azure.com;Database=morganhacks;Username=arctic;Password=test;SSL Mode=VerifyFull")]
+    [InlineData("ARCTIC_DB", "Host=localhost;Database=morganhacks;Username=arctic;Password=test;SSL Mode=VerifyFull")]
+    [InlineData("ARCTIC_DB", "Host=psql-mh-staging.postgres.database.azure.com;Database=morganhacks;Username=arctic;Password=test;SSL Mode=Require")]
+    [InlineData("ARCTIC_DB", "Host=psql-mh-staging.postgres.database.azure.com;Database=production;Username=arctic;Password=test;SSL Mode=VerifyFull")]
+    public void Staging_refuses_wrong_environment_or_database(string key, string value) =>
+        Assert.Throws<InvalidOperationException>(() => SeedSafety.StagingConnection(
+            k => k == key ? value : StagingSettings.GetValueOrDefault(k)));
+
     [Fact]
     [Trait("Category", "Database")]
     public async Task Seeds_real_schema_and_preserves_review_changes_on_rerun()
@@ -56,6 +81,13 @@ public sealed class SeedTests
         var sentinelId = (Guid)(await sentinel.ExecuteScalarAsync())!;
         var seed = new SeedRunner(source);
         Assert.Equal(new SeedResult(50, 0), await seed.RunAsync(50));
+        var queue = new MorganHacks.Lark.Data.Data.MessageQueue(source);
+        for (var i = 1; i <= 50; i++)
+        {
+            Assert.True(await queue.IsSuppressedAsync(SeedRunner.Email(i), transactional: true));
+            Assert.True(await queue.IsSuppressedAsync(SeedRunner.Email(i), transactional: false));
+        }
+        Assert.False(await queue.IsSuppressedAsync("existing@example.org", transactional: true));
         await using var query = source.CreateCommand("""
             SELECT count(*),count(DISTINCT status),
                 count(*) FILTER (WHERE status <> 'incomplete' AND submitted_at IS NULL),

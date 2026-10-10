@@ -54,3 +54,16 @@ docs/    setup, architecture, runbooks, backlog, in-progress plans
 - **[Deploying](deploy/azure/README.md)** — what ships, and why it's Bicep and not a script
 - **[Runbooks](docs/runbooks/README.md)** — what to do when something breaks
 - **[docs/](docs/README.md)** — everything else: architecture, backlog, open plans
+
+## Simulate organizer reviews
+
+For local mock applicants, start the local stack and run
+`deploy/local/seed-hackers.sh --apply`. For shared team testing, run the manual
+**Seed staging applicants** GitHub Action from `main`, with **Create applicants**
+checked, then select **MOCK — Organizer simulation** in the
+[staging organizer console](https://admin-stg.morganhacks.com).
+
+Both create a separate mock event and preserve review changes on reruns. Merging
+alone does not seed staging; production is blocked and mock email addresses are
+suppressed. See [setup instructions](docs/set-up.md#mock-applicants-for-organizer-simulations)
+and [the seed guide](src/atlas/MorganHacks.Seed/README.md).

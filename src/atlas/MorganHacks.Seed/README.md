@@ -1,7 +1,9 @@
-# Local organizer simulations
+# Organizer simulations: local and staging
 
 Create fake applicants for reviewing, filtering, decisions, and analytics in the
-**local** organizer console. This does not add applicants to admin.morganhacks.com.
+**local** or **staging** organizer console. Production remains blocked.
+
+## Local use
 
 Start the normal local stack first, including migrations and your organizer login:
 
@@ -40,10 +42,11 @@ fixtures for fictional applicants, not records of real consent. Reviewers may ad
 notes and change statuses normally. The initial history has a null actor and a
 synthetic-data reason for reviewer transitions; no real organizer is impersonated.
 
-This first version does not create login identities, resume files, or email
-messages. It does not test the hacker portal or send notifications during seeding.
-Normal actions in the organizer UI may still queue messages; keep local mail
-sending disabled, as in the standard local setup.
+The seed does not create login identities, resume files, or email messages. It does
+not test the hacker portal. Before inserting each applicant, it adds a manual
+email suppression for that mock address. This blocks both transactional and
+broadcast delivery, including emails triggered by subsequent organizer decisions.
+Existing unrelated addresses are unaffected.
 
 ## Reruns and failures
 
@@ -56,7 +59,7 @@ created application that failed, so rerunning can retry it. A process killed mid
 may leave that one row partially prepared; reruns preserve it like any other
 existing application. There is intentionally no destructive reset command.
 
-## Local-only safeguards
+## Local safeguards
 
 The launcher verifies a local Docker socket, the Compose Postgres container, and
 its Postgres cluster identifier. The utility compares that identifier with the
@@ -73,8 +76,46 @@ These are safeguards against accidental targeting, not a security boundary again
 someone editing the utility or supplying its internal verification argument.
 
 The utility is a standalone console project. It is not referenced by the API or
-migrations, and is never invoked by startup or deployment. It changes no schema.
-It calls application stores directly, bypassing endpoint email orchestration.
+migrations and never runs on application startup. It changes no schema. It calls
+application stores directly, bypassing endpoint email orchestration.
+
+## Shared staging simulations
+
+After this workflow is merged into `main`, open GitHub → **Actions → Seed staging
+applicants → Run workflow**. Choose `main`, leave the count at 50 (or enter 1–1000),
+and first leave **Create applicants** unchecked to preview. This preview validates
+the configuration without connecting to or writing to the database; it still builds
+the image and configures the Azure job. To populate staging, run it again with
+**Create applicants** checked.
+
+Wait for the action to succeed, then open
+[the staging organizer console](https://admin-stg.morganhacks.com/applicants?event=028c6934-b837-44e4-9b40-076083d126ae)
+and choose **MOCK — Organizer simulation**. Everyone with the appropriate staging
+organizer permissions sees the same applicants. This does not create organizer
+accounts; use the existing staging sign-in process.
+
+Merging alone does not seed any database. This is a separate, manually launched
+action. It uses the existing GitHub **Staging** environment's Azure OIDC variables
+(`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`) and `DB_PASSWORD`
+secret, plus optional `REGISTRY_NAME`. The existing staging infrastructure and
+schema migrations must already be deployed. Environment approval rules still apply.
+
+The action builds a standalone image, provisions `caj-seed-staging` in
+`rg-mh-staging`, and waits for that exact execution to finish. It shares the staging
+deployment lock so migrations cannot overlap. The Azure identity needs permissions
+to build in the registry and deploy/run this job, in addition to the existing
+staging resources. If Azure denies a step, an infrastructure maintainer must grant
+the missing access; no production credentials should be substituted.
+
+The job requires explicit staging environment settings and allows only
+`psql-mh-staging.postgres.database.azure.com:5432/morganhacks`, with full TLS
+certificate verification. There is no production target input. Local mode retains
+its Docker-cluster verification. Mock addresses are suppressed before applicants
+become visible; retain those suppressions while using the mock event.
+
+Rerunning preserves review decisions and notes and can extend the requested count.
+There is no reset/delete option. This first version intentionally uses its own mock
+form/event rather than changing the real event's questions or applicants.
 
 ## Verification
 
