@@ -39,13 +39,26 @@ export function AddOrganizer() {
         <h3 className={styles.subtitle}>Add an organizer</h3>
         <div className={styles.inviteRow}>
           <label htmlFor="organizer-email" className={styles.visuallyHidden}>Email</label>
+          {/*
+            A Morgan address. Organizers sign in with Google, and a Morgan
+            address is a Google account -- morgan.edu carries a
+            google-site-verification record alongside Microsoft's, which is why
+            Outlook works and the same address still signs in here.
+
+            It used to say name@morganhacks.com. That domain is on Cloudflare
+            Email Routing: it forwards mail and is not a Google identity, so an
+            address there is accepted -- AddOrganizer only checks
+            LooksLikeAnAddress -- and then cannot sign in. With the help text
+            trimmed, this placeholder is the only thing on screen saying which
+            address to use, and it named the one that does not work.
+          */}
           <input
             id="organizer-email"
             name="email"
             type="email"
             required
             autoComplete="off"
-            placeholder="name@morganhacks.com"
+            placeholder="name@morgan.edu"
             className={styles.emailInput}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
