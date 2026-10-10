@@ -519,6 +519,7 @@ public static class PublicFormEndpoints
         IFormStore forms,
         ISubmissionStore submissions,
         IRespondentStore respondents,
+        IIdentityStore people,
         IAnonymousSubmissionStore anonymous,
         SessionService sessions,
         TriggeredEmails triggered,
@@ -581,6 +582,24 @@ public static class PublicFormEndpoints
         try
         {
             var id = await submissions.SubmitApplicationAsync(form, published, answers, ct);
+
+            // An application comes with an account.
+            //
+            // Until now the only thing that created one was RequestFormLink,
+            // the form sign-in path -- so an applicant who filled in a form
+            // with requiresSignIn off got an application row and no identity,
+            // and could never sign in to the portal to read the decision made
+            // about them. Accepting them did not help: the portal asks
+            // FindHackerIdByEmailAsync for the address, finds nothing, and
+            // answers the uniform 202 that hides whether an address exists.
+            // Nothing in the system said anything was wrong.
+            //
+            // After the write rather than before it, and never allowed to fail
+            // it. The application is the thing that matters and is already
+            // safely stored by this line; an account that could not be made is
+            // a portal somebody cannot reach yet, which is recoverable, and
+            // losing the application is not.
+            await LinkAnAccountTo(id, published, answers, people, respondents, log, ct);
 
             log.LogInformation(
                 "Application submitted. {code} {applicationId} {event}",
@@ -752,6 +771,66 @@ public static class PublicFormEndpoints
     /// asks.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Gives a freshly submitted application an identity to sign in with.
+    /// </summary>
+    /// <remarks>
+    /// The address comes out of the answers the same way the store writes it:
+    /// the field whose column is <c>email</c>. Reading it here rather than
+    /// changing what SubmitApplicationAsync returns keeps this additive --
+    /// nothing about the write path moves, so a mistake here cannot cost
+    /// somebody their application.
+    /// <para>
+    /// A null from <c>EnsureHackerAsync</c> is an organizer's address or a
+    /// revoked one. Neither should get a hacker account, and neither should
+    /// stop the application being accepted, so it is left unlinked and the
+    /// submission stands.
+    /// </para>
+    /// </remarks>
+    private static async Task LinkAnAccountTo(
+        Guid applicationId,
+        FormVersion published,
+        IReadOnlyDictionary<string, JsonElement> answers,
+        IIdentityStore people,
+        IRespondentStore respondents,
+        ILogger log,
+        CancellationToken ct)
+    {
+        var field = published.Fields.FirstOrDefault(f => f.Column == AnswerColumns.Email);
+        if (field is null || !answers.TryGetValue(field.Key, out var answer)
+            || answer.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        var email = answer.GetString()?.Trim();
+        if (string.IsNullOrEmpty(email))
+        {
+            return;
+        }
+
+        try
+        {
+            // The name is left to the application row. EnsureHackerAsync's
+            // conflict branch does not touch full_name, so passing null here
+            // cannot blank a name somebody already has.
+            var personId = await people.EnsureHackerAsync(email, null, ct);
+            if (personId is not null)
+            {
+                await respondents.LinkPersonAsync(applicationId, personId.Value, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Swallowed on purpose, and loudly. The application is written and
+            // the applicant has been told so; the account can be made again by
+            // the next sign-in request for this address. Rethrowing would turn
+            // a recoverable gap into a lost application.
+            log.LogError(ex,
+                "Could not give a new application an account. {applicationId}", applicationId);
+        }
+    }
+
     private static async Task<IResult> SubmitAnonymous(
         Form form,
         FormVersion published,

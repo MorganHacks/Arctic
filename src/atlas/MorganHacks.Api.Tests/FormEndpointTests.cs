@@ -101,6 +101,48 @@ public class FormEndpointTests(ApplicationsDatabase db)
     private Task<HttpResponseMessage> Submit(string code, object body) =>
         _app.CreateClient().PostAsJsonAsync($"/forms/{code}/submit", body);
 
+    /// <summary>
+    /// An application arrives with an account, even on a form nobody signs in to.
+    /// </summary>
+    /// <remarks>
+    /// Until this was fixed the only thing that created a hacker identity was
+    /// the form sign-in path, so an applicant who answered a form with
+    /// requiresSignIn off had an application and no account -- and could never
+    /// reach the portal to read the decision made about them. Accepting them
+    /// did not help: the portal looks the address up, finds nothing, and
+    /// answers the same 202 it gives an address that was never seen, so the
+    /// failure was silent from both ends.
+    /// <para>
+    /// Checked against identity.people rather than through the portal, because
+    /// the portal's uniform answer is exactly what made this invisible.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_application_arrives_with_an_account_to_sign_in_with()
+    {
+        var form = await PublishedAsync();
+        var email = Unique("applied");
+
+        var response = await Submit(form.Code, Answers(email));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var person = db.DataSource.CreateCommand(
+            "SELECT count(*) FROM identity.people "
+            + "WHERE lower(email) = lower(@email) AND kind = 'hacker'");
+        person.Parameters.AddWithValue("email", email);
+        Assert.Equal(1L, (long)(await person.ExecuteScalarAsync())!);
+
+        // And joined to the application, which is what lets the portal find
+        // their decision rather than an account with nothing behind it.
+        await using var linked = db.DataSource.CreateCommand(
+            "SELECT count(*) FROM applications.applications a "
+            + "JOIN identity.people p ON p.id = a.person_id "
+            + "WHERE lower(a.email) = lower(@email)");
+        linked.Parameters.AddWithValue("email", email);
+        Assert.Equal(1L, (long)(await linked.ExecuteScalarAsync())!);
+    }
+
     // -------------------------------------------------------- reading one ---
 
     [Fact]
