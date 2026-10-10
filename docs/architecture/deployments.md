@@ -69,11 +69,21 @@ serves the 2027 site. That is a change from the state this document described
 before, when both were held by the team, assigned to no project, and serving
 404.
 
-**The two `forms` domains are attached to a project that has never built.**
-Every portalforms deployment is cancelled by its Ignored Build Step, so there is
-no production deployment for the domain to point at and both answer Vercel's
-`DEPLOYMENT_NOT_FOUND`. The public form is not deployed. It is the first entry
-[on the backlog](../backlog.md).
+**The two `forms` domains answer, and their root is meant to be a 404.**
+This page used to say portalforms had never built and both domains returned
+`DEPLOYMENT_NOT_FOUND`. That was true when it was written and is not now:
+
+```
+forms.morganhacks.com/api/health         200
+forms-stg.morganhacks.com/h7e8shw        200   a real form
+forms-stg.morganhacks.com/api/forms/...  200
+```
+
+The root of either domain is a 404 because portalforms has no index route. A
+form is served at `/{code}` and there is nothing sensible to put at `/` — a
+list of every open form is not something the public should get. Checking the
+root and concluding the app is down is the mistake this paragraph now exists to
+prevent, and it is the one that produced the old wording.
 
 If the plan ever gains custom environments, migrate: it drops the long-lived
 branch, which is the one thing this setup does that `morganhacks-cicd.md`
@@ -502,8 +512,8 @@ on this account are attached but dead for exactly that reason.
 | `main-stg.morganhacks.com` | `morganhacks-portalweb` (branch `staging`) | yes |
 | `admin.morganhacks.com` | `morganhacks-portaladmin` | yes |
 | `admin-stg.morganhacks.com` | `morganhacks-portaladmin` (branch `staging`) | yes |
-| `forms.morganhacks.com` | `morganhacks-portalforms` | **no — `DEPLOYMENT_NOT_FOUND`** |
-| `forms-stg.morganhacks.com` | `morganhacks-portalforms` (branch `staging`) | **no — same** |
+| `forms.morganhacks.com` | `morganhacks-portalforms` | yes — `/` is 404, a form is at `/{code}` |
+| `forms-stg.morganhacks.com` | `morganhacks-portalforms` (branch `staging`) | yes — same |
 | `2023/2024/2025/2026.morganhacks.com` | year archives | yes |
 | `quiz.morganhacks.com` | `morgan-hacks-quiz` | **no DNS** |
 
