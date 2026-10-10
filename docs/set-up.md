@@ -814,3 +814,12 @@ means mail is not arriving. Every service is up, every dashboard is green, and
 nobody can log in. No error rate catches it, because nothing is erroring. Both
 are emitted as an `event` property on a log line, so an aggregator can count
 them without a metrics stack to run.
+
+## Mock applicants for organizer simulations
+
+After starting the local stack, run `deploy/local/seed-hackers.sh --apply` from
+another terminal at the repository root. This adds 50 fictional applicants to a
+separate **MOCK — Organizer simulation** event in the local organizer console.
+Run without `--apply` for a preview. Reruns preserve existing applicants and your
+review changes. See [the seed utility guide](../src/atlas/MorganHacks.Seed/README.md)
+for counts, safeguards, and tests.
