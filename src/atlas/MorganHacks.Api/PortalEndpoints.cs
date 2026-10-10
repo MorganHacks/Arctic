@@ -187,10 +187,18 @@ public static class PortalEndpoints
             var store = http.RequestServices.GetRequiredService<IApplicantPortalStore>();
             var application = await store.FindForPersonAsync(http.PersonId(), http.RequestAborted);
 
-            // No application is the same answer as the wrong status. An
-            // organizer who signs in here has never applied, and the portal has
-            // nothing to show them either.
-            if (application is null || !PortalAccess.Allowed.Contains(application.Status))
+            // No application passes. It sounds like the stricter choice to
+            // refuse it, but there is nothing to refuse: the feed is scoped by
+            // the event of the reader's own application, so somebody without
+            // one matches no rows and reads an empty list either way. Turning
+            // that into a 404 would only break the page somebody sees between
+            // signing in and starting an application, which
+            // Somebody_who_has_not_started_still_gets_a_page exists to keep --
+            // not having applied yet is a state of the page rather than an
+            // error.
+            //
+            // A decided application is the case this is here for.
+            if (application is not null && !PortalAccess.Allowed.Contains(application.Status))
             {
                 return Results.NotFound();
             }

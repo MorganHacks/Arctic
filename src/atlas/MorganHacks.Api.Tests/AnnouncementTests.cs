@@ -819,14 +819,21 @@ public class AnnouncementTests(ApplicationsDatabase db)
     /// A real row rather than a person on their own, because the feed is
     /// scoped by the event of the reader's application and somebody without
     /// one is a different test.
+    /// <para>
+    /// Accepted, because the feed is only shown to somebody who is coming.
+    /// The column defaults to <c>incomplete</c>, which every test here used to
+    /// inherit -- and inheriting it is what made a feed readable by people who
+    /// had been turned down. A test that wants the other side of that gate
+    /// says so, in <c>PortalTests.The_feed_is_shut_to_somebody_who_is_not</c>.
+    /// </para>
     /// </remarks>
     private async Task<Guid> ApplicantAsync(Guid eventId)
     {
         var person = await db.AddPersonAsync(Unique("applicant"));
 
         await using var cmd = db.DataSource.CreateCommand("""
-            INSERT INTO applications.applications (event_id, person_id, email)
-            VALUES (@eventId, @personId, @email)
+            INSERT INTO applications.applications (event_id, person_id, email, status)
+            VALUES (@eventId, @personId, @email, 'accepted')
             """);
         cmd.Parameters.AddWithValue("eventId", eventId);
         cmd.Parameters.AddWithValue("personId", person);
