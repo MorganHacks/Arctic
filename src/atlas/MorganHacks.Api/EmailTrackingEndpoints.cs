@@ -8,7 +8,7 @@ public static class EmailTrackingEndpoints
 {
     public static IEndpointRouteBuilder MapEmailTracking(this IEndpointRouteBuilder app)
     {
-        app.MapMethods("/email/click/{id:guid}", ["GET", "HEAD"], Visit);
+        app.MapMethods("/email/click/{id:guid}", ["GET", "HEAD"], Visit).RequireRateLimiting("email-click");
         app.MapMethods("/email/open/{id:guid}", ["GET", "HEAD"], Open);
         return app;
     }

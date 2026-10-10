@@ -6,8 +6,8 @@ public static class EmailUnsubscribeEndpoints
 {
     public static IEndpointRouteBuilder MapEmailUnsubscribe(this IEndpointRouteBuilder app)
     {
-        app.MapMethods("/email/unsubscribe/{id:guid}", ["GET", "HEAD"], Show);
-        app.MapPost("/email/unsubscribe/{id:guid}", Confirm);
+        app.MapMethods("/email/unsubscribe/{id:guid}", ["GET", "HEAD"], Show).RequireRateLimiting("email-unsubscribe");
+        app.MapPost("/email/unsubscribe/{id:guid}", Confirm).RequireRateLimiting("email-unsubscribe");
         return app;
     }
 

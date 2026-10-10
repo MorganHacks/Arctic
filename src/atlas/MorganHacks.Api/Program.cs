@@ -339,6 +339,39 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 
+    // The click endpoint writes on every GET: it increments a counter and stamps
+    // first/last click. Without a limiter it is an unauthenticated write path,
+    // and its URL goes into every broadcast we send, so it is the most widely
+    // distributed URL we have. Not trivially abusable — a valid GUID is needed
+    // — but the pattern everywhere else here is that a public endpoint gets one.
+    //
+    // Generous, like webhook: a blast lands a building's worth of clicks on one
+    // campus NAT at once, and mail scanners pre-fetch links in bursts. What it
+    // has to hurt is somebody replaying a leaked GUID all night.
+    // Partitioned on the caller rather than the socket — see ClientAddress.
+    options.AddPolicy("email-click", http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientAddress.ForRateLimit(http, proxySecret),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
+    // Showing the confirm page and suppressing the recipient. A human does this
+    // once, so the allowance is small; the confirm mutates the suppression list,
+    // so neither half can be left open. Same partition as everywhere else.
+    options.AddPolicy("email-unsubscribe", http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientAddress.ForRateLimit(http, proxySecret),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(5),
+                QueueLimit = 0,
+            }));
+
     options.AddPolicy("magic-link", http =>
     {
         // The caller, not the front end that relayed them. See ClientAddress.
