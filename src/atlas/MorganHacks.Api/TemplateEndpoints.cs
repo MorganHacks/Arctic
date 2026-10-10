@@ -100,8 +100,7 @@ public static partial class TemplateEndpoints
         templates.MapPost("/import", ImportHtml)
                  .RequirePermission(Permission.EmailManageTemplates);
         templates.MapPost("/test", SendTest)
-                 .RequirePermission(Permission.EmailManageTemplates)
-                 .RequirePermission(Permission.EmailSendTemplated);
+                 .RequirePermission(Permission.EmailManageTemplates, Permission.EmailSendTemplated);
         templates.MapDelete("/{key}/draft", DiscardDraft)
                  .RequirePermission(Permission.EmailManageTemplates);
 
