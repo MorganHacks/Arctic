@@ -171,7 +171,7 @@ public sealed class SeedRunner(NpgsqlDataSource source)
         new() { Key="motivation", Label="What would you like to build?", Type=FieldType.Paragraph },
     ];
     private static FormField Column(string key, FieldType type, string label) =>
-        new() { Key=key, Label=label, Type=type, Storage=AnswerStorage.Column, Column=key };
+        new() { Key = key, Label = label, Type = type, Storage = AnswerStorage.Column, Column = key };
     public static string Email(int i) => $"mock-organizer-{i:D4}@example.com";
     public static Dictionary<string, JsonElement> Answers(int i)
     {
@@ -182,17 +182,25 @@ public sealed class SeedRunner(NpgsqlDataSource source)
         string[] projects = ["an accessible campus navigation app", "a study group matching tool", "a food pantry inventory dashboard", "a community volunteering platform"];
         var values = new Dictionary<string, object>
         {
-            ["email"]=Email(i), ["first_name"]=first[(i-1)%first.Length], ["last_name"]=last[(i-1)%last.Length],
-            ["age"]=18+i%9, ["phone"]=$"202-555-{100+i%100:D4}", ["school"]=schools[(i-1)%schools.Length],
-            ["country"]="United States", ["level_of_study"]=i%7==0 ? "graduate" : "undergraduate-3y",
-            ["mlh_coc_agreed_at"]=true, ["mlh_data_sharing_at"]=true, ["mlh_marketing_opt_in"]=i%3==0,
-            ["graduation_year"]=2026+i%5, ["first_time_hacker"]=i%2==0,
-            ["shirt_size"]=new[] { "S", "M", "L", "XL", "2XL" }[i%5],
-            ["major"]=majors[i%majors.Length],
-            ["motivation"]=$"[Synthetic application] I would like to build {projects[i%projects.Length]}. "
-                + (i%2==0 ? "This is my first hackathon and I want to learn with a team." : "I have built small projects before and want to practice shipping a useful prototype."),
+            ["email"] = Email(i),
+            ["first_name"] = first[(i - 1) % first.Length],
+            ["last_name"] = last[(i - 1) % last.Length],
+            ["age"] = 18 + i % 9,
+            ["phone"] = $"202-555-{100 + i % 100:D4}",
+            ["school"] = schools[(i - 1) % schools.Length],
+            ["country"] = "United States",
+            ["level_of_study"] = i % 7 == 0 ? "graduate" : "undergraduate-3y",
+            ["mlh_coc_agreed_at"] = true,
+            ["mlh_data_sharing_at"] = true,
+            ["mlh_marketing_opt_in"] = i % 3 == 0,
+            ["graduation_year"] = 2026 + i % 5,
+            ["first_time_hacker"] = i % 2 == 0,
+            ["shirt_size"] = new[] { "S", "M", "L", "XL", "2XL" }[i % 5],
+            ["major"] = majors[i % majors.Length],
+            ["motivation"] = $"[Synthetic application] I would like to build {projects[i % projects.Length]}. "
+                + (i % 2 == 0 ? "This is my first hackathon and I want to learn with a team." : "I have built small projects before and want to practice shipping a useful prototype."),
         };
-        if (i%3!=0) values["dietary_needs"]=i%2==0 ? "Vegetarian" : "Halal";
+        if (i % 3 != 0) values["dietary_needs"] = i % 2 == 0 ? "Vegetarian" : "Halal";
         return values.ToDictionary(p => p.Key, p => JsonSerializer.SerializeToElement(p.Value));
     }
 }
