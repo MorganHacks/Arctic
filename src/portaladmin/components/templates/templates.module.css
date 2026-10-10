@@ -36,45 +36,19 @@
 }
 
 /*
- * The templates screen pins itself to the viewport so the gallery scrolls
- * inside a shell that does not move. Every other page in the console lets
- * `main` grow and the window scroll; this one deliberately does not.
+ * No shell override here on purpose.
  *
- * `min-height` rather than `height`, and `auto` rather than `hidden`, because
- * the page gained siblings after this was written. The gallery is `flex: 1`
- * and the two panels under it -- automatic emails, and saved values -- are
- * `flex: 0 1 auto`, so they take their natural height and the gallery takes
- * what is left. Saved values grows by a row every time somebody saves one.
+ * This screen used to pin itself to the viewport -- height: 100dvh and
+ * overflow: hidden on main -- so the gallery scrolled inside a frame that did
+ * not move. That gave the page two scrollbars: one for the cards and one for
+ * everything else, and the cards' one was whatever height was left after the
+ * panels below had taken theirs. Saved values grows a row per value, so the
+ * gallery shrank as the data did, down to 89px of a 699px card.
  *
- * With `height: 100dvh` and `overflow: hidden` there was nowhere for that
- * growth to go. Four saved values pushed the gallery to 316px, of which the
- * scrolling part got 89px, and a card 699px tall was shown through an 89px
- * window with its own scrollbar inside it. Nothing had been deployed; the
- * screen degraded as the data grew, which is the kind of break that arrives
- * without a commit to blame.
- *
- * `min-height` keeps the pinned shell whenever the content fits, which is the
- * normal case and the look this was written for. When it stops fitting the
- * page grows and the window scrolls, which is what every other screen here
- * already does.
+ * Now it flows like every other screen in the console. The cards grow to the
+ * height they need, the window scrolls once, and the panels are below the
+ * gallery where somebody scrolling down expects to find them.
  */
-:global(main):has(.templateGallery) {
-  display: flex;
-  min-height: 100dvh;
-  flex-direction: column;
-  overflow: auto;
-  padding-bottom: 0;
-}
-
-/*
- * And a floor under the gallery, so it cannot be squeezed to a sliver before
- * the page decides to scroll. 320px is about two rows of cards -- enough that
- * the gallery still reads as the subject of the page rather than a strip
- * above the panels.
- */
-.templateGallery {
-  min-height: 320px;
-}
 
 .templateGallery {
   position: relative;
@@ -88,12 +62,12 @@
   flex: 0 0 auto;
 }
 
+/*
+ * Not a scroll container any more, despite the name. It keeps its padding and
+ * its focus ring; the window does the scrolling.
+ */
 .templateScroll {
-  flex: 1;
-  min-height: 0;
   padding: 0 0 28px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .templateScroll:focus-visible {
@@ -163,7 +137,14 @@
 }
 
 .selectionBar {
-  position: absolute;
+  /*
+   * Fixed, not absolute. It used to hang off .templateGallery, which was
+   * exactly viewport height while the shell was pinned -- so the bottom of the
+   * gallery was the bottom of the screen. Now the gallery is as tall as the
+   * cards, and an absolute bar would sit at the end of the page instead of
+   * floating above it.
+   */
+  position: fixed;
   bottom: max(24px, env(safe-area-inset-bottom));
   left: 50%;
   z-index: 100;
@@ -779,13 +760,6 @@ button.templateCard {
 
   .templateViewControls {
     justify-content: space-between;
-  }
-}
-
-@media (max-width: 48rem) {
-  /* Less the mobile bar, and min-height for the same reason as above. */
-  :global(main):has(.templateGallery) {
-    min-height: calc(100dvh - 56px);
   }
 }
 
