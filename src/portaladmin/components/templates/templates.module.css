@@ -35,12 +35,45 @@
   white-space: nowrap;
 }
 
+/*
+ * The templates screen pins itself to the viewport so the gallery scrolls
+ * inside a shell that does not move. Every other page in the console lets
+ * `main` grow and the window scroll; this one deliberately does not.
+ *
+ * `min-height` rather than `height`, and `auto` rather than `hidden`, because
+ * the page gained siblings after this was written. The gallery is `flex: 1`
+ * and the two panels under it -- automatic emails, and saved values -- are
+ * `flex: 0 1 auto`, so they take their natural height and the gallery takes
+ * what is left. Saved values grows by a row every time somebody saves one.
+ *
+ * With `height: 100dvh` and `overflow: hidden` there was nowhere for that
+ * growth to go. Four saved values pushed the gallery to 316px, of which the
+ * scrolling part got 89px, and a card 699px tall was shown through an 89px
+ * window with its own scrollbar inside it. Nothing had been deployed; the
+ * screen degraded as the data grew, which is the kind of break that arrives
+ * without a commit to blame.
+ *
+ * `min-height` keeps the pinned shell whenever the content fits, which is the
+ * normal case and the look this was written for. When it stops fitting the
+ * page grows and the window scrolls, which is what every other screen here
+ * already does.
+ */
 :global(main):has(.templateGallery) {
   display: flex;
-  height: 100dvh;
+  min-height: 100dvh;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
   padding-bottom: 0;
+}
+
+/*
+ * And a floor under the gallery, so it cannot be squeezed to a sliver before
+ * the page decides to scroll. 320px is about two rows of cards -- enough that
+ * the gallery still reads as the subject of the page rather than a strip
+ * above the panels.
+ */
+.templateGallery {
+  min-height: 320px;
 }
 
 .templateGallery {
@@ -750,8 +783,9 @@ button.templateCard {
 }
 
 @media (max-width: 48rem) {
+  /* Less the mobile bar, and min-height for the same reason as above. */
   :global(main):has(.templateGallery) {
-    height: calc(100dvh - 56px);
+    min-height: calc(100dvh - 56px);
   }
 }
 
