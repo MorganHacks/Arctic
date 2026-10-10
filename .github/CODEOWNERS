@@ -1,16 +1,51 @@
-# Default owner for anything not matched below.
-*                       @tobibytes
+# Who has to approve what.
+#
+# A path listed here needs a review from one of its owners before it can
+# merge. A path not listed here needs none, so a front-end fix still goes in
+# the moment CI is green. The rule is not seniority -- it is blast radius.
+# The things below are the ones where a mistake is expensive, slow to notice,
+# or impossible to take back.
+#
+# The last matching line wins, which is why the two front-end exceptions sit
+# at the bottom rather than beside their directories.
+#
+# Owners must have write access and cannot approve their own pull request.
+# That is the point, and it is also why there are two names on every line:
+# with one owner, that person could never merge their own work here.
 
-# Auth and schema are where a well-meaning mistake is expensive and hard to
-# spot in review. These stay with the tech lead regardless of who else joins.
-/src/atlas/MorganHacks.Identity/    @tobibytes
-/src/atlas/MorganHacks.Migrations/  @tobibytes
-/src/harbor/                        @tobibytes
+# --------------------------------------------------------------- the gate ---
+# This file and the workflows together. A change here can switch off every
+# other line in it, and a workflow holds the OIDC credential that deploys to
+# Azure -- so a pull request that edits one is the one most worth reading.
+/.github/                           @tobibytes @clintonimaroo
 
-# A change here can silently break another service, so it needs agreement
-# rather than a rubber stamp.
-/libs/contracts/                    @tobibytes
+# ------------------------------------------------------------ the backend ---
+# Sessions, permissions, and everybody's personal data. src/atlas also holds
+# MorganHacks.Migrations, where anything added under Scripts/ runs against
+# every environment, forever, in order -- there is no undo and no second
+# chance to review it after the fact.
+/src/atlas/                         @tobibytes @clintonimaroo
+/src/harbor/                        @tobibytes @clintonimaroo
+/src/lark/                          @tobibytes @clintonimaroo
 
-# CI and deployment config.
-/.github/                           @tobibytes
-/deploy/                            @tobibytes
+# ---------------------------------------------------------- the platform ---
+# Bicep, the deploy scripts, and the libraries every service imports. A
+# change to libs/ is a change to all six at once.
+/deploy/                            @tobibytes @clintonimaroo
+/libs/                              @tobibytes @clintonimaroo
+
+# ------------------------------------------- two front-end files, and why ---
+# The front ends are otherwise unowned on purpose: a copy change or a layout
+# fix should not wait on anybody.
+#
+# These two are different. next.config.ts holds the rewrite that sends every
+# API call -- carrying the session cookie -- to whatever API_ORIGIN names, and
+# lib/api.ts is the code that attaches that cookie. Repointing either one is
+# how an organizer's session leaves the building, and it looks like an
+# ordinary front-end edit in a diff.
+/src/portaladmin/next.config.ts     @tobibytes @clintonimaroo
+/src/portalweb/next.config.ts       @tobibytes @clintonimaroo
+/src/portalforms/next.config.ts     @tobibytes @clintonimaroo
+/src/portaladmin/lib/api.ts         @tobibytes @clintonimaroo
+/src/portalweb/lib/api.ts           @tobibytes @clintonimaroo
+/src/portalforms/lib/api.ts         @tobibytes @clintonimaroo
